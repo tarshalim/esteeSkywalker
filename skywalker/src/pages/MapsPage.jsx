@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
-import thumbnail1 from '/assets/thumbnail01.jpg';
 import thumbnail2 from '/assets/thumbnail02.jpg';
-import ImageUpload from '../components/ImageUpload';
 import Mum from "../components/cyclists/Mum";
 import "./Mapspage.css";
 
@@ -24,9 +22,6 @@ const MapsPage = () => {
 
   return (
     <div className="page-container">
-      <div className="upload-button-container">
-        <ImageUpload />
-      </div>
       
       {/* Background Images */}
       <div
