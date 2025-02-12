@@ -1,0 +1,59 @@
+.page-container {
+    position: relative;
+    height: 9900vh; /* Make it 200% of the viewport height to trigger vertical scroll */
+    overflow-x: hidden; /* Hide horizontal overflow to prevent the content from spilling out */
+    overflow-y: scroll; /* Allow vertical scroll */
+}
+
+.fixed-content {
+    display: flex; /* Align images horizontally */
+    position: fixed; /* Keep it fixed while scrolling */
+    width: 100%; /* Ensure it takes up full width */
+    height: 100vh; /* Make sure it fills the full viewport height */
+    top: 0; /* Keep it aligned to the top */
+    left: 0; /* Align to the left side */
+    z-index: 10; /* Ensure it stays above other content */
+}
+
+.scenery-image {
+    width: 100vw; /* Make each image take up the full viewport width */
+    height: 100vh; /* Make each image take up the full viewport height */
+    flex-shrink: 0; /* Prevent images from shrinking */
+    object-fit: cover; /* Ensure images cover the container properly */
+}
+
+.long-body {
+    margin-top: 100vh; /* Move the body content down to make space for the fixed images */
+    padding-top: 20px; /* Adds some space before the long body starts */
+    min-height: 100vh; /* Ensure body has enough height to scroll */
+}
+
+.section {
+    padding: 20px;
+    min-height: 100vh; /* Each section will take up the full height of the viewport */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+    border-bottom: 1px solid #ccc;
+}
+
+.cyclist {
+    position: absolute;
+    top: 40%; /* Cyclist will always be at 40% of the image's height */
+    left: 50%; /* Cyclist will always be horizontally centered */
+    transform: translate(-50%, -50%) scaleX(-1); /* Center horizontally and flip vertically */
+    z-index: 20; /* Ensure the cyclist appears on top of images */
+}
+
+.upload-button-container {
+    position: fixed;
+    top: 20px; /* Adjust for desired position */
+    right: 20px; /* Position on top-right corner */
+    z-index: 1000; /* Ensure it's above other elements */
+    background: rgba(255, 255, 255, 0.8); /* Slight transparency */
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}

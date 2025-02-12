@@ -1,0 +1,21 @@
+.trip-image-container {
+opacity: 0;
+transform: translateX(-50%); /* Initially hide the image off-screen to the left */
+transition: opacity 1s ease, transform 1s ease;
+
+}
+
+.trip-image-container.fade-in {
+opacity: 1;
+transform: translateX(0); /* Move the image into view */
+}
+
+.trip-image-container.right-fade {
+transform: translateX(50%); /* Start from the right */
+}
+
+.trip-image-container.left-fade {
+transform: translateX(-50%); /* Start from the left */
+}
+
+
