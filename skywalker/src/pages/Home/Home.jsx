@@ -1,20 +1,80 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useRef } from 'react';
 import CarouselPic from '../../components/Carousel/CarouselPic';
-import thumbnail1 from '/assets/thumbnail01.jpg';
-import thumbnail2 from '/assets/thumbnail02.jpg';
-import thumbnail3 from '/assets/thumbnail03.jpg';
-import thumbnail4 from '/assets/thumbnail04.jpg';
+import cycling01 from '/assets/Singapore/Cycling01.mp4';
 import './Home.css'; 
 
 
 const Home = () => {
-    const [searchTerm, setSearchTerm] = useState('');
+    const videoRef = useRef(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    // if video in view, autoplay
+                    videoRef.current.play();
+                } else {
+                    // pause video when out of view
+                    videoRef.current.pause();
+                }
+            },
+            {
+                // play video when 80% in view
+                threshold: 0.8,
+            }
+        );
+
+        if (videoRef.current) {
+            observer.observe(videoRef.current);
+        }
+
+        return () => {
+            if (videoRef.current) {
+                observer.unobserve(videoRef.current);
+            }
+        };
+    }, []);
 
     return (
-            <div>
-            <CarouselPic/>
-            </div>
+            <main>
+                <div className="scrolling-section">
+                    <CarouselPic/>
+                </div>
+                <div className="video-section">
+                    <video
+                    ref={videoRef}
+                    style={{width: "50%"}}
+                    height="auto"
+                    muted
+                    loop
+                    preload="auto"
+                    className="video"
+                    >
+                        <source 
+                        src={cycling01}
+                        type="video/mp4"
+                        />
+                        </video>
+                </div>
+
+                <div className="video-section">
+                    <video
+                    ref={videoRef}
+                    style={{width: "50%"}}
+                    height="auto"
+                    muted
+                    loop
+                    preload="auto"
+                    className="video"
+                    >
+                        <source 
+                        src={cycling01}
+                        type="video/mp4"
+                        />
+                        </video>
+                </div>
+            
+            </main>
                 
     );
 };

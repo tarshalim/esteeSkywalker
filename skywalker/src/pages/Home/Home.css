@@ -1,0 +1,23 @@
+.video-section {
+    padding: 20px; /* Add padding around the video */
+    overflow: hidden; /* Ensure the video doesn't overflow */
+}
+
+.video {
+    width: 100%;
+    height: auto;
+    opacity: 0; /* Start with the video hidden */
+    transform: translateX(-100%); /* Start the video off-screen to the left */
+    animation: fadeInLeft 1.5s ease-in-out forwards; /* Apply fade-in and slide-in effect */
+}
+
+@keyframes fadeInLeft {
+    0% {
+        opacity: 0;
+        transform: translateX(-100%); /* Starts off-screen */
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0); /* Ends at normal position */
+    }
+}
