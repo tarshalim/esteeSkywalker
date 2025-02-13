@@ -19,7 +19,7 @@ const CarouselPic = () => {
       <Carousel.Item>
         <img className="d-block w-100" src={picture1} alt="First slide" />
         <Carousel.Caption>
-          <p>Barbie and the magical Bicycles</p>
+          <p></p>
         </Carousel.Caption>
       </Carousel.Item>
 
@@ -34,7 +34,7 @@ const CarouselPic = () => {
         <img className="d-block w-100" src={picture3} alt="Third slide" />
         <Carousel.Caption>
           <p>
-            Last day in New Zealand. 
+            Sunrise in New Zealand. 
           </p>
         </Carousel.Caption>
       </Carousel.Item>
@@ -43,7 +43,7 @@ const CarouselPic = () => {
         <img className="d-block w-100" src={picture4} alt="Fourth slide" />
         <Carousel.Caption>
           <p>
-            If skies were drawn by Vincent Van Gogh 
+            If skies were drawn by Raphael 
           </p>
         </Carousel.Caption>
       </Carousel.Item>

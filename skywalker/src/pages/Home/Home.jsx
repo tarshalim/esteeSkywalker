@@ -40,7 +40,10 @@ const Home = () => {
                 <div className="scrolling-section">
                     <CarouselPic/>
                 </div>
-                <div className="video-section">
+                <h1> Singapore </h1>
+
+
+                <div className="video-section left">
                     <video
                     ref={videoRef}
                     style={{width: "50%"}}
@@ -57,7 +60,24 @@ const Home = () => {
                         </video>
                 </div>
 
-                <div className="video-section">
+                <div className="video-section right">
+                    <video
+                    ref={videoRef}
+                    style={{width: "50%"}}
+                    height="auto"
+                    muted
+                    loop
+                    preload="auto"
+                    className="video"
+                    >
+                        <source 
+                        src={cycling01}
+                        type="video/mp4"
+                        />
+                    </video>
+                </div>
+
+                <div className="video-section left">
                     <video
                     ref={videoRef}
                     style={{width: "50%"}}
