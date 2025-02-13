@@ -26,7 +26,7 @@ const CarouselPic = () => {
       <Carousel.Item>
         <img className="d-block w-100" src={picture2} alt="Second slide" />
         <Carousel.Caption>
-          <p>Egg yolk in the sky? </p>
+          <p></p>
         </Carousel.Caption>
       </Carousel.Item>
 
@@ -34,7 +34,7 @@ const CarouselPic = () => {
         <img className="d-block w-100" src={picture3} alt="Third slide" />
         <Carousel.Caption>
           <p>
-            Sunrise in New Zealand. 
+          
           </p>
         </Carousel.Caption>
       </Carousel.Item>
@@ -43,7 +43,7 @@ const CarouselPic = () => {
         <img className="d-block w-100" src={picture4} alt="Fourth slide" />
         <Carousel.Caption>
           <p>
-            If skies were drawn by Raphael 
+            
           </p>
         </Carousel.Caption>
       </Carousel.Item>
