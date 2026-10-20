@@ -1,0 +1,40 @@
+.editor-toolbar {
+  position: sticky;
+  top: 5.5rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.9rem;
+  border-radius: 1rem;
+  margin: 0 auto 1.5rem;
+  width: fit-content;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 1.4rem;
+  background: var(--border);
+}
+
+.toolbar-btn {
+  font-size: 0.78rem;
+  color: var(--text);
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover,
+.toolbar-btn.is-active {
+  background: var(--yellow);
+  color: var(--blue-deep);
+  font-weight: 600;
+}

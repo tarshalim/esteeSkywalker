@@ -1,0 +1,40 @@
+.globe-explorer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  background: var(--bg);
+}
+
+.globe-explorer-stage {
+  flex: 0 0 60%;
+  min-height: 0;
+  position: relative;
+}
+
+.globe-explorer-gallery {
+  flex: 0 0 40%;
+  min-height: 0;
+  border-top: 2px solid var(--border);
+  background: var(--bg);
+}
+
+/* Homepage: globe only. Stops short of 100vh so a strip of the blog feed
+   peeks below; the canvas eats wheel events (zoom), so the peek is what
+   invites the user to scroll on. */
+.globe-explorer--no-gallery {
+  height: calc(100vh - 4.5rem);
+}
+.globe-explorer--no-gallery .globe-explorer-stage {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px) {
+  .globe-explorer-stage {
+    flex-basis: 50%;
+  }
+  .globe-explorer-gallery {
+    flex-basis: 50%;
+  }
+}

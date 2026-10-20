@@ -1,67 +1,152 @@
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import "tailwindcss";
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Yellow & Blue identity — light mode (default) */
+  --bg: #fafaf9;
+  --bg-elevated: #ffffff;
+  --bg-panel: rgba(255, 255, 255, 0.78);
+  --bg-panel-strong: rgba(255, 255, 255, 0.94);
+
+  --text: #0f172a;
+  --text-strong: #1d4ed8;
+  --text-muted: rgba(15, 23, 42, 0.62);
+  --text-on-accent: #1e293b;
+
+  --border: rgba(29, 78, 216, 0.22);
+  --border-strong: #1d4ed8;
+  --glass-border: rgba(29, 78, 216, 0.18);
+
+  --yellow: #facc15;
+  --yellow-bright: #fde047;
+  --blue: #2563eb;
+  --blue-bright: #3b82f6;
+  --blue-deep: #1e40af;
+
+  --shadow-color: rgba(29, 78, 216, 0.16);
+  --shadow-sharp: 0 4px 0 var(--blue-deep);
+
+  /* legacy aliases still referenced around the app */
+  --space-bg: var(--bg);
+  --space-bg-2: var(--bg-elevated);
+  --accent: var(--blue-bright);
+  --accent-warm: var(--yellow);
+
+  color-scheme: light;
+  font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+:root.dark {
+  /* Yellow & Blue identity — dark mode */
+  --bg: #0f172a;
+  --bg-elevated: #1e293b;
+  --bg-panel: rgba(30, 41, 59, 0.78);
+  --bg-panel-strong: rgba(30, 41, 59, 0.94);
+
+  --text: #f1f5f9;
+  --text-strong: #fde047;
+  --text-muted: rgba(241, 245, 249, 0.62);
+  --text-on-accent: #1e293b;
+
+  --border: rgba(250, 204, 21, 0.35);
+  --border-strong: #facc15;
+  --glass-border: rgba(250, 204, 21, 0.28);
+
+  --yellow: #facc15;
+  --yellow-bright: #fde047;
+  --blue: #3b82f6;
+  --blue-bright: #60a5fa;
+  --blue-deep: #1e40af;
+
+  --shadow-color: rgba(0, 0, 0, 0.45);
+  --shadow-sharp: 0 4px 0 rgba(0, 0, 0, 0.5);
+
+  --space-bg: var(--bg);
+  --space-bg-2: var(--bg-elevated);
+  --accent: var(--blue-bright);
+  --accent-warm: var(--yellow);
+
+  color-scheme: dark;
 }
-a:hover {
-  color: #535bf2;
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
-  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* Reusable glass utilities shared across the app */
+.glass-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px var(--shadow-color);
+}
+
+.glass-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.glass-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--blue-bright);
+  opacity: 0.5;
+  border-radius: 999px;
+}
+.glass-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Sun/Moon theme toggle */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--yellow);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+  flex-shrink: 0;
+}
+.theme-toggle:hover {
+  transform: translateY(-1px) rotate(-8deg);
+}
+.theme-toggle:active {
+  transform: translateY(0) rotate(0deg);
 }

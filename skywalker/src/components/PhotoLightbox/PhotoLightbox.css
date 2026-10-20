@@ -1,0 +1,75 @@
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.photo-lightbox-card {
+  position: relative;
+  max-width: min(900px, 100%);
+  max-height: 85vh;
+  background: var(--bg-elevated);
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 2px solid var(--border-strong);
+}
+
+.photo-lightbox-card img {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  object-fit: cover;
+}
+
+.photo-lightbox-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+.photo-lightbox-meta-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.photo-lightbox-meta-text span {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.photo-lightbox-blog-badge {
+  flex-shrink: 0;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--blue-deep);
+  background: linear-gradient(to bottom right, var(--yellow-bright), var(--yellow));
+  white-space: nowrap;
+}
+.photo-lightbox-blog-badge:hover {
+  filter: brightness(1.05);
+}
+
+.photo-lightbox-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--blue-deep);
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+}

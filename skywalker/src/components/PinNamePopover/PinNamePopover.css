@@ -1,0 +1,70 @@
+.pin-name-popover-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.pin-name-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(320px, calc(100% - 48px));
+  padding: 18px 20px;
+  border-radius: 16px;
+}
+
+.pin-name-popover h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pin-name-popover input,
+.pin-name-popover textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.pin-name-popover input::placeholder,
+.pin-name-popover textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.pin-name-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pin-name-popover-cancel,
+.pin-name-popover-save {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+
+.pin-name-popover-cancel {
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  color: var(--text);
+}
+
+.pin-name-popover-save {
+  background: linear-gradient(to bottom right, var(--yellow-bright), var(--yellow));
+  color: var(--blue-deep);
+  font-weight: 700;
+}

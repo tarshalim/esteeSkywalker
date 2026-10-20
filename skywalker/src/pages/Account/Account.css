@@ -1,0 +1,113 @@
+.account-page {
+  min-height: 100vh;
+  padding: 9rem 1rem 4rem;
+  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--blue) 10%, var(--bg)) 0%, var(--bg) 55%);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.account-card {
+  width: min(420px, 100%);
+  padding: 2rem 1.75rem;
+  border-radius: 1.25rem;
+  border: 2px solid var(--border-strong);
+  background: var(--bg-elevated);
+  text-align: center;
+}
+
+.account-kicker {
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--blue);
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.account-card h1 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.account-muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.account-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.account-form input {
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  border: 2px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.account-form input:focus {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yellow) 35%, transparent);
+}
+
+.account-primary {
+  margin-top: 0.25rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--yellow);
+  color: var(--text-on-accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.account-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.account-link {
+  margin-top: 1.1rem;
+  border: none;
+  background: none;
+  color: var(--blue);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.account-error,
+.account-notice {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.account-error {
+  color: #dc2626;
+}
+
+.account-notice {
+  color: var(--blue);
+}

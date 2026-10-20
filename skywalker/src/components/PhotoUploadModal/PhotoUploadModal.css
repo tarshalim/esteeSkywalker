@@ -1,0 +1,118 @@
+.upload-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.upload-modal {
+  width: min(420px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: var(--bg-panel-strong);
+  border: 1px solid var(--border);
+}
+
+.upload-modal h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.upload-modal-picker {
+  aspect-ratio: 16/10;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--blue) 8%, var(--bg-elevated));
+  border: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+.upload-modal-picker img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-modal-status {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0 0 0.9rem;
+}
+
+.upload-modal-field {
+  display: block;
+  margin-bottom: 0.85rem;
+}
+.upload-modal-field > span {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+.upload-modal-field > span em {
+  color: var(--blue);
+  font-style: normal;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.upload-modal-field input[type="text"],
+.upload-modal-field input.upload-modal-date {
+  width: 100%;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.85rem;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.upload-modal-continent {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.upload-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+.upload-modal-actions button {
+  font-size: 0.82rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+}
+.upload-modal-actions button:first-child {
+  color: var(--text);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+}
+.upload-modal-primary {
+  background: var(--yellow);
+  color: var(--text-on-accent);
+  font-weight: 700;
+}
+.upload-modal-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

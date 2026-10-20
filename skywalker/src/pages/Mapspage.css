@@ -5,23 +5,6 @@
     overflow-y: scroll; /* Allow vertical scroll */
 }
 
-.fixed-content {
-    display: flex; /* Align images horizontally */
-    position: fixed; /* Keep it fixed while scrolling */
-    width: 100%; /* Ensure it takes up full width */
-    height: 100vh; /* Make sure it fills the full viewport height */
-    top: 0; /* Keep it aligned to the top */
-    left: 0; /* Align to the left side */
-    z-index: 10; /* Ensure it stays above other content */
-}
-
-.scenery-image {
-    width: 100vw; /* Make each image take up the full viewport width */
-    height: 100vh; /* Make each image take up the full viewport height */
-    flex-shrink: 0; /* Prevent images from shrinking */
-    object-fit: cover; /* Ensure images cover the container properly */
-}
-
 .long-body {
     margin-top: 100vh; /* Move the body content down to make space for the fixed images */
     padding-top: 20px; /* Adds some space before the long body starts */
