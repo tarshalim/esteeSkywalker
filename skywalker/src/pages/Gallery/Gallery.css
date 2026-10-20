@@ -1,6 +1,6 @@
 .gallery-page {
   min-height: 100vh;
-  padding: 9rem 1.5rem 4rem;
+  padding: calc(var(--nav-bottom) + 4.5rem) 1.5rem 4rem;
   background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--blue) 10%, var(--bg)) 0%, var(--bg) 55%);
   max-width: 1200px;
   margin: 0 auto;
@@ -120,8 +120,31 @@
   background: linear-gradient(to top, rgba(15, 23, 42, 0.8), transparent);
 }
 
-
-
-
-
-
+@media (max-width: 640px) {
+  .gallery-page {
+    padding: calc(var(--nav-bottom) + 1.75rem) 0.75rem 3rem;
+  }
+  .gallery-header {
+    margin-bottom: 1.5rem;
+  }
+  .gallery-add-photo {
+    min-height: 44px;
+    padding: 0.55rem 1.4rem;
+  }
+  /* Two columns instead of one giant tile per row. */
+  .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin-top: 1rem;
+  }
+  .gallery-item {
+    border-radius: 0.75rem;
+  }
+  .gallery-item-label {
+    padding: 0.45rem 0.55rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

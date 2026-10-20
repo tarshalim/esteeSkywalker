@@ -1,12 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { MapPin, CalendarDays, ArrowRight, X } from "lucide-react";
-import { formatDate } from "../../utils/dateFilters";
+import {
+  MapPin,
+  CalendarDays,
+  ArrowRight,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  ChevronDown,
+  Earth,
+  LayoutGrid,
+  X,
+} from "lucide-react";
+import { formatBlogDate } from "../../utils/dateFilters";
+import JourneyPortal from "../JourneyPortal/JourneyPortal";
 import "./BlogFeed.css";
 
 const PAGE_SIZE = 6;
 const ALL_TAB = "All";
+const ALL_YEARS = "all";
+
+const blogTime = (b) => new Date(b.postDate ?? b.date).getTime();
+const blogYear = (b) => new Date(b.postDate ?? b.date).getFullYear();
 
 /**
  * Homepage blog feed: continent tabs over a continuously loading card grid.
@@ -17,17 +32,24 @@ const ALL_TAB = "All";
  * @param {?{countryCode:string,label:string}} globeFilter - selection made on the globe above
  * @param {?function} onClearGlobeFilter
  * @param {?Element} scrollRoot - the scrolling ancestor, used as the observer root
+ * @param {boolean} autoLoad - false pauses the infinite loader
  */
-export default function BlogFeed({ blogs, globeFilter = null, onClearGlobeFilter, scrollRoot = null, tabsTop = 0 }) {
+export default function BlogFeed({
+  blogs,
+  globeFilter = null,
+  onClearGlobeFilter,
+  scrollRoot = null,
+  tabsTop = 0,
+  autoLoad = true,
+}) {
   const [activeTab, setActiveTab] = useState(ALL_TAB);
+  const [activeYear, setActiveYear] = useState(ALL_YEARS);
+  const [sortOrder, setSortOrder] = useState("newest");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef(null);
 
   const published = useMemo(
-    () =>
-      blogs
-        .filter((b) => b.status === "published")
-        .sort((a, b) => new Date(b.postDate ?? b.date) - new Date(a.postDate ?? a.date)),
+    () => blogs.filter((b) => b.status === "published").sort((a, b) => blogTime(b) - blogTime(a)),
     [blogs]
   );
 
@@ -36,52 +58,93 @@ export default function BlogFeed({ blogs, globeFilter = null, onClearGlobeFilter
     [published]
   );
 
-  const filtered = useMemo(
-    () =>
-      published.filter(
-        (b) =>
-          (activeTab === ALL_TAB || b.continent === activeTab) &&
-          (!globeFilter || b.countryCode === globeFilter.countryCode)
-      ),
-    [published, activeTab, globeFilter]
+  const years = useMemo(
+    () => [...new Set(published.map(blogYear).filter((y) => !Number.isNaN(y)))].sort((a, b) => b - a),
+    [published]
   );
 
-  useEffect(() => setVisibleCount(PAGE_SIZE), [activeTab, globeFilter]);
+  const filtered = useMemo(() => {
+    const matches = published.filter(
+      (b) =>
+        (activeTab === ALL_TAB || b.continent === activeTab) &&
+        (activeYear === ALL_YEARS || blogYear(b) === Number(activeYear)) &&
+        (!globeFilter || b.countryCode === globeFilter.countryCode)
+    );
+    // `published` is already newest-first.
+    return sortOrder === "oldest" ? matches.reverse() : matches;
+  }, [published, activeTab, activeYear, sortOrder, globeFilter]);
+
+  useEffect(() => setVisibleCount(PAGE_SIZE), [activeTab, activeYear, sortOrder, globeFilter]);
+
+  const SortIcon = sortOrder === "newest" ? ArrowDownWideNarrow : ArrowUpNarrowWide;
 
   const hasMore = visibleCount < filtered.length;
 
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || !hasMore) return;
+    if (!el || !hasMore || !autoLoad) return;
     const observer = new IntersectionObserver(
       ([entry]) => entry.isIntersecting && setVisibleCount((n) => n + PAGE_SIZE),
       { root: scrollRoot, rootMargin: "0px 0px 400px 0px" }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore, scrollRoot, visibleCount]);
+  }, [hasMore, scrollRoot, visibleCount, autoLoad]);
 
   const visible = filtered.slice(0, visibleCount);
 
   return (
     <div className="blog-feed">
-      <div className="blog-feed-tabs glass-panel" style={{ top: tabsTop }} role="tablist" aria-label="Filter stories by continent">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={tab === activeTab}
-            className={`blog-feed-tab${tab === activeTab ? " is-active" : ""}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="blog-feed-tabs glass-panel" style={{ top: tabsTop }}>
+        <div className="blog-feed-tab-group" role="tablist" aria-label="Filter stories by continent">
+          {tabs.map((tab) => {
+            const Icon = tab === ALL_TAB ? LayoutGrid : Earth;
+            return (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={tab === activeTab}
+                className={`blog-feed-tab${tab === activeTab ? " is-active" : ""}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                <Icon size={12} aria-hidden="true" /> {tab}
+              </button>
+            );
+          })}
+        </div>
+
+        <span className="blog-feed-divider" aria-hidden="true" />
+
+        {years.length > 1 && (
+          <label className={`blog-feed-select${activeYear !== ALL_YEARS ? " is-active" : ""}`}>
+            <CalendarDays size={12} aria-hidden="true" />
+            <select value={activeYear} onChange={(e) => setActiveYear(e.target.value)} aria-label="Filter stories by year">
+              <option value={ALL_YEARS}>All years</option>
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={12} aria-hidden="true" />
+          </label>
+        )}
+
+        <button
+          type="button"
+          className="blog-feed-sort"
+          onClick={() => setSortOrder((s) => (s === "newest" ? "oldest" : "newest"))}
+          aria-label={`Sorted ${sortOrder} first — switch to ${sortOrder === "newest" ? "oldest" : "newest"} first`}
+          title={`Sorted ${sortOrder} first`}
+        >
+          <SortIcon size={12} aria-hidden="true" /> {sortOrder === "newest" ? "Newest" : "Oldest"}
+        </button>
+
         {globeFilter && (
-          <button type="button" className="blog-feed-chip" onClick={onClearGlobeFilter}>
-            <MapPin size={13} /> {globeFilter.label}
-            <X size={13} aria-label="Clear globe filter" />
+          <button type="button" className="blog-feed-chip" onClick={onClearGlobeFilter} aria-label={`Clear globe filter: ${globeFilter.label}`}>
+            <MapPin size={13} className="shrink-0" /> <span className="blog-feed-chip-label">{globeFilter.label}</span>
+            <X size={13} className="shrink-0" aria-hidden="true" />
           </button>
         )}
       </div>
@@ -112,7 +175,7 @@ export default function BlogFeed({ blogs, globeFilter = null, onClearGlobeFilter
                       <MapPin size={13} /> {blog.location?.name ?? blog.countryName}
                     </span>
                     <span>
-                      <CalendarDays size={13} /> {formatDate(blog.postDate ?? blog.date)}
+                      <CalendarDays size={13} /> {formatBlogDate(blog)}
                     </span>
                   </div>
                   <h3 className="blog-card-title">{blog.title}</h3>
@@ -130,9 +193,7 @@ export default function BlogFeed({ blogs, globeFilter = null, onClearGlobeFilter
       {hasMore && <div ref={sentinelRef} className="blog-feed-sentinel" aria-hidden="true" />}
 
       <div className="blog-feed-footer">
-        <Link to="/blogs" className="blog-feed-journey-btn">
-          Ride the full journey <ArrowRight size={16} />
-        </Link>
+        <JourneyPortal storyCount={published.length} />
       </div>
     </div>
   );

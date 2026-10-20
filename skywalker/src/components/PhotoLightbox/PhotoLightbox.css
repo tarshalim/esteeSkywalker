@@ -1,7 +1,7 @@
 .photo-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: var(--z-modal);
   background: rgba(15, 23, 42, 0.8);
   backdrop-filter: blur(6px);
   display: flex;
@@ -39,6 +39,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .photo-lightbox-meta-text span {
@@ -72,4 +74,38 @@
   border: none;
   font-weight: 700;
   cursor: pointer;
+  z-index: 2;
+}
+
+@media (max-width: 640px) {
+  .photo-lightbox {
+    padding: 0.75rem;
+  }
+  /* Scroll inside the card instead of clipping the caption off the bottom. */
+  .photo-lightbox-card {
+    width: 100%;
+    max-height: calc(100dvh - 1.5rem);
+    overflow-y: auto;
+  }
+  .photo-lightbox-card img,
+  .photo-lightbox-card .media-view--full {
+    max-height: 60dvh;
+  }
+  .photo-lightbox-meta {
+    flex-wrap: wrap;
+    padding: 0.85rem 1rem 1rem;
+  }
+  .photo-lightbox-blog-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    width: 100%;
+  }
+  .photo-lightbox-close {
+    width: 44px;
+    height: 44px;
+    top: 0.5rem;
+    right: 0.5rem;
+  }
 }

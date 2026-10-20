@@ -2,8 +2,10 @@
   position: absolute;
   top: 16px;
   left: 16px;
-  z-index: 20;
-  width: min(360px, calc(100% - 32px));
+  z-index: var(--z-hud);
+  /* Leaves the top-right column free for the pin dock (44px buttons + gaps),
+     so the bar can never cover the pin on mid-width screens. */
+  width: min(360px, calc(100% - 32px - var(--globe-pin-dock-width, 60px)));
 }
 
 .globe-search-form {
@@ -56,10 +58,20 @@
   color: var(--text-muted);
 }
 
+.globe-search-section {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pin-red);
+  border-bottom: 1px solid var(--border);
+}
+
 .globe-search-result {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   text-align: left;
   padding: 10px 16px;
@@ -76,6 +88,19 @@
   background: color-mix(in srgb, var(--blue) 12%, transparent);
 }
 
+.globe-search-result svg {
+  flex-shrink: 0;
+}
+.globe-search-result-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.globe-search-result--place .globe-search-result-kind {
+  color: var(--text-muted);
+}
+
 .globe-search-result-label {
   font-size: 13px;
   font-weight: 600;
@@ -85,4 +110,26 @@
   font-size: 11px;
   color: var(--blue);
   font-weight: 600;
+}
+
+/* PinDropButton docks to the bottom-left on phones, so the bar can span the top. */
+@media (max-width: 640px) {
+  .globe-search-bar {
+    top: 12px;
+    left: 12px;
+    width: calc(100% - 24px);
+  }
+  .globe-search-form {
+    min-height: 44px;
+    padding: 6px 14px;
+  }
+  .globe-search-input {
+    min-width: 0;
+  }
+  .globe-search-results {
+    max-height: min(320px, 45dvh);
+  }
+  .globe-search-result {
+    min-height: 44px;
+  }
 }

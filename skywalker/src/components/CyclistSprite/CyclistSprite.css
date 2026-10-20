@@ -13,6 +13,34 @@
   transform: translate(-50%, 0) scaleX(1);
 }
 
+/* Positioned by a parent wrapper (e.g. the scroll-driven My Blog trail) instead of fixed screen coordinates. */
+/* Inline mode: the box ends exactly at the tyres so a parent can anchor it to the ground.
+   No drop-shadow: a filter on an animating Lottie SVG re-rasterises every frame. */
+.cyclist-sprite.is-inline {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  overflow: hidden;
+  filter: none;
+  transform: scaleX(-1);
+}
+
+.cyclist-sprite.is-inline.is-reversed {
+  transform: scaleX(1);
+}
+
+/* The Lottie canvas has ~21% (of its width) of empty space + watermark below the wheels. */
+.cyclist-sprite.is-inline .cyclist-sprite-anim {
+  display: block;
+  height: auto;
+  margin-bottom: -21%;
+  clip-path: none;
+}
+
+.cyclist-sprite.is-inline .cyclist-sprite-shadow {
+  display: none;
+}
+
 .cyclist-sprite-anim {
   width: 100%;
   height: 100%;

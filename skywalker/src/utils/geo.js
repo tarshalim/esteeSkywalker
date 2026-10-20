@@ -146,6 +146,67 @@ export function continentForCountryCode(code, countryFeatures, fallback = {}) {
 }
 
 /**
+ * Strict variant of findCountryForPoint: only a polygon that actually
+ * contains the point, else null — so a pin in mid-ocean isn't labelled with
+ * whichever country's centroid happens to be nearest.
+ */
+export function countryContainingPoint(lat, lng, countryFeatures) {
+  // Cheap bbox reject first: this runs on every pointer move of a pin drag.
+  const feature = countryFeatures.find((f) => {
+    const [minLng, minLat, maxLng, maxLat] = featureBbox(f);
+    return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng && isPointInFeature(lat, lng, f);
+  });
+  return feature ? featureToCountryInfo(feature) : null;
+}
+
+const bboxCache = new WeakMap();
+
+/** [minLng, minLat, maxLng, maxLat] of a Polygon/MultiPolygon feature, memoized. */
+function featureBbox(feature) {
+  if (!bboxCache.has(feature)) {
+    const bbox = [Infinity, Infinity, -Infinity, -Infinity];
+    const geometry = feature.geometry;
+    const polygons = !geometry ? [] : geometry.type === "MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
+    for (const polygon of polygons) {
+      for (const [lng, lat] of polygon[0] ?? []) {
+        bbox[0] = Math.min(bbox[0], lng);
+        bbox[1] = Math.min(bbox[1], lat);
+        bbox[2] = Math.max(bbox[2], lng);
+        bbox[3] = Math.max(bbox[3], lat);
+      }
+    }
+    bboxCache.set(feature, bbox);
+  }
+  return bboxCache.get(feature);
+}
+
+/** "35.01°N, 135.77°E" — the place label of last resort. */
+export function formatCoords(lat, lng) {
+  return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"}, ${Math.abs(lng).toFixed(2)}°${lng >= 0 ? "E" : "W"}`;
+}
+
+/**
+ * Which ocean an offshore point is in ("North Atlantic Ocean"), from coarse
+ * longitude bands — only meant for points no country polygon or geocoder
+ * claims, so the land boundaries between basins can stay rough.
+ */
+export function oceanForPoint(lat, lng) {
+  if (lat >= 66) return "Arctic Ocean";
+  if (lat <= -60) return "Southern Ocean";
+  const hemisphere = lat >= 0 ? "North" : "South";
+  // Indian: east of Africa, west of the Malay archipelago / Australia.
+  if (lng >= 20 && lng < (lat < -10 ? 147 : 100) && lat < 30) return "Indian Ocean";
+  // Atlantic: east of the Americas (Caribbean/Gulf included north of ~8°N).
+  if (lng >= (lat > 8 ? -100 : -70) && lng < 20) return `${hemisphere} Atlantic Ocean`;
+  return `${hemisphere} Pacific Ocean`;
+}
+
+/** Whether a place label names open water, so it reads "in the …". */
+export function isWaterName(name) {
+  return /\b(Ocean|Sea)$/.test(name ?? "");
+}
+
+/**
  * Client-side reverse geocoding: which country (and continent, read straight
  * off the same feature) contains this point. Falls back to the nearest
  * country by centroid distance when no polygon contains the point — some
@@ -153,11 +214,8 @@ export function continentForCountryCode(code, countryFeatures, fallback = {}) {
  * Earth dataset, so an exact match isn't always possible.
  */
 export function findCountryForPoint(lat, lng, countryFeatures) {
-  for (const feature of countryFeatures) {
-    if (isPointInFeature(lat, lng, feature)) {
-      return featureToCountryInfo(feature);
-    }
-  }
+  const containing = countryContainingPoint(lat, lng, countryFeatures);
+  if (containing) return containing;
 
   let nearest = null;
   let nearestDist = Infinity;

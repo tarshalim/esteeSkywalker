@@ -1,0 +1,320 @@
+/* Fixed corner CD for a post's background track. Everything animated here is
+   transform/opacity only, so it stays on the compositor while the page scrolls. */
+.bg-audio {
+  --bg-audio-size: 64px;
+  position: fixed;
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-hud);
+  width: var(--bg-audio-size);
+  height: var(--bg-audio-size);
+}
+
+.bg-audio-disc {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  border-radius: 50%;
+  border: 2px solid var(--glass-border);
+  background: var(--bg-panel-strong);
+  box-shadow: 0 8px 24px var(--shadow-color);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease;
+}
+.bg-audio-disc:hover {
+  transform: scale(1.06);
+}
+.bg-audio-disc:active {
+  transform: scale(0.94);
+}
+.bg-audio-disc:focus-visible {
+  outline: 3px solid var(--border-strong);
+  outline-offset: 3px;
+}
+
+.bg-audio-cd {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  animation: bg-audio-spin 4s linear infinite;
+  /* Paused keeps the current angle, so stopping is instant with no snap back. */
+  animation-play-state: paused;
+  opacity: 0.55;
+  filter: grayscale(0.6);
+  will-change: transform;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+.bg-audio.is-playing .bg-audio-cd {
+  animation-play-state: running;
+  opacity: 1;
+  filter: none;
+}
+
+/* Red diagonal strike while paused. */
+.bg-audio-strike {
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  right: 8%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px var(--bg-elevated);
+  transform: rotate(-45deg) scaleX(1);
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  pointer-events: none;
+}
+.bg-audio.is-playing .bg-audio-strike {
+  opacity: 0;
+  transform: rotate(-45deg) scaleX(0);
+}
+
+/* Notes start behind the disc and rise out from its top edge. */
+.bg-audio-notes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.bg-audio-note {
+  position: absolute;
+  left: 50%;
+  top: 35%;
+  width: var(--note-size);
+  height: var(--note-size);
+  margin-left: calc(var(--note-size) / -2);
+  background-color: var(--note-color);
+  -webkit-mask: var(--note-src) center / contain no-repeat;
+  mask: var(--note-src) center / contain no-repeat;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: bg-audio-note var(--note-dur) ease-out forwards;
+}
+
+.bg-audio-hint {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  translate: 0 -50%;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 2px solid var(--glass-border);
+  background: var(--bg-panel-strong);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 4px 14px var(--shadow-color);
+  pointer-events: none;
+  animation: bg-audio-hint-in 0.3s ease-out both;
+}
+
+/* Hover/focus card left of the disc. The padding bridges the gap so the
+   pointer can travel from the CD onto the "Open in…" link. */
+.bg-audio-tip {
+  position: absolute;
+  right: 100%;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: min(240px, calc(100vw - var(--bg-audio-size) - 48px));
+  margin-right: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--glass-border);
+  background: var(--bg-panel-strong);
+  color: var(--text);
+  box-shadow: 0 4px 14px var(--shadow-color);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(6px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
+}
+.bg-audio-tip::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 12px;
+}
+.bg-audio:hover .bg-audio-tip,
+.bg-audio:focus-within .bg-audio-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+.bg-audio:hover .bg-audio-hint,
+.bg-audio:focus-within .bg-audio-hint {
+  opacity: 0;
+}
+.bg-audio-tip-status {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted, currentColor);
+  opacity: 0.8;
+}
+.bg-audio-tip-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bg-audio-tip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 4px;
+}
+.bg-audio-tip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--blue-bright, #3b82f6);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.bg-audio-tip-link:hover {
+  text-decoration: underline;
+}
+
+/* Upload/YouTube engines are headless; keep their element in the DOM but off-screen. */
+.bg-audio-engine {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  clip-path: inset(50%);
+}
+
+/* Spotify's compact embed sits above the disc. Closing only hides it — the
+   iframe stays mounted so playback continues. */
+.bg-audio-embed {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  z-index: 2;
+  width: min(300px, calc(100vw - 32px));
+  padding: 6px;
+  border-radius: 16px;
+  border: 2px solid var(--glass-border);
+  background: var(--bg-panel-strong);
+  box-shadow: 0 8px 24px var(--shadow-color);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px) scale(0.97);
+  transform-origin: bottom right;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
+}
+.bg-audio-embed.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+.bg-audio-embed-frame,
+.bg-audio-embed-frame iframe {
+  display: block;
+  width: 100%;
+  height: 80px;
+  border: 0;
+  border-radius: 12px;
+}
+.bg-audio-embed-close {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--glass-border);
+  background: var(--bg-panel-strong);
+  color: var(--text);
+  cursor: pointer;
+}
+
+@keyframes bg-audio-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bg-audio-note {
+  0% {
+    transform: translate(0, 0) scale(0.4) rotate(0deg);
+    opacity: 0;
+  }
+  18% {
+    transform: translate(var(--note-sway), -22px) scale(1) rotate(calc(var(--note-rot) * 0.3));
+    opacity: 1;
+  }
+  45% {
+    transform: translate(calc(var(--note-dx) * 0.4 - var(--note-sway)), -52px) scale(1) rotate(calc(var(--note-rot) * -0.4));
+    opacity: 0.95;
+  }
+  72% {
+    transform: translate(calc(var(--note-dx) * 0.7 + var(--note-sway)), -82px) scale(0.95) rotate(calc(var(--note-rot) * 0.7));
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(var(--note-dx), -116px) scale(0.85) rotate(var(--note-rot));
+    opacity: 0;
+  }
+}
+
+@keyframes bg-audio-hint-in {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+}
+
+@media (max-width: 640px) {
+  .bg-audio {
+    --bg-audio-size: 54px;
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  /* No hover on touch; the tap feedback comes from :active. */
+  .bg-audio-disc:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-audio-cd {
+    animation: none;
+  }
+  .bg-audio-strike,
+  .bg-audio-cd,
+  .bg-audio-tip,
+  .bg-audio-embed {
+    transition: none;
+  }
+}

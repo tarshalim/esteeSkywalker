@@ -1,29 +1,14 @@
 import { createHistory, pushHistory, undo, redo } from "../../../lib/canvasHistory";
 
-export const TOOL = {
-  SELECT: "select",
-  TEXT: "text",
-  IMAGE: "image",
-  VIDEO: "video",
-  AUDIO: "audio",
-  STICKER: "sticker",
-  JOURNEY: "journey",
-};
-
 export function createInitialState(doc) {
   return {
     history: createHistory(doc),
+    // Consecutive commits sharing a coalesce key (e.g. keystrokes in one text
+    // box) replace the present snapshot instead of each taking an undo slot.
+    lastCoalesce: null,
     ui: {
       selectedId: null,
-      activeTool: TOOL.SELECT,
-      pendingSticker: null, // { stickerId, category, char? } while armed for spawn
-      drawingLine: null, // [{x,y}, ...] while the journey tool is mid-draw
-      zoom: 1,
-      pan: { x: 0, y: 0 },
-      drawerOpen: false,
-      drawerTab: "nature",
-      themePanelOpen: false,
-      sizePanelOpen: false,
+      editingId: null, // element whose text is being typed into
     },
   };
 }
@@ -33,56 +18,37 @@ export function canvasReducer(state, action) {
     case "LOAD_DOC":
       return createInitialState(action.doc);
 
-    case "COMMIT":
-      return { ...state, history: pushHistory(state.history, action.doc) };
+    case "COMMIT": {
+      const present = state.history.present;
+      // Commits are functions of the latest doc, so async callers (uploads)
+      // can never write back a stale snapshot.
+      const next = action.fn(present);
+      if (next === present) return state;
+      if (action.coalesce && action.coalesce === state.lastCoalesce) {
+        return { ...state, history: { ...state.history, present: next, future: [] } };
+      }
+      return { ...state, history: pushHistory(state.history, next), lastCoalesce: action.coalesce ?? null };
+    }
 
     case "UNDO":
-      return { ...state, history: undo(state.history) };
+      return { ...state, history: undo(state.history), lastCoalesce: null, ui: { ...state.ui, editingId: null } };
 
     case "REDO":
-      return { ...state, history: redo(state.history) };
+      return { ...state, history: redo(state.history), lastCoalesce: null, ui: { ...state.ui, editingId: null } };
 
     case "SELECT":
-      return { ...state, ui: { ...state.ui, selectedId: action.id } };
-
-    case "SET_TOOL":
       return {
         ...state,
-        ui: { ...state.ui, activeTool: action.tool, pendingSticker: null, drawingLine: null, selectedId: null },
+        lastCoalesce: null,
+        ui: { selectedId: action.id, editingId: action.id && action.id === state.ui.editingId ? action.id : null },
       };
 
-    case "ARM_STICKER":
-      return {
-        ...state,
-        ui: { ...state.ui, activeTool: TOOL.STICKER, pendingSticker: action.sticker, selectedId: null },
-      };
+    case "EDIT":
+      return { ...state, lastCoalesce: null, ui: { selectedId: action.id ?? state.ui.selectedId, editingId: action.id } };
 
-    case "CANCEL_TOOL":
-      return {
-        ...state,
-        ui: { ...state.ui, activeTool: TOOL.SELECT, pendingSticker: null, drawingLine: null },
-      };
-
-    case "SET_DRAWING_LINE":
-      return { ...state, ui: { ...state.ui, drawingLine: action.points } };
-
-    case "SET_ZOOM":
-      return { ...state, ui: { ...state.ui, zoom: action.zoom } };
-
-    case "SET_PAN":
-      return { ...state, ui: { ...state.ui, pan: action.pan } };
-
-    case "TOGGLE_DRAWER":
-      return { ...state, ui: { ...state.ui, drawerOpen: action.open ?? !state.ui.drawerOpen } };
-
-    case "SET_DRAWER_TAB":
-      return { ...state, ui: { ...state.ui, drawerTab: action.tab } };
-
-    case "TOGGLE_THEME_PANEL":
-      return { ...state, ui: { ...state.ui, themePanelOpen: action.open ?? !state.ui.themePanelOpen, sizePanelOpen: false } };
-
-    case "TOGGLE_SIZE_PANEL":
-      return { ...state, ui: { ...state.ui, sizePanelOpen: action.open ?? !state.ui.sizePanelOpen, themePanelOpen: false } };
+    case "FORGET":
+      // An element went away (deleted): drop any selection pointing at it.
+      return state.ui.selectedId === action.id ? { ...state, ui: { selectedId: null, editingId: null } } : state;
 
     default:
       return state;

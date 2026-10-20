@@ -1,0 +1,129 @@
+/* Scrapbook canvas: paper shapes, tapes and stamps that are awkward to
+   express as Tailwind utilities. Layout/positioning stays in the JSX. */
+
+.sb-text {
+  outline: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.sb-editable:empty::before {
+  content: attr(data-placeholder);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Floating toolbar buttons: finger-sized on touch screens */
+.sb-tool {
+  width: 32px;
+  height: 32px;
+}
+@media (pointer: coarse) {
+  .sb-tool {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Sticky note: subtle curl highlight + lifted bottom-right corner */
+.sb-sticky {
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.35), transparent 45%),
+    linear-gradient(315deg, rgba(0, 0, 0, 0.07), transparent 22%);
+  border-bottom-right-radius: 18px 6px;
+}
+
+/* Ruled paper: blue lines + red margin */
+.sb-lined {
+  background-image: linear-gradient(90deg, transparent 11%, rgba(239, 68, 68, 0.45) 11%, rgba(239, 68, 68, 0.45) calc(11% + 1.5px), transparent calc(11% + 1.5px)),
+    repeating-linear-gradient(180deg, transparent 0 27px, rgba(59, 130, 246, 0.3) 27px 28px);
+  background-position: 0 0, 0 14px;
+}
+.sb-lined--nomargin {
+  background-image: repeating-linear-gradient(180deg, transparent 0 27px, rgba(59, 130, 246, 0.3) 27px 28px);
+  background-position: 0 30px;
+}
+
+/* Notepad spiral binding: wire coils over punched holes */
+.sb-spiral {
+  background-image: radial-gradient(ellipse 7px 10px at 50% 30%, transparent 5px, #64748b 5.5px, #94a3b8 7px, transparent 7.5px),
+    radial-gradient(circle at 50% 72%, #1e293b 4px, transparent 4.5px);
+  background-size: 22px 100%;
+  background-repeat: repeat-x;
+}
+
+/* Washi tape: translucent, jagged torn ends, tinted via --tint */
+.sb-washi {
+  --tint: #f9a8d4;
+  background-color: color-mix(in srgb, var(--tint) 82%, transparent);
+  mix-blend-mode: multiply;
+  clip-path: polygon(0 6%, 3% 22%, 0 40%, 3% 58%, 0 76%, 2.5% 94%, 1% 100%, 99% 100%, 97% 82%, 100% 64%, 97% 46%, 100% 28%, 97% 10%, 99% 0, 1% 0);
+  box-shadow: inset 0 0 0 100vmax rgba(255, 255, 255, 0.08);
+}
+.sb-washi--stripe {
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.45) 0 6px, transparent 6px 13px);
+}
+.sb-washi--dots {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 2.2px, transparent 2.8px);
+  background-size: 12px 12px;
+}
+.sb-washi--grid {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.45) 50%, transparent 50%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.45) 50%, transparent 50%);
+  background-size: 12px 12px;
+}
+.sb-washi--plain {
+  background-image: repeating-linear-gradient(90deg, rgba(90, 60, 30, 0.08) 0 1px, transparent 1px 5px);
+}
+
+/* Postage stamp: perforated edge. Holes tile the whole box; the inner panel
+   covers all but the half-holes along the border. */
+.sb-stamp {
+  background: radial-gradient(circle at center, transparent 4px, #fffdf7 4.5px) -7px -7px / 14px 14px;
+  filter: drop-shadow(0 3px 4px rgba(15, 23, 42, 0.25));
+}
+
+/* Wax seal */
+.sb-seal {
+  --tint: #b91c1c;
+  border-radius: 47% 53% 49% 51% / 52% 47% 53% 48%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--tint) 70%, white), var(--tint) 45%, color-mix(in srgb, var(--tint) 65%, black));
+  box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.35), inset 0 3px 6px rgba(255, 255, 255, 0.25), 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+.sb-seal-ring {
+  border: 2px solid rgba(0, 0, 0, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Camcorder viewfinder overlay */
+.sb-viewfinder {
+  color: #fff;
+  font: 600 12px/1 "Courier Prime", monospace;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  background:
+    linear-gradient(#fff, #fff) top left / 18px 2px, linear-gradient(#fff, #fff) top left / 2px 18px,
+    linear-gradient(#fff, #fff) top right / 18px 2px, linear-gradient(#fff, #fff) top right / 2px 18px,
+    linear-gradient(#fff, #fff) bottom left / 18px 2px, linear-gradient(#fff, #fff) bottom left / 2px 18px,
+    linear-gradient(#fff, #fff) bottom right / 18px 2px, linear-gradient(#fff, #fff) bottom right / 2px 18px;
+  background-repeat: no-repeat;
+}
+.sb-rec {
+  color: #f87171;
+  animation: sb-blink 1.2s steps(2, start) infinite;
+}
+.sb-battery {
+  width: 22px;
+  height: 10px;
+  border: 1.5px solid #fff;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #fff 70%, transparent 70%) 1px 1px / calc(100% - 2px) calc(100% - 2px) no-repeat;
+}
+@keyframes sb-blink {
+  to {
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-rec {
+    animation: none;
+  }
+}

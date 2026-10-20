@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import MediaView from "../MediaView/MediaView";
@@ -9,10 +10,11 @@ import "./PhotoLightbox.css";
  * Full-size media modal (image or video), shared by GlobeExplorer and the
  * Gallery page: AnimatePresence + layoutId morph, scrim, click-outside-to-close.
  * `photo.blog` (or `photo.blogId`) adds a link to the post it belongs to.
+ * Portaled to <body> so it covers TopNav (pages sit in an isolated layer below it).
  */
 export default function PhotoLightbox({ photo, onClose }) {
   const blogId = photo.blog?.id ?? photo.blogId;
-  return (
+  return createPortal(
     <motion.div
       className="photo-lightbox"
       initial={{ opacity: 0 }}
@@ -44,6 +46,7 @@ export default function PhotoLightbox({ photo, onClose }) {
           ✕
         </button>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }

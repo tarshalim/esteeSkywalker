@@ -1,0 +1,5 @@
+/* Shrink the trail's rider to fit the miniature scene. Plain CSS rather than a
+   Tailwind utility: the sprite's own width is unlayered, so it would win. */
+.journey-portal-rider .cyclist-sprite {
+  width: clamp(64px, 11vw, 92px);
+}

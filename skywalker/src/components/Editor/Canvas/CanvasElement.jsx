@@ -1,95 +1,145 @@
 import { useRef, useState } from "react";
-import { ArrowUp, ArrowDown, Trash2, RotateCw } from "lucide-react";
+import { Move, RotateCw } from "lucide-react";
+import { ELEMENT_KIND, hasText } from "../../../lib/canvasElements";
 
 const MIN_SIZE = 24;
+const DRAG_THRESHOLD = 4; // screen px a press must travel before it becomes a drag
+const KEEP_VISIBLE = 40; // px of an element that must stay on the page after a drag
+const KEEP_ASPECT = new Set([ELEMENT_KIND.STICKER, ELEMENT_KIND.FRAME_STICKER, ELEMENT_KIND.POLAROID]);
+const COARSE_POINTER = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+
+function rotateVec(x, y, deg) {
+  const r = (deg * Math.PI) / 180;
+  return { x: x * Math.cos(r) - y * Math.sin(r), y: x * Math.sin(r) + y * Math.cos(r) };
+}
+
+function rounded(patch) {
+  return Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, Math.round(v)]));
+}
 
 /**
- * Generic transform chrome (move / resize / rotate / layer / delete) shared
- * by every canvas element kind. Drag/resize/rotate only commit a single
- * history snapshot on pointer-up — see docs/canvas-editor-spec.md §3.2.
+ * Transform chrome (move / resize / rotate) shared by every canvas element
+ * kind. Pointer moves only update local `live` state; a single history
+ * snapshot is committed on release. A press that never passes the drag
+ * threshold is a tap: it selects, and a second tap on a text-bearing element
+ * starts editing it.
  */
-export default function CanvasElement({ element, selected, toCanvasPoint, onSelect, actions, children }) {
-  const elRef = useRef(null);
-  const [live, setLive] = useState(null); // { x, y, width, height, rotation } transient override while dragging
+export default function CanvasElement({ element, selected, editing, zoom, pageWidth, toCanvasPoint, actions, onInteract, children }) {
+  const liveRef = useRef(null);
+  const [live, setLiveState] = useState(null);
+  const setLive = (next) => {
+    liveRef.current = next;
+    setLiveState(next);
+  };
+  const view = { ...element, ...live };
 
-  const view = { x: element.x, y: element.y, width: element.width, height: element.height, rotation: element.rotation, ...live };
-
-  const beginPointerSession = (onMove, onDone) => (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    onSelect(element.id);
-    const move = (ev) => onMove(ev);
-    const up = (ev) => {
-      onMove(ev);
-      onDone();
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+  const commitLive = () => {
+    const cur = liveRef.current;
+    setLive(null);
+    if (cur) actions.updateElement(element.id, rounded(cur));
   };
 
-  const handleMove = beginPointerSession(
-    (() => {
-      let start = null;
-      return (e) => {
-        const p = toCanvasPoint(e.clientX, e.clientY);
-        if (!start) start = p;
-        setLive({ x: element.x + (p.x - start.x), y: element.y + (p.y - start.y) });
-      };
-    })(),
-    () => {
-      setLive((cur) => {
-        if (cur) actions.updateElement(element.id, { x: Math.round(cur.x), y: Math.round(cur.y) });
-        return null;
-      });
-    }
-  );
+  function startSession(e, { onMove, onEnd }) {
+    const { pointerId } = e;
+    const startClient = { x: e.clientX, y: e.clientY };
+    const startPoint = toCanvasPoint(e.clientX, e.clientY);
+    let dragging = false;
 
-  function makeResizeHandler(edges) {
-    let startPoint = null;
-    return beginPointerSession(
-      (e) => {
-        const p = toCanvasPoint(e.clientX, e.clientY);
-        if (!startPoint) startPoint = p;
-        const dx = p.x - startPoint.x;
-        const dy = p.y - startPoint.y;
-        const next = { x: element.x, y: element.y, width: element.width, height: element.height };
-        if (edges.includes("right")) next.width = Math.max(MIN_SIZE, element.width + dx);
-        if (edges.includes("bottom")) next.height = Math.max(MIN_SIZE, element.height + dy);
-        setLive(next);
-      },
-      () => {
-        setLive((cur) => {
-          if (cur) actions.updateElement(element.id, { width: Math.round(cur.width), height: Math.round(cur.height) });
-          return null;
-        });
+    const move = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y) < DRAG_THRESHOLD) return;
+        dragging = true;
+        onInteract?.(true);
       }
-    );
+      const point = toCanvasPoint(ev.clientX, ev.clientY);
+      onMove({ dx: point.x - startPoint.x, dy: point.y - startPoint.y, point, event: ev });
+    };
+    const end = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (dragging) onInteract?.(false);
+      const cancelled = ev.type === "pointercancel";
+      if (cancelled) setLive(null);
+      onEnd({ dragged: dragging, cancelled });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
   }
 
-  const handleRotate = beginPointerSession(
-    (e) => {
-      const center = toCanvasPoint(
-        elRef.current.getBoundingClientRect().left + elRef.current.getBoundingClientRect().width / 2,
-        elRef.current.getBoundingClientRect().top + elRef.current.getBoundingClientRect().height / 2
-      );
-      const p = toCanvasPoint(e.clientX, e.clientY);
-      const angle = (Math.atan2(p.y - center.y, p.x - center.x) * 180) / Math.PI + 90;
-      setLive({ rotation: Math.round(angle) });
-    },
-    () => {
-      setLive((cur) => {
-        if (cur?.rotation !== undefined) actions.updateElement(element.id, { rotation: cur.rotation });
-        return null;
-      });
-    }
-  );
+  const startMove = (e, { allowEdit }) => {
+    if (e.button > 0) return;
+    e.stopPropagation();
+    const wasSelected = selected;
+    if (!selected) actions.select(element.id);
+    startSession(e, {
+      onMove: ({ dx, dy }) => {
+        const x = Math.min(Math.max(element.x + dx, KEEP_VISIBLE - element.width), pageWidth - KEEP_VISIBLE);
+        const y = Math.max(element.y + dy, KEEP_VISIBLE - element.height);
+        setLive({ x, y });
+      },
+      onEnd: ({ dragged, cancelled }) => {
+        if (dragged && !cancelled) commitLive();
+        else if (!dragged && allowEdit && wasSelected && !editing && hasText(element)) actions.edit(element.id);
+      },
+    });
+  };
+
+  const startResize = (edges) => (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const corner = edges.length === 2;
+    startSession(e, {
+      onMove: ({ dx, dy, event }) => {
+        // Work in the element's own (unrotated) frame, then shift the centre
+        // so the opposite corner stays visually pinned.
+        const local = rotateVec(dx, dy, -element.rotation);
+        let w = edges.includes("right") ? element.width + local.x : element.width;
+        let h = edges.includes("bottom") ? element.height + local.y : element.height;
+        if (corner && (KEEP_ASPECT.has(element.kind) || event.shiftKey)) {
+          const s = Math.max(w / element.width, h / element.height);
+          w = element.width * s;
+          h = element.height * s;
+        }
+        w = Math.max(MIN_SIZE, w);
+        h = Math.max(MIN_SIZE, h);
+        const shift = rotateVec((w - element.width) / 2, (h - element.height) / 2, element.rotation);
+        const cx = element.x + element.width / 2 + shift.x;
+        const cy = element.y + element.height / 2 + shift.y;
+        setLive({ x: cx - w / 2, y: cy - h / 2, width: w, height: h });
+      },
+      onEnd: ({ dragged, cancelled }) => dragged && !cancelled && commitLive(),
+    });
+  };
+
+  const startRotate = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const center = { x: element.x + element.width / 2, y: element.y + element.height / 2 };
+    startSession(e, {
+      onMove: ({ point, event }) => {
+        let angle = (Math.atan2(point.y - center.y, point.x - center.x) * 180) / Math.PI + 90;
+        angle = ((angle + 540) % 360) - 180;
+        const snapped = Math.round(angle / 15) * 15;
+        if (event.shiftKey || Math.abs(snapped - angle) < 4) angle = snapped;
+        setLive({ rotation: angle });
+      },
+      onEnd: ({ dragged, cancelled }) => dragged && !cancelled && commitLive(),
+    });
+  };
+
+  // Handles live inside the scaled page, so counter-scale them to stay a
+  // constant on-screen size (and finger-sized on touch screens).
+  const hs = (COARSE_POINTER ? 22 : 13) / zoom;
+  const handle = "absolute rounded-full bg-white border-2 border-blue-500 shadow-md";
 
   return (
     <div
-      ref={elRef}
-      className={`absolute ${selected ? "outline outline-2 outline-blue-400" : ""}`}
+      data-element-id={element.id}
+      className="absolute select-none"
       style={{
         left: view.x,
         top: view.y,
@@ -97,66 +147,58 @@ export default function CanvasElement({ element, selected, toCanvasPoint, onSele
         height: view.height,
         transform: `rotate(${view.rotation}deg)`,
         zIndex: element.zIndex,
-        cursor: selected ? "grab" : "pointer",
+        cursor: editing ? "auto" : "grab",
+        touchAction: selected ? "none" : "pan-y",
+        outline: selected ? `${2 / zoom}px ${editing ? "dashed" : "solid"} #3b82f6` : undefined,
+        outlineOffset: 3 / zoom,
       }}
-      onPointerDown={handleMove}
+      onPointerDown={(e) => startMove(e, { allowEdit: true })}
+      onDoubleClick={() => hasText(element) && actions.edit(element.id)}
     >
       {children}
 
       {selected && (
         <>
           <div
-            className="absolute -right-1.5 top-1/2 -translate-y-1/2 h-6 w-3 cursor-ew-resize rounded bg-blue-400 border border-white/70"
-            onPointerDown={makeResizeHandler(["right"])}
+            className={`${handle} cursor-ew-resize`}
+            style={{ width: hs, height: hs, right: -hs / 2, top: `calc(50% - ${hs / 2}px)`, touchAction: "none" }}
+            onPointerDown={startResize(["right"])}
             title="Resize width"
           />
           <div
-            className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-3 cursor-ns-resize rounded bg-blue-400 border border-white/70"
-            onPointerDown={makeResizeHandler(["bottom"])}
+            className={`${handle} cursor-ns-resize`}
+            style={{ width: hs, height: hs, bottom: -hs / 2, left: `calc(50% - ${hs / 2}px)`, touchAction: "none" }}
+            onPointerDown={startResize(["bottom"])}
             title="Resize height"
           />
           <div
-            className="absolute -right-1.5 -bottom-1.5 h-3.5 w-3.5 cursor-nwse-resize rounded-full bg-blue-400 border border-white/70"
-            onPointerDown={makeResizeHandler(["right", "bottom"])}
-            title="Resize"
+            className={`${handle} cursor-nwse-resize bg-blue-500`}
+            style={{ width: hs, height: hs, right: -hs / 2, bottom: -hs / 2, touchAction: "none" }}
+            onPointerDown={startResize(["right", "bottom"])}
+            title="Resize (Shift keeps proportions)"
           />
           <div
-            className="absolute left-1/2 -top-7 -translate-x-1/2 h-5 w-5 cursor-alias rounded-full bg-slate-900 text-blue-300 border border-slate-600 flex items-center justify-center"
-            onPointerDown={handleRotate}
-            title="Rotate"
+            className="absolute bg-blue-500 pointer-events-none"
+            style={{ width: 2 / zoom, height: 18 / zoom, top: -18 / zoom, left: `calc(50% - ${1 / zoom}px)` }}
+          />
+          <div
+            className={`${handle} cursor-alias flex items-center justify-center text-blue-600`}
+            style={{ width: hs * 1.3, height: hs * 1.3, top: -18 / zoom - hs * 1.3, left: `calc(50% - ${(hs * 1.3) / 2}px)`, touchAction: "none" }}
+            onPointerDown={startRotate}
+            title="Rotate (snaps to 15°)"
           >
-            <RotateCw size={12} />
+            <RotateCw size={hs * 0.75} strokeWidth={2.5} />
           </div>
-
-          <div className="absolute -top-9 right-0 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/95 px-1 py-1 shadow-xl">
-            <button
-              type="button"
-              className="p-1 rounded text-slate-300 hover:bg-slate-700 hover:text-white"
-              title="Bring forward"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => actions.reorderLayer(element.id, "up")}
+          {editing && (
+            <div
+              className="absolute flex items-center justify-center rounded-full bg-blue-500 text-white shadow-md cursor-move"
+              style={{ width: hs * 1.5, height: hs * 1.5, left: -hs * 1.1, top: -hs * 1.1, touchAction: "none" }}
+              onPointerDown={(e) => startMove(e, { allowEdit: false })}
+              title="Drag to move"
             >
-              <ArrowUp size={13} />
-            </button>
-            <button
-              type="button"
-              className="p-1 rounded text-slate-300 hover:bg-slate-700 hover:text-white"
-              title="Send backward"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => actions.reorderLayer(element.id, "down")}
-            >
-              <ArrowDown size={13} />
-            </button>
-            <button
-              type="button"
-              className="p-1 rounded text-rose-300 hover:bg-rose-500/20"
-              title="Delete"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => actions.deleteElement(element.id)}
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
+              <Move size={hs * 0.85} strokeWidth={2.5} />
+            </div>
+          )}
         </>
       )}
     </div>

@@ -96,3 +96,18 @@
 .country-select-result:hover {
   background: color-mix(in srgb, var(--blue) 12%, transparent);
 }
+
+@media (max-width: 640px) {
+  .country-select-input-row {
+    min-height: 44px;
+  }
+  .country-select-input {
+    min-width: 0;
+  }
+  .country-select-result {
+    min-height: 44px;
+  }
+  .country-select-results {
+    max-height: min(260px, 40dvh);
+  }
+}

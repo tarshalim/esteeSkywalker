@@ -1,7 +1,7 @@
 .upload-modal-scrim {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-modal);
   background: rgba(15, 23, 42, 0.6);
   display: flex;
   align-items: center;
@@ -116,4 +116,29 @@
 .upload-modal-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Phones: bottom sheet, full width, scrolls within the visible viewport. */
+@media (max-width: 640px) {
+  .upload-modal-scrim {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .upload-modal {
+    width: 100%;
+    max-height: 92dvh;
+    padding: 1.25rem 1rem calc(1rem + env(safe-area-inset-bottom));
+    border-radius: 1.25rem 1.25rem 0 0;
+  }
+  .upload-modal .country-select {
+    max-width: none;
+  }
+  .upload-modal-field input[type="text"],
+  .upload-modal-field input.upload-modal-date {
+    min-height: 44px;
+  }
+  .upload-modal-actions button {
+    flex: 1;
+    min-height: 44px;
+  }
 }

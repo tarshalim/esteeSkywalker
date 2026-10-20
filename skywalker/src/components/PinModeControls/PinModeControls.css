@@ -1,0 +1,123 @@
+.pin-mode-controls {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pin-mode-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* Set on GlobeExplorer's dock so these match the pin button exactly. */
+  width: var(--dock-button-size, 44px);
+  height: var(--dock-button-size, 44px);
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 4px 12px var(--shadow-color);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+.pin-mode-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--pin-red);
+  color: var(--pin-red);
+}
+.pin-mode-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--pin-red) 60%, transparent);
+  outline-offset: 2px;
+}
+.pin-mode-button:disabled {
+  cursor: progress;
+}
+.pin-mode-button.is-active {
+  background: var(--pin-red);
+  border-color: var(--pin-red-deep);
+  color: #ffffff;
+}
+
+/* Label pill to the left, on hover/focus (and permanently while active). */
+.pin-mode-button::after {
+  content: attr(data-label);
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-strong);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(6px, -50%);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.pin-mode-button:hover::after,
+.pin-mode-button:focus-visible::after,
+.pin-mode-button:disabled::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+.pin-mode-spin {
+  animation: pin-mode-spin 0.9s linear infinite;
+}
+@keyframes pin-mode-spin {
+  to { transform: rotate(360deg); }
+}
+
+.pin-mode-message:empty {
+  display: none;
+}
+.pin-mode-message {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--bg-panel-strong);
+  border: 2px solid var(--pin-red);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .pin-mode-button::after {
+    right: auto;
+    left: calc(100% + 10px);
+    transform: translate(-6px, -50%);
+  }
+  .pin-mode-message {
+    top: auto;
+    bottom: calc(100% + 8px);
+    right: auto;
+    left: 0;
+  }
+}
+
+/* Phones and touch screens can't hover to discover what an icon does, so
+   each label stays up as a persistent pill beside its button. */
+@media (max-width: 640px), (hover: none) {
+  .pin-mode-button::after {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-mode-spin {
+    animation: none;
+  }
+  .pin-mode-button,
+  .pin-mode-button::after {
+    transition: none;
+  }
+}

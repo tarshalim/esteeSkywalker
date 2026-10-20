@@ -1,15 +1,20 @@
-import { BrowserRouter as Router, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ThemeProvider } from "./lib/theme";
 import TopNav from "./components/TopNav/TopNav";
 import Landing from "./pages/Landing/Landing";
 import Gallery from "./pages/Gallery/Gallery";
-import BlogsJourney from "./pages/BlogsJourney/BlogsJourney";
+import MyBlog from "./pages/MyBlog/MyBlog";
 import BlogDetail from "./pages/BlogDetail/BlogDetail";
 import BlogEditor from "./pages/BlogEditor/BlogEditor";
 import MapsPage from "./pages/MapsPage";
 import Account from "./pages/Account/Account";
+import Drafts from "./pages/Drafts/Drafts";
 import { AuthProvider, RequireAuth } from "./lib/auth";
+import { GlobePrefsProvider } from "./lib/globePrefs";
+import { TourProvider } from "./lib/tour";
+import Tour from "./components/Tour/Tour";
+import { GLOBE_PATH } from "./utils/routes";
 
 // The editor gets its own dedicated header (title/cover/save actions), so the
 // floating global nav would just compete with it for the same screen space.
@@ -39,18 +44,25 @@ function AppShell() {
   return (
     <>
       {showGlobalNav && <TopNav />}
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={transitionKey}>
-          <Route path="/" element={<PageTransition><Landing /></PageTransition>} />
-          <Route path="/gallery" element={<PageTransition><Gallery /></PageTransition>} />
-          <Route path="/blogs" element={<PageTransition><BlogsJourney /></PageTransition>} />
-          <Route path="/blogs/new" element={<RequireAuth><PageTransition><BlogEditor /></PageTransition></RequireAuth>} />
-          <Route path="/blogs/edit/:id" element={<RequireAuth><PageTransition><BlogEditor /></PageTransition></RequireAuth>} />
-          <Route path="/blogs/:id" element={<PageTransition><BlogDetail /></PageTransition>} />
-          <Route path="/maps" element={<PageTransition><MapsPage /></PageTransition>} />
-          <Route path="/account" element={<PageTransition><Account /></PageTransition>} />
-        </Routes>
-      </AnimatePresence>
+      {/* Isolated stacking context: page layers stay under the nav; dialogs
+          that must cover it portal to <body> (see --z-* in index.css). */}
+      <main className="app-main">
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={transitionKey}>
+            <Route path="/" element={<PageTransition><Landing /></PageTransition>} />
+            <Route path="/gallery" element={<PageTransition><Gallery /></PageTransition>} />
+            <Route path="/blogs" element={<PageTransition><MyBlog /></PageTransition>} />
+            <Route path="/blogs/drafts" element={<RequireAuth><PageTransition><Drafts /></PageTransition></RequireAuth>} />
+            <Route path="/blogs/new" element={<RequireAuth><PageTransition><BlogEditor /></PageTransition></RequireAuth>} />
+            <Route path="/blogs/edit/:id" element={<RequireAuth><PageTransition><BlogEditor /></PageTransition></RequireAuth>} />
+            <Route path="/blogs/:id" element={<PageTransition><BlogDetail /></PageTransition>} />
+            <Route path={GLOBE_PATH} element={<PageTransition><MapsPage /></PageTransition>} />
+            <Route path="/maps" element={<Navigate to={GLOBE_PATH} replace />} />
+            <Route path="/account" element={<PageTransition><Account /></PageTransition>} />
+          </Routes>
+        </AnimatePresence>
+      </main>
+      <Tour />
     </>
   );
 }
@@ -59,9 +71,13 @@ const App = () => {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router>
-          <AppShell />
-        </Router>
+        <GlobePrefsProvider>
+          <Router>
+            <TourProvider>
+              <AppShell />
+            </TourProvider>
+          </Router>
+        </GlobePrefsProvider>
       </AuthProvider>
     </ThemeProvider>
   );

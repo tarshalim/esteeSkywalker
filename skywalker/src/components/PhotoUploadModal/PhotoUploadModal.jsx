@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata } from "../../lib/exif";
@@ -104,7 +105,8 @@ export default function PhotoUploadModal({ onClose, onSubmit }) {
 
   const canSubmit = Boolean(previewUrl && country && date) && !saving;
 
-  return (
+  // Portaled to <body> so the dialog layers above TopNav.
+  return createPortal(
     <motion.div
       className="upload-modal-scrim"
       initial={{ opacity: 0 }}
@@ -178,6 +180,7 @@ export default function PhotoUploadModal({ onClose, onSubmit }) {
           </button>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }

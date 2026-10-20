@@ -9,6 +9,7 @@ function detectUrlSourceType(url) {
 }
 
 const WIDGET_STYLES = [
+  { id: "card", label: "Music Card" },
   { id: "pill", label: "Glass Pill" },
   { id: "cassette", label: "Cassette" },
   { id: "vinyl", label: "Vinyl" },
@@ -18,6 +19,7 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
   const [tab, setTab] = useState("upload");
   const [url, setUrl] = useState(element.src && element.sourceType !== "upload" ? element.src : "");
   const [title, setTitle] = useState(element.title || "");
+  const [artist, setArtist] = useState(element.artist || "");
   const [widgetStyle, setWidgetStyle] = useState(element.widgetStyle || "pill");
   const [accentColor, setAccentColor] = useState(element.accentColor || "#3b82f6");
   const [pendingUpload, setPendingUpload] = useState(null);
@@ -38,6 +40,7 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
         sourceType: "upload",
         src: pendingUpload?.dataUrl ?? element.src,
         title,
+        artist,
         widgetStyle,
         accentColor,
       });
@@ -46,6 +49,7 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
         sourceType: detectUrlSourceType(url.trim()),
         src: url.trim(),
         title,
+        artist,
         widgetStyle,
         accentColor,
       });
@@ -59,7 +63,7 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold">Add background music</h3>
+          <h3 className="text-sm font-semibold">Add music</h3>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-white">
             <X size={16} />
           </button>
@@ -106,6 +110,12 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
           placeholder="Track title (optional)"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+        />
+        <input
+          className="w-full mt-2 text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 outline-none focus:border-blue-400"
+          placeholder="Artist (optional)"
+          value={artist}
+          onChange={(e) => setArtist(e.target.value)}
         />
 
         <div className="mt-4">

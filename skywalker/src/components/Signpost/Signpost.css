@@ -101,3 +101,15 @@
   font-size: 0.85rem;
   line-height: 1;
 }
+
+/* Short phone screens: keep the revealed card clear of the fixed filter bar.
+   The cyclist shrinks to its 160px clamp floor here, so a shorter pole still
+   clears its head. */
+@media (max-width: 640px) {
+  .signpost-pole {
+    height: 200px;
+  }
+  .signpost-card {
+    width: min(210px, 70vw);
+  }
+}

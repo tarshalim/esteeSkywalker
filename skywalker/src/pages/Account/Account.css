@@ -1,6 +1,6 @@
 .account-page {
   min-height: 100vh;
-  padding: 9rem 1rem 4rem;
+  padding: calc(var(--nav-bottom) + 4.5rem) 1rem 4rem;
   background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--blue) 10%, var(--bg)) 0%, var(--bg) 55%);
   display: flex;
   justify-content: center;
@@ -181,6 +181,43 @@
   color: var(--text-muted);
 }
 
+.account-admin-subhead {
+  margin-top: 1.25rem !important;
+}
+
+.account-admin-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.account-approve,
+.account-reject {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.account-approve {
+  border: none;
+  background: var(--yellow);
+  color: var(--text-on-accent);
+}
+
+.account-reject {
+  border: 2px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+}
+
+.account-approve:disabled,
+.account-reject:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .account-admin-list select {
   flex-shrink: 0;
   padding: 0.35rem 0.5rem;
@@ -189,4 +226,180 @@
   background: var(--bg-panel);
   color: var(--text);
   font-size: 0.8rem;
+}
+
+.account-settings {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 2px solid var(--border);
+  text-align: left;
+}
+
+.account-settings h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.account-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+}
+
+.account-setting + .account-setting {
+  border-top: 1px solid var(--border);
+}
+
+.account-setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.account-setting-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.account-setting-hint {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.account-settings-note {
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+}
+
+.account-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.account-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.account-switch[aria-checked="true"] {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+.account-switch[aria-checked="true"] .account-switch-thumb {
+  transform: translateX(18px);
+  background: #ffffff;
+}
+
+.account-switch:focus-visible,
+.account-segmented button:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 2px;
+}
+
+.account-segmented {
+  flex-shrink: 0;
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
+}
+
+.account-segmented button {
+  padding: 0.3rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.account-segmented button.is-active {
+  background: var(--blue);
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-switch,
+  .account-switch-thumb {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .account-segmented button {
+    min-height: 38px; /* + the track's 3px padding = 44px */
+  }
+  .account-setting {
+    min-height: 44px;
+  }
+  .account-page {
+    padding: calc(var(--nav-bottom) + 1.75rem) 0.75rem 3rem;
+  }
+  .account-card {
+    padding: 1.5rem 1.1rem;
+  }
+  .account-form input,
+  .account-primary,
+  .account-link,
+  .account-admin-list select,
+  .account-approve,
+  .account-reject {
+    min-height: 44px;
+  }
+  .account-approve,
+  .account-reject {
+    padding-inline: 1rem;
+  }
+  /* Long emails get their own line instead of squeezing the role picker. */
+  .account-admin-list li {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .account-admin-email {
+    flex: 1 1 100%;
+  }
+}
+
+.account-avatar {
+  margin: 0 auto 0.75rem;
+  box-shadow: 0 0 0 3px var(--border-strong);
+}
+
+.account-avatar-field {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.account-avatar-field legend {
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }

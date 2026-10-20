@@ -17,6 +17,19 @@ export function videoPoster(url) {
   return match ? `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg` : null;
 }
 
+/** Embeddable player URL for a canvas audio element's Spotify/YouTube link, else "". */
+export function audioEmbedSrc(element) {
+  if (element.sourceType === "youtube") {
+    const m = element.src.match(/(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([\w-]+)/);
+    return m ? `https://www.youtube.com/embed/${m[1]}?autoplay=0` : "";
+  }
+  if (element.sourceType === "spotify") {
+    const m = element.src.match(/open\.spotify\.com\/(track|album|playlist|episode)\/([\w]+)/);
+    return m ? `https://open.spotify.com/embed/${m[1]}/${m[2]}` : "";
+  }
+  return "";
+}
+
 function blogMediaBase(blog) {
   return {
     blogId: blog.id,

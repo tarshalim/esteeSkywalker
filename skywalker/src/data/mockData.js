@@ -32,9 +32,13 @@ import { COUNTRY_TO_CONTINENT } from "../utils/countries";
  * @property {string} countryCode   - ISO 3166-1 alpha-2 code, matches geojson ISO_A2.
  * @property {string} countryName
  * @property {string} continent     - Derived from countryCode via COUNTRY_TO_CONTINENT.
- * @property {string} date          - Legacy alias, kept mirrored to postDate.
- * @property {string} postDate      - ISO 8601 (yyyy-mm-dd) date tag set from the editor.
- * @property {number} year          - Derived from postDate, for the Year filter tier.
+ * @property {string} startDate     - ISO 8601 (yyyy-mm-dd) date (or first day of the trip) set from the editor.
+ * @property {?string} endDate      - Last day of the trip (yyyy-mm-dd), or null for a single-day post.
+ * @property {string} postDate      - Legacy alias, kept mirrored to startDate.
+ * @property {string} date          - Legacy alias, kept mirrored to startDate.
+ * @property {number} year          - Derived from startDate, for the Year filter tier.
+ * @property {string} [city]
+ * @property {string[]} [vibes]     - Ids from VIBES (src/lib/blogTaxonomy.js).
  * @property {"draft"|"published"} status
  * @property {number} trackX        - Horizontal position along the BlogsJourney timeline (unrelated to the globe).
  * @property {number} laneOffset    - Vertical nudge along the BlogsJourney timeline (unrelated to the globe).

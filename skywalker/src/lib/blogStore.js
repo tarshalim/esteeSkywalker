@@ -2,6 +2,7 @@ import { mockBlogs } from "../data/blogs";
 import { delay, readJSON, writeJSON, makeId } from "./storage";
 import { supabase, unwrap, fromRows } from "./supabase";
 import { createCollection } from "./collection";
+import { deleteBlogAudio, getBlogMusic } from "./music";
 
 // Blogs/templates API: Supabase `blogs`/`templates` tables when configured,
 // otherwise a localStorage mock. Every function returns a Promise so callers
@@ -21,9 +22,33 @@ function toBlogRow(blog) {
     id: blog.id,
     track_x: blog.trackX ?? 0,
     status: blog.status ?? "draft",
+    start_date: blog.startDate ?? null,
+    end_date: blog.endDate ?? null,
     data: blog,
     updated_at: blog.updatedAt ?? new Date().toISOString(),
   };
+}
+
+/**
+ * A post is dated by `startDate` plus an optional `endDate` (null for a
+ * single day). `postDate`/`date` stay mirrored to the start date for the
+ * sort/filter code that predates ranges.
+ */
+function resolveDates(blog, prev = {}) {
+  const startDate =
+    blog.startDate ?? blog.postDate ?? blog.date ?? prev.startDate ?? prev.postDate ?? prev.date ?? new Date().toISOString().slice(0, 10);
+  const endDate = "endDate" in blog ? blog.endDate || null : prev.endDate ?? null;
+  if (endDate && endDate < startDate) throw new Error("End date can't be before the start date");
+  return { startDate, endDate, postDate: startDate, date: startDate, year: new Date(startDate).getFullYear() };
+}
+
+// Fields that were dropped from the model; cleared from posts as they're saved.
+const REMOVED_FIELDS = ["tripType", "duration"];
+
+function withoutRemovedFields(blog) {
+  const next = { ...blog };
+  for (const key of REMOVED_FIELDS) delete next[key];
+  return next;
 }
 
 async function loadBlogs() {
@@ -80,18 +105,15 @@ export async function upsertBlog(blog) {
   if (blog.id) {
     const idx = blogs.findIndex((b) => b.id === blog.id);
     if (idx !== -1) {
-      const postDate = blog.postDate ?? blog.date ?? blogs[idx].postDate ?? blogs[idx].date;
-      const updated = {
+      const updated = withoutRemovedFields({
         ...blogs[idx],
         ...blog,
         // Shallow-merging would replace `location` wholesale and drop the
         // lat/lng the globe needs whenever the payload only carries a name.
         location: { ...blogs[idx].location, ...blog.location },
-        date: postDate,
-        postDate,
-        year: new Date(postDate).getFullYear(),
+        ...resolveDates(blog, blogs[idx]),
         updatedAt: now,
-      };
+      });
       blogs[idx] = updated;
       return saveBlog(updated, blogs);
     }
@@ -102,8 +124,7 @@ export async function upsertBlog(blog) {
 
   const trackX = blog.trackX ?? (blogs.length === 0 ? 900 : Math.max(...blogs.map((b) => b.trackX)) + 1000);
 
-  const postDate = blog.postDate ?? blog.date ?? now.slice(0, 10);
-  const created = {
+  const created = withoutRemovedFields({
     laneOffset: 0,
     status: "draft",
     countryCode: "",
@@ -111,27 +132,38 @@ export async function upsertBlog(blog) {
     ...blog,
     id,
     trackX,
-    date: postDate,
-    postDate,
-    year: new Date(postDate).getFullYear(),
+    ...resolveDates(blog),
     createdAt: now,
     updatedAt: now,
-  };
+  });
   blogs.push(created);
   return saveBlog(created, blogs);
+}
+
+export async function deleteBlog(id) {
+  if (supabase) {
+    const blog = await getBlogById(id);
+    unwrap(await supabase.from("blogs").delete().eq("id", id));
+    await deleteBlogAudio(getBlogMusic(blog)?.storagePath);
+    return true;
+  }
+  const blogs = await loadBlogs();
+  writeJSON(BLOGS_KEY, blogs.filter((b) => b.id !== id));
+  return delay(true);
 }
 
 export const getTemplates = templates.list;
 export const getTemplateById = templates.get;
 export const deleteTemplate = templates.remove;
 
-export function saveTemplate({ name, title, coverImage, blocks }) {
+export function saveTemplate({ name, title, coverImage, blocks, canvas }) {
   return templates.insert({
     id: makeId("tpl"),
     name,
     title,
     coverImage,
     blocks,
+    canvas,
     createdAt: new Date().toISOString(),
   });
 }

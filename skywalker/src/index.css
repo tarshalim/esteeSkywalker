@@ -2,6 +2,27 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* My Blog trail loops. Keyframes use the standalone `translate`/`scale` properties so they
+   run on the compositor and don't fight Framer Motion's inline `transform` (hover/tap). */
+@theme {
+  --animate-pin-float: pin-float 3.2s ease-in-out infinite;
+  --animate-pin-shadow: pin-shadow 3.2s ease-in-out infinite;
+  --animate-halo: halo 2.4s ease-out infinite;
+
+  @keyframes pin-float {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -12px; }
+  }
+  @keyframes pin-shadow {
+    0%, 100% { scale: 1 1; opacity: 0.55; }
+    50% { scale: 0.7 1; opacity: 0.3; }
+  }
+  @keyframes halo {
+    0% { scale: 0.75; opacity: 0.7; }
+    100% { scale: 1.35; opacity: 0; }
+  }
+}
+
 :root {
   /* Yellow & Blue identity — light mode (default) */
   --bg: #fafaf9;
@@ -24,6 +45,10 @@
   --blue-bright: #3b82f6;
   --blue-deep: #1e40af;
 
+  /* The pin-drop marker: one high-visibility red in both themes. */
+  --pin-red: #ef4444;
+  --pin-red-deep: #b91c1c;
+
   --shadow-color: rgba(29, 78, 216, 0.16);
   --shadow-sharp: 0 4px 0 var(--blue-deep);
 
@@ -32,6 +57,25 @@
   --space-bg-2: var(--bg-elevated);
   --accent: var(--blue-bright);
   --accent-warm: var(--yellow);
+
+  /* One stacking scale for the whole app (Tailwind: `z-(--z-nav)`). Pages
+     render inside `.app-main`, an isolated stacking context beneath TopNav,
+     so no page layer can rise over the nav whatever its local z-index.
+     Anything that must cover the nav portals to <body> and uses --z-overlay
+     or above. */
+  --z-base: 0;
+  --z-raised: 10; /* sticky in-page bars */
+  --z-hud: 20; /* floating toolbars and controls */
+  --z-nav: 30; /* fixed TopNav */
+  --z-overlay: 40; /* full-screen transitions */
+  --z-modal: 50; /* dialogs, lightbox, bottom sheets */
+  --z-drag: 60; /* pointer-following drag ghost */
+  --z-tour: 70; /* tour spotlight, can highlight the nav itself */
+
+  /* Distance from the viewport top to TopNav's bottom edge, the top safe
+     area for every page. TopNav overwrites this with its measured value
+     (and 0px on editor routes, where it's hidden); this is first paint only. */
+  --nav-bottom: 4.5rem;
 
   color-scheme: light;
   font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
@@ -79,8 +123,19 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 639.98px) {
+  :root {
+    --nav-bottom: 3.75rem;
+  }
+}
+
 html, body, #root {
   min-height: 100%;
+}
+
+/* Base layer for all routed pages; see the --z-* scale above. */
+.app-main {
+  isolation: isolate;
 }
 
 body {
@@ -89,6 +144,9 @@ body {
   background: var(--bg);
   color: var(--text);
   transition: background-color 0.25s ease, color 0.25s ease;
+  /* Safety net: a stray wide element must never make the whole page pan
+     sideways on a phone. `clip` (unlike `hidden`) keeps position: sticky working. */
+  overflow-x: clip;
 }
 
 a {
@@ -98,6 +156,41 @@ a {
 
 button {
   font-family: inherit;
+}
+
+/* No 300ms double-tap-zoom delay on taps. */
+a,
+button,
+select,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  /* iOS Safari zooms the whole page into any field under 16px on focus. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Visually small controls (close ✕, flags, progress dots) keep their look but
+   get an invisible 44×44 hit area on touch screens. :where() keeps this at
+   zero specificity so an element's own `position: absolute` still wins. */
+:where(.touch-hit) {
+  position: relative;
+}
+@media (max-width: 640px) {
+  .touch-hit::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
 }
 
 /* Reusable glass utilities shared across the app */
@@ -149,4 +242,18 @@ button {
 }
 .theme-toggle:active {
   transform: translateY(0) rotate(0deg);
+}
+
+/* Solid red teardrop with a white "eye" — reads at a glance on any terrain.
+   Shared by the pin-drop button, its drag ghost, the dropped globe marker,
+   the pin dialog and place search results. */
+.red-pin-icon {
+  color: var(--pin-red-deep);
+}
+.red-pin-icon path {
+  fill: var(--pin-red);
+}
+.red-pin-icon circle {
+  fill: #ffffff;
+  stroke: var(--pin-red-deep);
 }

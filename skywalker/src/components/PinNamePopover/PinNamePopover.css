@@ -1,10 +1,12 @@
+/* Portaled to <body>: a viewport modal above TopNav (--z-modal > --z-nav). */
 .pin-name-popover-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 24px;
   background: rgba(15, 23, 42, 0.45);
 }
 
@@ -12,7 +14,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: min(320px, calc(100% - 48px));
+  width: min(360px, 100%);
+  /* Short laptop screens: scroll inside the dialog, never off-screen. */
+  max-height: 100%;
+  overflow-y: auto;
   padding: 18px 20px;
   border-radius: 16px;
 }
@@ -22,6 +27,78 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+}
+
+/* Where the story lands — the dialog's headline. */
+.pin-name-popover-place {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -4px -6px 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--pin-red) 10%, var(--bg-elevated));
+  border: 2px solid color-mix(in srgb, var(--pin-red) 45%, transparent);
+}
+.pin-name-popover-place svg {
+  flex-shrink: 0;
+}
+.pin-name-popover-place-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* "Pinning your story in Luxor, Egypt" — one bold line, the place in red. */
+.pin-name-popover-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.pin-name-popover-place-name {
+  color: var(--pin-red);
+}
+/* Placeholder while the reverse geocode is in flight. */
+.pin-name-popover-skeleton {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--text-muted) 22%, transparent) 50%,
+      transparent 100%
+    )
+    0 0 / 200% 100%,
+    color-mix(in srgb, var(--text-muted) 12%, transparent);
+  animation: pin-name-popover-shimmer 1.2s linear infinite;
+}
+@keyframes pin-name-popover-shimmer {
+  to {
+    background-position: -200% 0, 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pin-name-popover-skeleton {
+    animation: none;
+  }
+}
+/* Secondary to the place name: small, monospaced, muted. */
+.pin-name-popover-coords {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }
 
 .pin-name-popover input,
@@ -67,4 +144,30 @@
   background: linear-gradient(to bottom right, var(--yellow-bright), var(--yellow));
   color: var(--blue-deep);
   font-weight: 700;
+}
+
+/* Phones: a bottom sheet, where the thumb is and the keyboard pushes it. */
+@media (max-width: 640px) {
+  .pin-name-popover-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .pin-name-popover {
+    width: 100%;
+    max-height: 85dvh;
+    padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+    border-radius: 20px 20px 0 0;
+  }
+  .pin-name-popover-title {
+    font-size: 20px;
+  }
+  .pin-name-popover input,
+  .pin-name-popover textarea {
+    min-height: 44px;
+  }
+  .pin-name-popover-cancel,
+  .pin-name-popover-save {
+    flex: 1;
+    min-height: 44px;
+  }
 }

@@ -1,16 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  createTextBlock,
-  createImageBlock,
-  createVideoBlock,
-  createTextboxBlock,
-  makeBlockId,
-} from "../../lib/blocks";
+import { ArrowLeft, FolderOpen, LayoutTemplate, Send } from "lucide-react";
 import { getBlogById, upsertBlog, getTemplates, getTemplateById, saveTemplate } from "../../lib/blogStore";
-import Toolbar from "../../components/Editor/Toolbar";
-import BlockView from "../../components/Editor/BlockView";
+import { CanvasProvider } from "../../components/Editor/Canvas/CanvasProvider";
+import ScrapbookCanvas from "../../components/Editor/Canvas/ScrapbookCanvas";
+import { createEmptyCanvasDoc } from "../../lib/canvasElements";
+import { blocksToCanvas, canvasToBlocks, cloneCanvasDoc } from "../../lib/canvasConvert";
 import CountrySelect from "../../components/CountrySelect/CountrySelect";
 import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata } from "../../lib/exif";
@@ -18,6 +14,10 @@ import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { findCountryForPoint, continentForCountryCode, centroidForCountryCode, hasCoords } from "../../utils/geo";
 import { PLACEHOLDER_COVER } from "../../lib/media";
 import { COUNTRY_TO_CONTINENT } from "../../utils/countries";
+import { VIBES } from "../../lib/blogTaxonomy";
+import UnsavedChangesDialog from "./UnsavedChangesDialog";
+import BackgroundMusicField from "./BackgroundMusicField";
+import { deleteBlogAudio, getBlogMusic } from "../../lib/music";
 import "./BlogEditor.css";
 
 function todayISO() {
@@ -36,12 +36,21 @@ export default function BlogEditor() {
   const [locationName, setLocationName] = useState("");
   const [coords, setCoords] = useState(null); // { lat, lng } | null — what the globe pins
   const [country, setCountry] = useState(null); // { code, name } | null
-  const [postDate, setPostDate] = useState(todayISO());
-  const [postDateTouched, setPostDateTouched] = useState(false);
+  const [startDate, setStartDate] = useState(todayISO());
+  const [startDateTouched, setStartDateTouched] = useState(false);
+  const [isDateRange, setIsDateRange] = useState(false);
+  const [endDate, setEndDate] = useState("");
+  const [city, setCity] = useState("");
+  const [vibes, setVibes] = useState([]);
+  const [music, setMusic] = useState(null);
+  // The track as last loaded/saved: its file must survive until a save replaces it.
+  const savedMusicRef = useRef(null);
   const countries = useCountriesGeoJson();
-  const [blocks, setBlocks] = useState([createTextBlock("paragraph", "")]);
+  // The canvas owns its own state (CanvasProvider); the editor only seeds it
+  // (bumping `key` remounts it with a new doc) and reads the latest doc back.
+  const [canvasSeed, setCanvasSeed] = useState(() => ({ key: 0, doc: createEmptyCanvasDoc() }));
+  const canvasDocRef = useRef(canvasSeed.doc);
   const [status, setStatus] = useState("draft");
-  const [focusedBlockId, setFocusedBlockId] = useState(null);
   const [toast, setToast] = useState(null);
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState([]);
@@ -49,9 +58,16 @@ export default function BlogEditor() {
   const [templateName, setTemplateName] = useState("");
   const [loadState, setLoadState] = useState(isEditMode ? "loading" : "ready"); // loading | ready | missing | error
   const loadedIdRef = useRef(null);
-  const draggedIdRef = useRef(null);
   const toastTimer = useRef(null);
   const coverInputRef = useRef(null);
+  const [exitPromptOpen, setExitPromptOpen] = useState(false);
+  // Unsaved-change tracking: the form fields are compared against a snapshot
+  // taken at load/save; the canvas against the doc it first emitted after
+  // being seeded (CanvasProvider reports its initial doc on mount).
+  const fieldsBaselineRef = useRef(null);
+  const canvasBaselineRef = useRef(null);
+  // A template applied to an unsaved post is content even though it reseeds the canvas.
+  const templateDirtyRef = useRef(false);
 
   useEffect(() => {
     getTemplates()
@@ -66,6 +82,7 @@ export default function BlogEditor() {
       // typed since the save.
       if (id === loadedIdRef.current) return;
       let cancelled = false;
+      fieldsBaselineRef.current = null;
       setLoadState("loading");
       getBlogById(id)
         .then((blog) => {
@@ -78,9 +95,15 @@ export default function BlogEditor() {
           setLocationName(blog.location?.name || "");
           setCoords(hasCoords(blog.location) ? { lat: blog.location.lat, lng: blog.location.lng } : null);
           setCountry(blog.countryCode ? { code: blog.countryCode, name: blog.countryName || blog.countryCode } : null);
-          setPostDate(blog.postDate || blog.date || todayISO());
-          setPostDateTouched(true);
-          setBlocks(blog.blocks?.length ? blog.blocks : [createTextBlock("paragraph", "")]);
+          setStartDate(blog.startDate || blog.postDate || blog.date || todayISO());
+          setStartDateTouched(true);
+          setIsDateRange(Boolean(blog.endDate));
+          setEndDate(blog.endDate || "");
+          setCity(blog.city || "");
+          setVibes(blog.vibes ?? []);
+          savedMusicRef.current = getBlogMusic(blog);
+          setMusic(savedMusicRef.current);
+          seedCanvas(blog.canvas ? blog.canvas : blocksToCanvas(blog.blocks));
           setStatus(blog.status || "draft");
           setLoadState("ready");
         })
@@ -101,68 +124,64 @@ export default function BlogEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  function seedCanvas(doc) {
+    canvasDocRef.current = doc;
+    canvasBaselineRef.current = null;
+    setCanvasSeed((prev) => ({ key: prev.key + 1, doc }));
+  }
+
   function applyTemplate(tpl) {
     if (!tpl) return;
     setTitle(tpl.title || "");
     setCoverImage(tpl.coverImage || "");
-    setBlocks(tpl.blocks?.length ? tpl.blocks.map((b) => ({ ...b, id: makeBlockId() })) : [createTextBlock("paragraph", "")]);
+    seedCanvas(tpl.canvas ? cloneCanvasDoc(tpl.canvas) : blocksToCanvas(tpl.blocks));
+    templateDirtyRef.current = true;
   }
+
+  const handleCanvasChange = useCallback((doc) => {
+    canvasDocRef.current = doc;
+    if (canvasBaselineRef.current === null) canvasBaselineRef.current = doc;
+  }, []);
+
+  const fieldsSnapshot = () =>
+    JSON.stringify([title, coverImage, locationName, coords, country?.code, startDate, isDateRange && endDate, city, vibes, music]);
+
+  // Take the field baseline once the loaded post (or blank form) has rendered.
+  useEffect(() => {
+    if (loadState === "ready" && fieldsBaselineRef.current === null) fieldsBaselineRef.current = fieldsSnapshot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadState]);
+
+  const isDirty = () =>
+    templateDirtyRef.current ||
+    (fieldsBaselineRef.current !== null && fieldsSnapshot() !== fieldsBaselineRef.current) ||
+    (canvasBaselineRef.current !== null && canvasDocRef.current !== canvasBaselineRef.current);
+
+  const markClean = () => {
+    fieldsBaselineRef.current = fieldsSnapshot();
+    canvasBaselineRef.current = canvasDocRef.current;
+    templateDirtyRef.current = false;
+  };
+
+  // Closing the tab or reloading can't show our dialog; fall back to the
+  // browser's own "Leave site?" prompt. A ref keeps the listener current
+  // without re-subscribing on every keystroke.
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (!isDirtyRef.current()) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
 
   const showToast = (text) => {
     setToast(text);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 2600);
-  };
-
-  const updateBlock = (blockId, patch) => {
-    setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
-  };
-
-  const deleteBlock = (blockId) => {
-    setBlocks((prev) => (prev.length > 1 ? prev.filter((b) => b.id !== blockId) : prev));
-  };
-
-  const insertBlock = (kind) => {
-    const factory = {
-      quote: () => createTextBlock("quote", ""),
-      image: () => createImageBlock("", ""),
-      video: () => createVideoBlock(""),
-      textbox: () => createTextboxBlock(2, ""),
-    }[kind];
-    if (!factory) return;
-    const newBlock = factory();
-    setBlocks((prev) => {
-      const idx = prev.findIndex((b) => b.id === focusedBlockId);
-      if (idx === -1) return [...prev, newBlock];
-      const next = [...prev];
-      next.splice(idx + 1, 0, newBlock);
-      return next;
-    });
-  };
-
-  const reorderBlocks = (draggedId, targetId) => {
-    if (draggedId === targetId) return;
-    setBlocks((prev) => {
-      const from = prev.findIndex((b) => b.id === draggedId);
-      const to = prev.findIndex((b) => b.id === targetId);
-      if (from === -1 || to === -1) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
-  };
-
-  const runInlineCommand = (cmd) => {
-    document.execCommand(cmd, false, null);
-    const active = document.activeElement;
-    const id = active?.dataset?.blockId;
-    if (id) updateBlock(id, { html: active.innerHTML });
-  };
-
-  const setVariant = (variant) => {
-    if (!focusedBlockId) return;
-    updateBlock(focusedBlockId, { variant });
   };
 
   const handleCoverPick = async (e) => {
@@ -182,8 +201,8 @@ export default function BlogEditor() {
     // a value the user already set (manually, from a previous upload, or
     // from loading an existing post).
     const detected = [];
-    if (metadata.dateTaken && !postDateTouched) {
-      setPostDate(metadata.dateTaken.slice(0, 10));
+    if (metadata.dateTaken && !startDateTouched) {
+      setStartDate(metadata.dateTaken.slice(0, 10));
       detected.push(metadata.dateTaken.slice(0, 10));
     }
     if (metadata.lat != null && metadata.lng != null && !coords) {
@@ -205,6 +224,20 @@ export default function BlogEditor() {
   // to from the globe — fall back to the country's centroid.
   const resolveCoords = () => coords ?? (country ? centroidForCountryCode(country.code, countries) : null);
 
+  // ISO yyyy-mm-dd strings compare correctly as plain strings.
+  const dateRangeError = !isDateRange
+    ? null
+    : !endDate
+    ? "Pick an end date for the trip"
+    : endDate < startDate
+    ? "End date can't be before the start date"
+    : null;
+
+  const toggleDateRange = (on) => {
+    setIsDateRange(on);
+    if (on && !endDate) setEndDate(startDate);
+  };
+
   const buildPayload = (nextStatus) => ({
     id: blogId ?? undefined,
     title: title.trim() || "Untitled Blog Post",
@@ -213,20 +246,39 @@ export default function BlogEditor() {
     countryCode: country?.code ?? "",
     countryName: country?.name ?? "",
     continent: country ? continentForCountryCode(country.code, countries, COUNTRY_TO_CONTINENT) : "",
-    postDate: postDate || todayISO(),
-    blocks,
+    startDate: startDate || todayISO(),
+    endDate: isDateRange && endDate ? endDate : null,
+    city: city.trim(),
+    vibes,
+    music,
+    // Legacy field older readers use; also clears a stale one when music changes.
+    audioUrl: music?.type === "upload" ? music.url : "",
+    canvas: canvasDocRef.current,
+    // Derived, so block-only consumers (Gallery media, excerpts) still work.
+    blocks: canvasToBlocks(canvasDocRef.current),
     status: nextStatus,
   });
 
   // Shared by draft + publish. Previously a rejected upsert (RLS, network)
   // left `saving` true — both buttons disabled for good, with no message.
   const persist = async (nextStatus) => {
+    if (dateRangeError) {
+      showToast(dateRangeError);
+      return null;
+    }
     setSaving(true);
     try {
       const saved = await upsertBlog(buildPayload(nextStatus));
       loadedIdRef.current = saved.id;
       setBlogId(saved.id);
       setStatus(saved.status);
+      markClean();
+      // The saved post no longer points at the previous upload, so its file can go.
+      const previousMusic = savedMusicRef.current;
+      savedMusicRef.current = music;
+      if (previousMusic?.storagePath && previousMusic.storagePath !== music?.storagePath) {
+        deleteBlogAudio(previousMusic.storagePath);
+      }
       return saved;
     } catch (err) {
       console.error(err);
@@ -237,12 +289,40 @@ export default function BlogEditor() {
     }
   };
 
-  const handleSaveDraft = async () => {
-    const saved = await persist("draft");
-    if (!saved) return;
-    showToast("Saved as draft");
-    if (!isEditMode) navigate(`/blogs/edit/${saved.id}`, { replace: true });
+  const isPublished = status === "published";
+
+  const handleBack = (e) => {
+    if (!isDirty()) return; // let the <Link> navigate
+    e.preventDefault();
+    setExitPromptOpen(true);
   };
+
+  // Editing a published post keeps it published; everything else becomes a draft.
+  const handleExitSave = async () => {
+    const saved = await persist(isPublished ? "published" : "draft");
+    setExitPromptOpen(false);
+    if (saved) navigate(isPublished ? `/blogs/${saved.id}` : "/blogs/drafts");
+  };
+
+  // An upload that was never saved is orphaned once it's replaced, removed or discarded.
+  const discardUnsavedUpload = (m) => {
+    if (m?.storagePath && m.storagePath !== savedMusicRef.current?.storagePath) deleteBlogAudio(m.storagePath);
+  };
+
+  const handleMusicChange = (next) => {
+    if (next?.storagePath !== music?.storagePath) discardUnsavedUpload(music);
+    setMusic(next);
+  };
+
+  const handleExitDiscard = () => {
+    discardUnsavedUpload(music);
+    setExitPromptOpen(false);
+    navigate("/blogs");
+  };
+
+  const closeExitPrompt = useCallback(() => setExitPromptOpen(false), []);
+
+  const toggleVibe = (id) => setVibes((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
 
   const handlePublish = async () => {
     if (!country) {
@@ -256,7 +336,13 @@ export default function BlogEditor() {
   const handleSaveAsTemplate = async () => {
     if (!templateName.trim()) return;
     try {
-      const tpl = await saveTemplate({ name: templateName.trim(), title, coverImage, blocks });
+      const tpl = await saveTemplate({
+        name: templateName.trim(),
+        title,
+        coverImage,
+        canvas: canvasDocRef.current,
+        blocks: canvasToBlocks(canvasDocRef.current),
+      });
       setTemplates((prev) => [...prev, tpl]);
       setShowTemplateModal(false);
       setTemplateName("");
@@ -268,7 +354,7 @@ export default function BlogEditor() {
 
   const handleLoadTemplate = async (templateId) => {
     if (!templateId) return;
-    if (blocks.some((b) => b.html) && !window.confirm("Replace the current draft with this template?")) return;
+    if (canvasDocRef.current.elements.length > 0 && !window.confirm("Replace the current draft with this template?")) return;
     try {
       applyTemplate(await getTemplateById(templateId));
     } catch (err) {
@@ -295,41 +381,56 @@ export default function BlogEditor() {
 
   return (
     <div className="editor-page">
+      {/* Below sm the secondary actions collapse to icons (labels stay as
+          tooltips/aria-labels); Publish keeps its text as the primary action. */}
       <div className="editor-topbar glass-panel">
-        <Link to="/blogs" className="editor-back">
-          ← Back
+        <Link
+          to="/blogs"
+          onClick={handleBack}
+          className="editor-back"
+          aria-label="Back to the journey"
+          title="Back to the journey"
+        >
+          <ArrowLeft size={16} aria-hidden="true" />
+          <span className="hidden sm:inline">Back</span>
         </Link>
         <span className="editor-topbar-label">
           {isEditMode ? `Editing · ${status === "draft" ? "Draft" : "Published"}` : "New Blog Post"}
         </span>
         <div className="editor-actions">
-          <select
-            className="editor-template-select"
-            value=""
-            onChange={(e) => handleLoadTemplate(e.target.value)}
-          >
-            <option value="" disabled>
-              Load template…
-            </option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+          <label className="editor-template-picker" title="Load template">
+            <FolderOpen size={16} className="editor-template-picker-icon" aria-hidden="true" />
+            <select
+              className="editor-template-select"
+              value=""
+              aria-label="Load template"
+              onChange={(e) => handleLoadTemplate(e.target.value)}
+            >
+              <option value="" disabled>
+                Load template…
               </option>
-            ))}
-          </select>
-          <button className="editor-btn" onClick={() => setShowTemplateModal(true)}>
-            Save as Template
-          </button>
-          <button className="editor-btn" onClick={handleSaveDraft} disabled={saving}>
-            Save as Draft
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="editor-btn"
+            onClick={() => setShowTemplateModal(true)}
+            aria-label="Save as Template"
+            title="Save as Template"
+          >
+            <LayoutTemplate size={16} className="sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">Save as Template</span>
           </button>
           <button className="editor-btn editor-btn-primary" onClick={handlePublish} disabled={saving}>
+            <Send size={15} className="sm:hidden" aria-hidden="true" />
             Publish
           </button>
         </div>
       </div>
-
-      <Toolbar onInlineCommand={runInlineCommand} onSetVariant={setVariant} onInsertBlock={insertBlock} />
 
       <div className="editor-canvas">
         <div className="editor-cover" onClick={() => coverInputRef.current?.click()}>
@@ -360,45 +461,79 @@ export default function BlogEditor() {
             <CountrySelect value={country} onChange={setCountry} />
           </div>
           <div className="editor-metadata-field">
-            <span className="editor-metadata-label">Date</span>
+            <label className="editor-metadata-label" htmlFor="editor-start-date">
+              {isDateRange ? "Start date" : "Date"}
+            </label>
             <input
+              id="editor-start-date"
               type="date"
               className="editor-date-input"
-              value={postDate}
+              value={startDate}
               onChange={(e) => {
-                setPostDate(e.target.value);
-                setPostDateTouched(true);
+                setStartDate(e.target.value);
+                setStartDateTouched(true);
               }}
+            />
+            <label className="editor-range-toggle">
+              <input type="checkbox" checked={isDateRange} onChange={(e) => toggleDateRange(e.target.checked)} />
+              Date range
+            </label>
+          </div>
+          {isDateRange && (
+            <div className="editor-metadata-field">
+              <label className="editor-metadata-label" htmlFor="editor-end-date">
+                End date
+              </label>
+              <input
+                id="editor-end-date"
+                type="date"
+                className="editor-date-input"
+                min={startDate}
+                value={endDate}
+                aria-invalid={Boolean(dateRangeError)}
+                aria-describedby={dateRangeError ? "editor-date-error" : undefined}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+              {dateRangeError && (
+                <span id="editor-date-error" className="editor-field-error" role="alert">
+                  {dateRangeError}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="editor-metadata-field">
+            <span className="editor-metadata-label">City</span>
+            <input
+              className="editor-date-input"
+              placeholder="e.g. Kyoto"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="editor-blocks" onClick={() => !focusedBlockId && setFocusedBlockId(blocks[blocks.length - 1]?.id)}>
-          {blocks.map((block) => (
-            <BlockView
-              key={block.id}
-              block={block}
-              editable
-              onChange={(patch) => updateBlock(block.id, patch)}
-              onDelete={() => deleteBlock(block.id)}
-              onFocusBlock={setFocusedBlockId}
-              dragProps={{
-                onDragStart: () => {
-                  draggedIdRef.current = block.id;
-                },
-                onDragOver: (e) => e.preventDefault(),
-                onDrop: () => reorderBlocks(draggedIdRef.current, block.id),
-                onDragEnd: () => {
-                  draggedIdRef.current = null;
-                },
-              }}
-            />
+        <div className="editor-vibes" role="group" aria-label="Vibe / activity">
+          <span className="editor-metadata-label">Vibe</span>
+          {VIBES.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              className={`editor-vibe-chip${vibes.includes(o.id) ? " is-on" : ""}`}
+              aria-pressed={vibes.includes(o.id)}
+              onClick={() => toggleVibe(o.id)}
+            >
+              {o.label}
+            </button>
           ))}
         </div>
 
-        <button className="editor-add-block" onClick={() => setBlocks((prev) => [...prev, createTextBlock("paragraph", "")])}>
-          + Add paragraph
-        </button>
+        <BackgroundMusicField value={music} onChange={handleMusicChange} onError={showToast} />
+
+        <div className="editor-scrapbook">
+          <CanvasProvider key={canvasSeed.key} initialDoc={canvasSeed.doc} onDocChange={handleCanvasChange}>
+            <ScrapbookCanvas onError={showToast} />
+          </CanvasProvider>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -427,6 +562,18 @@ export default function BlogEditor() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {exitPromptOpen && (
+          <UnsavedChangesDialog
+            saveLabel={isPublished ? "Save Changes" : "Save as Draft"}
+            saving={saving}
+            onSave={handleExitSave}
+            onDiscard={handleExitDiscard}
+            onCancel={closeExitPrompt}
+          />
         )}
       </AnimatePresence>
 

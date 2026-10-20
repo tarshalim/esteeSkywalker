@@ -3,7 +3,13 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* dvh tracks the visible area as mobile browser toolbars show/hide; plain
+     vh is the toolbar-hidden height, which pushes the bottom off-screen. */
+  height: 100dvh;
   box-sizing: border-box;
+  /* The stage (and the search bar / pin dock pinned to its top) starts
+     below the fixed TopNav instead of underneath it. */
+  padding-top: var(--nav-bottom);
   background: var(--bg);
 }
 
@@ -11,6 +17,41 @@
   flex: 0 0 60%;
   min-height: 0;
   position: relative;
+  /* Read by GlobeSearchBar to keep clear of the dock. */
+  --globe-pin-dock-width: 60px;
+}
+
+/* Red pin + click-mode / my-location controls, top-right. Above the search
+   bar's layer so nothing can cover the pin even while results are open. */
+.globe-pin-dock {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: calc(var(--z-hud) + 1);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  /* One size for every dock button (pin, click mode, my location); matches
+     the search bar's 44px height. */
+  --dock-button-size: 44px;
+}
+
+/* Phones: GlobeSearchBar spans the top edge, so the dock moves bottom-left
+   (the homepage's fixed "Back to stories" button owns the bottom-right),
+   with the pin at the bottom where the thumb rests. */
+@media (max-width: 640px) {
+  .globe-explorer-stage {
+    --globe-pin-dock-width: 0px;
+  }
+  .globe-pin-dock {
+    top: auto;
+    right: auto;
+    left: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    flex-direction: column-reverse;
+    align-items: flex-start;
+  }
 }
 
 .globe-explorer-gallery {
@@ -20,12 +61,7 @@
   background: var(--bg);
 }
 
-/* Homepage: globe only. Stops short of 100vh so a strip of the blog feed
-   peeks below; the canvas eats wheel events (zoom), so the peek is what
-   invites the user to scroll on. */
-.globe-explorer--no-gallery {
-  height: calc(100vh - 4.5rem);
-}
+/* Homepage: globe only, as the full-height section beneath the blog feed. */
 .globe-explorer--no-gallery .globe-explorer-stage {
   flex: 1 1 auto;
 }
@@ -37,4 +73,15 @@
   .globe-explorer-gallery {
     flex-basis: 50%;
   }
+}
+
+.globe-explorer-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 2rem;
+  color: var(--text-muted);
+  text-align: center;
 }

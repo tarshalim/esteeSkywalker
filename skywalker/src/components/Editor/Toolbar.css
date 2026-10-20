@@ -10,6 +10,7 @@
   border-radius: 1rem;
   margin: 0 auto 1.5rem;
   width: fit-content;
+  max-width: 100%;
 }
 
 .toolbar-group {
@@ -18,12 +19,17 @@
 }
 
 .toolbar-divider {
+  flex-shrink: 0;
   width: 1px;
   height: 1.4rem;
   background: var(--border);
 }
 
 .toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   font-size: 0.78rem;
   color: var(--text);
   padding: 0.4rem 0.6rem;
@@ -37,4 +43,32 @@
   background: var(--yellow);
   color: var(--blue-deep);
   font-weight: 600;
+}
+
+/* Phones: one swipeable row of 44px icon buttons instead of three wrapped
+   rows eating the screen while the toolbar is stuck to the top. */
+@media (max-width: 640px) {
+  .editor-toolbar {
+    top: 4.9rem;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .editor-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+  .toolbar-group {
+    flex-shrink: 0;
+    gap: 0.1rem;
+  }
+  .toolbar-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
 }

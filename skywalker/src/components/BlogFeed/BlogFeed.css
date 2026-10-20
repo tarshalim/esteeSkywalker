@@ -6,13 +6,13 @@
 
 .blog-feed-tabs {
   position: sticky;
-  z-index: 10;
+  z-index: var(--z-raised);
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   align-items: center;
   overflow-x: auto;
   scrollbar-width: none;
-  padding: 0.5rem;
+  padding: 0.3rem;
   border-radius: 999px;
   margin-bottom: 1.75rem;
 }
@@ -20,13 +20,32 @@
   display: none;
 }
 
-.blog-feed-tab,
-.blog-feed-chip {
+.blog-feed-tab-group {
+  display: flex;
+  gap: 0.25rem;
   flex-shrink: 0;
+}
+
+.blog-feed-divider {
+  flex-shrink: 0;
+  width: 1px;
+  align-self: stretch;
+  margin: 0.35rem 0.25rem;
+  background: var(--border);
+}
+
+.blog-feed-tab,
+.blog-feed-chip,
+.blog-feed-sort,
+.blog-feed-select {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   border: none;
   border-radius: 999px;
-  padding: 0.45rem 1rem;
-  font-size: 0.875rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   background: transparent;
@@ -41,10 +60,39 @@
   color: #ffffff;
 }
 
+.blog-feed-sort,
+.blog-feed-select {
+  border: 1px solid var(--border);
+}
+.blog-feed-sort:hover,
+.blog-feed-select:hover {
+  border-color: var(--border-strong);
+}
+.blog-feed-select.is-active {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--blue) 14%, transparent);
+}
+.blog-feed-select:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.blog-feed-select select {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+}
+.blog-feed-select select option {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
 .blog-feed-chip {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
   gap: 0.35rem;
   background: var(--yellow);
   color: var(--text-on-accent);
@@ -53,7 +101,8 @@
 
 .blog-feed-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  /* min() so a 300px track can't overflow a container narrower than that. */
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: 1.5rem;
 }
 
@@ -173,24 +222,34 @@
   margin-top: 3rem;
 }
 
-.blog-feed-journey-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.85rem 1.75rem;
-  border-radius: 999px;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--yellow-bright), var(--yellow));
-  color: var(--blue-deep);
-  box-shadow: var(--shadow-sharp);
-  transition: transform 0.2s ease;
-}
-.blog-feed-journey-btn:hover {
-  transform: translateY(-2px);
-}
-
 @media (max-width: 640px) {
+  .blog-feed {
+    width: calc(100% - 1.5rem);
+  }
   .blog-feed-grid {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .blog-feed-tabs {
+    padding: 0.25rem;
+    margin-bottom: 1.25rem;
+  }
+  .blog-feed-tab,
+  .blog-feed-chip,
+  .blog-feed-sort,
+  .blog-feed-select {
+    min-height: 36px;
+  }
+  /* The chip names a country, which can be long; cap it so the tabs stay reachable. */
+  .blog-feed-chip {
+    max-width: 70vw;
+  }
+  .blog-feed-chip-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .blog-card-body {
+    padding: 0.95rem 1rem 1.1rem;
   }
 }

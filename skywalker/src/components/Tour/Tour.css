@@ -1,0 +1,251 @@
+/* Top of the stacking scale, above TopNav and dialogs, so nav items can be
+   spotlit too. */
+.tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-tour);
+}
+
+.tour-blocker {
+  position: absolute;
+  inset: 0;
+}
+
+/* The hole in the scrim: a huge spread shadow darkens everything else. */
+.tour-spotlight {
+  position: fixed;
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 3px var(--yellow),
+    0 0 0 9999px rgba(15, 23, 42, 0.6);
+  pointer-events: none;
+  transition: top 0.3s ease, left 0.3s ease, width 0.3s ease, height 0.3s ease;
+}
+.tour-spotlight.is-empty {
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.6);
+}
+
+.tour-popover {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-strong);
+  box-shadow: var(--shadow-sharp), 0 16px 40px var(--shadow-color);
+  color: var(--text);
+}
+
+.tour-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tour-step-count {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tour-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.tour-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tour-dots {
+  display: flex;
+  gap: 6px;
+}
+.tour-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: width 0.2s ease, background 0.2s ease;
+}
+.tour-dots span.is-active {
+  width: 18px;
+  background: var(--blue);
+}
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.tour-actions-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.tour-btn {
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+.tour-btn:focus-visible,
+.tour-close:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 2px;
+}
+.tour-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tour-btn--primary {
+  background: var(--blue);
+  color: #ffffff;
+}
+.tour-btn--primary:hover {
+  background: var(--blue-deep);
+}
+.tour-btn--secondary {
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  color: var(--text);
+}
+.tour-btn--ghost {
+  background: transparent;
+  color: var(--text-muted);
+  padding-inline: 6px;
+}
+.tour-btn--ghost:hover {
+  color: var(--text);
+}
+
+.tour-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.tour-close:hover {
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  color: var(--text);
+}
+
+/* First-visit opt-in prompt, bottom-left so it clears the globe's own
+   overlays (search top-left, annotate top-right). */
+.tour-banner {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  z-index: var(--z-hud);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(520px, calc(100vw - 2.5rem));
+  padding: 12px 44px 12px 14px;
+  border-radius: 18px;
+  color: var(--text);
+}
+
+.tour-banner-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--blue-deep);
+}
+
+.tour-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.tour-banner-text strong {
+  font-size: 14px;
+  color: var(--text-strong);
+}
+
+.tour-banner-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.tour-banner-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+@media (max-width: 640px) {
+  .tour-banner {
+    right: 0.75rem;
+    left: 0.75rem;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    max-width: none;
+    flex-wrap: wrap;
+  }
+  .tour-banner-text {
+    flex: 1;
+  }
+  .tour-banner-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .tour-banner-close {
+    top: 2px;
+    right: 2px;
+  }
+
+  /* Can be taller than a landscape phone; scroll rather than clip. */
+  .tour-popover {
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+  .tour-actions {
+    flex-wrap: wrap;
+  }
+  .tour-btn {
+    min-height: 44px;
+    padding-inline: 16px;
+  }
+  .tour-btn--ghost {
+    padding-inline: 10px;
+  }
+  .tour-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-spotlight,
+  .tour-dots span {
+    transition: none;
+  }
+}

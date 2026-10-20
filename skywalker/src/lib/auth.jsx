@@ -5,7 +5,18 @@ import { supabase } from "./supabase";
 const AuthContext = createContext(null);
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const ROLE_LABELS = { user: "User", admin: "Admin", super_admin: "Super admin" };
+export const ROLE_LABELS = { pending: "Pending", user: "User", admin: "Admin", super_admin: "Super admin" };
+
+// Supabase Auth needs an email, so usernames map to a synthetic address that
+// never receives mail ("Confirm email" must be off in the Supabase dashboard).
+// Input containing "@" is used as-is so pre-username accounts can still sign in.
+const USERNAME_EMAIL_DOMAIN = "users.skywalker.app";
+export const USERNAME_PATTERN = "[A-Za-z0-9_]{3,24}";
+// eslint-disable-next-line react-refresh/only-export-components
+export function loginEmail(username) {
+  const name = username.trim().toLowerCase();
+  return name.includes("@") ? name : `${name}@${USERNAME_EMAIL_DOMAIN}`;
+}
 
 // Without Supabase configured there's no auth at all — the localStorage mock
 // is single-user, so `canEdit` is always true in that mode. With Supabase,
@@ -34,34 +45,38 @@ export function AuthProvider({ children }) {
     let cancelled = false;
     supabase
       .from("profiles")
-      .select("role")
+      .select("role, username")
       .eq("id", userId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (error) console.error("Failed to load profile role", error);
-        // Fail closed: an unreadable role is treated as read-only.
-        if (!cancelled) setProfile({ userId, role: data?.role ?? "user" });
+        // Fail closed: an unreadable role is treated as pending.
+        if (!cancelled) setProfile({ userId, role: data?.role ?? "pending", username: data?.username ?? null });
       });
     return () => {
       cancelled = true;
     };
   }, [userId]);
 
-  const role = userId && profile?.userId === userId ? profile.role : null;
+  const ownProfile = userId && profile?.userId === userId ? profile : null;
+  const role = ownProfile?.role ?? null;
+  const username = ownProfile?.username || user?.user_metadata?.username || null;
   const isAdmin = role === "admin" || role === "super_admin";
   const loading = sessionLoading || Boolean(userId && !role);
 
   const value = useMemo(
     () => ({
       user,
+      username,
       role,
       loading,
       enabled: Boolean(supabase),
       isAdmin,
+      isPending: role === "pending",
       isSuperAdmin: role === "super_admin",
       canEdit: !supabase || isAdmin,
     }),
-    [user, role, loading, isAdmin]
+    [user, username, role, loading, isAdmin]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

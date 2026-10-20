@@ -1,0 +1,28 @@
+.globe-preview {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.globe-preview-stage {
+  height: 220px;
+  border-radius: 1rem;
+  border: 2px solid var(--border);
+  overflow: hidden;
+}
+
+.globe-preview-fallback {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+}
+
+.globe-preview-caption {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  text-align: center;
+  color: var(--text-muted);
+}

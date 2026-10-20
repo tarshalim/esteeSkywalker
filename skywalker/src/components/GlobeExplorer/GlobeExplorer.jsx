@@ -4,14 +4,16 @@ import PhotoGlobe from "../PhotoGlobe/PhotoGlobe";
 import PhotoGallery from "../PhotoGallery/PhotoGallery";
 import PhotoLightbox from "../PhotoLightbox/PhotoLightbox";
 import GlobeSearchBar from "../GlobeSearchBar/GlobeSearchBar";
-import PinToolbox from "../PinToolbox/PinToolbox";
+import PinDropButton from "../PinDropButton/PinDropButton";
 import PinNamePopover from "../PinNamePopover/PinNamePopover";
+import PinModeControls from "../PinModeControls/PinModeControls";
+import ErrorBoundary from "../ErrorBoundary/ErrorBoundary";
 import { getPhotos } from "../../lib/photoStore";
 import { getBlogs } from "../../lib/blogStore";
 import * as pinStore from "../../lib/pinStore";
 import { isPointInView, clusterPhotosByLocation, hasCoords } from "../../utils/geo";
-import { useNavbarHeight } from "../../hooks/useNavbarHeight";
 import { useAuth } from "../../lib/auth";
+import { useGlobePrefs } from "../../lib/globePrefs";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./GlobeExplorer.css";
 
@@ -19,8 +21,8 @@ const HOVER_FLY_DEBOUNCE_MS = 250;
 
 /**
  * State-owning container for the interactive globe experience — rendered
- * both embedded in the homepage (Landing.jsx, below the hero) and standalone
- * at /maps (MapTab.jsx), so the two never drift apart. `variant` only
+ * both embedded in the homepage (Landing.jsx, below the blog feed) and standalone
+ * at /globe (MapTab.jsx), so the two never drift apart. `variant` only
  * affects outer sizing CSS.
  *
  * @param {"standalone"|"embedded"} variant
@@ -54,15 +56,19 @@ export default function GlobeExplorer({
   const [flyTarget, setFlyTarget] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
 
-  const [labelMode, setLabelMode] = useState("hover");
   const [isPlacingPin, setIsPlacingPin] = useState(false);
-  const [pendingPinCoords, setPendingPinCoords] = useState(null);
+  // { lat, lng, placeName? } — the red pin anchored on the globe while its
+  // naming dialog is open. placeName is known when it came from the drag HUD
+  // or a search pick; otherwise PinNamePopover resolves it.
+  const [pendingPin, setPendingPin] = useState(null);
 
-  const navbarHeight = useNavbarHeight();
+  // Display settings live on the Account page; changes there apply here live.
+  const { prefs } = useGlobePrefs();
   const { canEdit } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const hoverFlyTimeoutRef = useRef(null);
+  const globeRef = useRef(null);
 
   // Real store, not the hard-coded mock: uploads used to never reach the globe.
   // Each source fails independently so one bad request doesn't blank the rest.
@@ -203,9 +209,29 @@ export default function GlobeExplorer({
     setLightboxPhoto(photo);
   }, []);
 
+  const handlePinDropAt = useCallback((coords, placeName = null) => {
+    setPendingPin({ lat: coords.lat, lng: coords.lng, placeName });
+    setIsPlacingPin(false);
+  }, []);
+
+  const goToSignIn = useCallback(
+    () => navigate("/account", { state: { from: location.pathname } }),
+    [navigate, location.pathname]
+  );
+
+  // Gate for every pin-placement path; viewers are sent to sign in.
+  const canPlacePin = useCallback(() => {
+    if (!canEdit) goToSignIn();
+    return canEdit;
+  }, [canEdit, goToSignIn]);
+
   const handleSearchSelect = useCallback((result) => {
     setFlyTarget({ lat: result.lat, lng: result.lng });
-    if (result.kind === "country") {
+    if (result.kind === "place") {
+      // World place from the geocoder: fly there and drop the pin. Viewers
+      // who can't pin still get the flight.
+      if (canEdit) handlePinDropAt(result, result.placeName);
+    } else if (result.kind === "country") {
       setSelectedLocationId(null);
       setSelectedCustomPinId(null);
       setSelectedCountry({ code: result.code, name: result.label });
@@ -219,74 +245,110 @@ export default function GlobeExplorer({
       setSelectedCustomPinId(result.id);
     }
     // "blog" results just fly the camera; they aren't a globe filter tier.
-  }, []);
+  }, [canEdit, handlePinDropAt]);
 
-  const handleToggleLabelMode = useCallback(() => {
-    setLabelMode((prev) => (prev === "hover" ? "always" : "hover"));
-  }, []);
+  const coordsAtClientPoint = useCallback((x, y) => globeRef.current?.coordsAtClientPoint(x, y) ?? null, []);
 
-  const handlePinDropAt = useCallback((coords) => {
-    setPendingPinCoords(coords);
-    setIsPlacingPin(false);
-  }, []);
+  // Draggable pin released at client (x, y): open the naming popover for that
+  // coordinate, carrying the place name its HUD showed. Returns false (pin
+  // snaps back) if it missed the globe.
+  const handlePinDragDrop = useCallback(
+    (x, y, placeName) => {
+      const coords = coordsAtClientPoint(x, y);
+      if (!coords) return false;
+      if (canPlacePin()) handlePinDropAt(coords, placeName);
+      return true;
+    },
+    [coordsAtClientPoint, canPlacePin, handlePinDropAt]
+  );
+
+  const handleToggleClickMode = useCallback(() => {
+    if (canPlacePin()) setIsPlacingPin((prev) => !prev);
+  }, [canPlacePin]);
+
+  const handleLocated = useCallback(
+    (coords) => {
+      setFlyTarget(coords);
+      handlePinDropAt(coords);
+    },
+    [handlePinDropAt]
+  );
 
   const handleCreatePin = useCallback(
-    async ({ title, note }) => {
-      if (!pendingPinCoords) return;
+    async ({ title, note, placeName }) => {
+      if (!pendingPin) return;
       try {
-        const pin = await pinStore.createPin({ ...pendingPinCoords, title, note });
+        const pin = await pinStore.createPin({ lat: pendingPin.lat, lng: pendingPin.lng, title, note, placeName });
         setCustomPins((prev) => [...prev, pin]);
-        setPendingPinCoords(null);
+        setPendingPin(null);
       } catch (err) {
         console.error(err);
         window.alert(`Couldn't save pin: ${err.message}`);
       }
     },
-    [pendingPinCoords]
+    [pendingPin]
   );
 
-  const handleCancelPendingPin = useCallback(() => setPendingPinCoords(null), []);
+  const handleCancelPendingPin = useCallback(() => setPendingPin(null), []);
 
   const handleBlogClick = useCallback((blog) => navigate(`/blogs/${blog.id}`), [navigate]);
 
   return (
-    <div
-      className={`globe-explorer globe-explorer--${variant}${showGallery ? "" : " globe-explorer--no-gallery"}`}
-      style={{ paddingTop: navbarHeight }}
-    >
-      <div className="globe-explorer-stage">
+    <div className={`globe-explorer globe-explorer--${variant}${showGallery ? "" : " globe-explorer--no-gallery"}`}>
+      <div className="globe-explorer-stage" data-tour="globe">
         <GlobeSearchBar pins={photoPins} customPins={customPins} blogs={mappableBlogs} onSelect={handleSearchSelect} />
-        <PinToolbox
-          labelMode={labelMode}
-          onToggleLabelMode={handleToggleLabelMode}
-          isPlacingPin={isPlacingPin}
-          onTogglePlacingPin={() =>
-            canEdit
-              ? setIsPlacingPin((prev) => !prev)
-              : navigate("/account", { state: { from: location.pathname } })
-          }
-        />
-        <PhotoGlobe
-          photos={photos}
-          customPins={customPins}
-          blogs={mappableBlogs}
-          selectedCountryCode={selectedCountry?.code ?? null}
-          selectedLocationId={selectedLocationId}
-          selectedCustomPinId={selectedCustomPinId}
-          labelMode={labelMode}
-          isPlacingPin={isPlacingPin}
-          flyToTarget={flyTarget}
-          onViewportChange={setViewport}
-          onCountryClick={handleCountryClick}
-          onCountryHover={handleCountryHover}
-          onPinClick={handlePinClick}
-          onPinHover={handlePinHover}
-          onCustomPinClick={handleCustomPinClick}
-          onPinDropAt={handlePinDropAt}
-          onBlogClick={handleBlogClick}
-        />
-        {pendingPinCoords && (
-          <PinNamePopover onConfirm={handleCreatePin} onCancel={handleCancelPendingPin} />
+        <div className="globe-pin-dock">
+          <PinDropButton
+            isPlacingPin={isPlacingPin}
+            onTogglePlacingPin={handleToggleClickMode}
+            onDropAt={handlePinDragDrop}
+            coordsAt={coordsAtClientPoint}
+          />
+          <PinModeControls
+            isClickMode={isPlacingPin}
+            onToggleClickMode={handleToggleClickMode}
+            canPlace={canPlacePin}
+            onLocated={handleLocated}
+          />
+        </div>
+        <ErrorBoundary
+          resetKey={location.pathname}
+          fallback={<div className="globe-explorer-fallback">The 3D globe couldn&rsquo;t load on this device.</div>}
+        >
+          <PhotoGlobe
+            ref={globeRef}
+            photos={photos}
+            customPins={customPins}
+            blogs={mappableBlogs}
+            selectedCountryCode={selectedCountry?.code ?? null}
+            selectedLocationId={selectedLocationId}
+            selectedCustomPinId={selectedCustomPinId}
+            labelMode={prefs.labelMode}
+            showBorders={prefs.showBorders}
+            showGrid={prefs.showGrid}
+            showAtmosphere={prefs.showAtmosphere}
+            autoRotate={prefs.autoRotate}
+            isPlacingPin={isPlacingPin}
+            pendingPin={pendingPin}
+            flyToTarget={flyTarget}
+            onViewportChange={setViewport}
+            onCountryClick={handleCountryClick}
+            onCountryHover={handleCountryHover}
+            onPinClick={handlePinClick}
+            onPinHover={handlePinHover}
+            onCustomPinClick={handleCustomPinClick}
+            onPinDropAt={handlePinDropAt}
+            onBlogClick={handleBlogClick}
+          />
+        </ErrorBoundary>
+        {pendingPin && (
+          <PinNamePopover
+            key={`${pendingPin.lat}:${pendingPin.lng}`}
+            coords={pendingPin}
+            placeName={pendingPin.placeName}
+            onConfirm={handleCreatePin}
+            onCancel={handleCancelPendingPin}
+          />
         )}
       </div>
 

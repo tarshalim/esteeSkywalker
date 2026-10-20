@@ -195,3 +195,117 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
+
+/* Desktop: the drawer wrapper is layout-transparent and its toggle hidden,
+   so the bar lays out exactly as a single flex row/wrap. */
+.filter-bar-body {
+  display: contents;
+}
+.filter-bar-toggle {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 4px;
+    border-radius: 18px;
+  }
+
+  .filter-bar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: none;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .filter-bar-toggle .filter-bar-count {
+    margin-left: auto;
+  }
+  .filter-bar-toggle-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--yellow);
+    box-shadow: 0 0 0 2px var(--blue);
+  }
+  .filter-bar-toggle-chevron {
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+  }
+  .filter-bar.is-open .filter-bar-toggle-chevron {
+    transform: rotate(180deg);
+  }
+
+  .filter-bar-body {
+    display: none;
+  }
+  .filter-bar.is-open .filter-bar-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 60dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px 8px 10px;
+    border-top: 1px solid var(--border);
+  }
+  /* Already shown on the toggle. */
+  .filter-bar-body .filter-bar-count {
+    display: none;
+  }
+
+  .filter-bar-pills {
+    min-width: 0;
+  }
+  .filter-bar-pill,
+  .filter-bar-year-pill,
+  .filter-bar-sort-btn,
+  .filter-bar-range-toggle,
+  .filter-bar-clear {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .filter-bar-pill,
+  .filter-bar-year-pill {
+    padding: 6px 14px;
+  }
+  .filter-bar-sort-btn {
+    padding: 6px 16px;
+  }
+  .filter-bar-clear {
+    padding: 0 8px;
+  }
+
+  /* Opens in-flow inside the drawer instead of floating off-screen. */
+  .filter-bar-range:has(.filter-bar-range-popover) {
+    flex-basis: 100%;
+  }
+  .filter-bar-range-popover {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+    box-shadow: none;
+  }
+  .filter-bar-range-popover input {
+    min-height: 44px;
+  }
+  .filter-bar-range-clear {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  .filter-bar-toggle-chevron {
+    transition: none;
+  }
+}

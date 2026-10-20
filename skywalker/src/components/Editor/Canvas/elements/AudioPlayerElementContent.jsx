@@ -1,22 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Play, Pause, Volume2, VolumeX, Music2, Disc3, Radio } from "lucide-react";
+import { audioEmbedSrc } from "../../../../lib/media";
 
 const SKIN_ICON = { cassette: Disc3, vinyl: Disc3, pill: Radio };
 
 function isEmbed(sourceType) {
   return sourceType === "youtube" || sourceType === "spotify";
-}
-
-function embedSrc(element) {
-  if (element.sourceType === "youtube") {
-    const m = element.src.match(/(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([\w-]+)/);
-    return m ? `https://www.youtube.com/embed/${m[1]}?autoplay=0` : "";
-  }
-  if (element.sourceType === "spotify") {
-    const m = element.src.match(/open\.spotify\.com\/(track|album|playlist|episode)\/([\w]+)/);
-    return m ? `https://open.spotify.com/embed/${m[1]}/${m[2]}` : "";
-  }
-  return "";
 }
 
 export default function AudioPlayerElementContent({ element, editable, actions, onRequestSource, autoplayOnVisible }) {
@@ -80,7 +69,7 @@ export default function AudioPlayerElementContent({ element, editable, actions, 
   }
 
   if (isEmbed(element.sourceType)) {
-    const src = embedSrc(element);
+    const src = audioEmbedSrc(element);
     return (
       <div ref={containerRef} className="w-full h-full rounded-2xl overflow-hidden bg-slate-900">
         {src ? (
@@ -157,7 +146,7 @@ export default function AudioPlayerElementContent({ element, editable, actions, 
       <button
         type="button"
         className="shrink-0 p-1 opacity-80 hover:opacity-100"
-        onClick={() => actions.updateElement(element.id, { muted: !element.muted })}
+        onClick={() => actions?.updateElement(element.id, { muted: !element.muted })}
         title={element.muted ? "Unmute" : "Mute"}
       >
         {element.muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -175,7 +164,7 @@ export default function AudioPlayerElementContent({ element, editable, actions, 
           setLocalVolume(v);
           if (audioRef.current) audioRef.current.volume = v;
         }}
-        onPointerUp={() => actions.updateElement(element.id, { volume: localVolume })}
+        onPointerUp={() => actions?.updateElement(element.id, { volume: localVolume })}
       />
     </div>
   );

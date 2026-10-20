@@ -6,7 +6,6 @@ import CyclistSprite from "../../components/CyclistSprite/CyclistSprite";
 import Signpost from "../../components/Signpost/Signpost";
 import FilterBar from "../../components/FilterBar/FilterBar";
 import { useFilteredItems } from "../../hooks/useFilteredItems";
-import { useNavbarHeight } from "../../hooks/useNavbarHeight";
 import { useAsync } from "../../hooks/useAsync";
 import "./BlogsJourney.css";
 
@@ -34,7 +33,6 @@ export default function BlogsJourney() {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const idleTimer = useRef(null);
   const dragState = useRef(null);
-  const navbarHeight = useNavbarHeight();
 
   const {
     filtered: filteredBlogs,
@@ -131,7 +129,7 @@ export default function BlogsJourney() {
 
   return (
     <div className="journey-page">
-      <div className="journey-filterbar" style={{ top: navbarHeight + 16 }}>
+      <div className="journey-filterbar">
         <FilterBar
           availableContinents={availableContinents}
           continentFilter={continentFilter}
@@ -206,7 +204,8 @@ export default function BlogsJourney() {
           {filteredBlogs.map((blog) => (
             <button
               key={blog.id}
-              className="journey-progress-mark"
+              className="journey-progress-mark touch-hit"
+              aria-label={blog.title}
               style={{ left: `${(blog.trackX / trackWidth) * 100}%` }}
               onClick={() => jumpTo(blog.trackX - cyclistScreenX + 60)}
               title={blog.title}
@@ -218,7 +217,10 @@ export default function BlogsJourney() {
         </button>
       </div>
 
-      <p className="journey-hint">Scroll, drag, or use the arrows to ride down the timeline</p>
+      <p className="journey-hint">
+        <span className="hidden sm:inline">Scroll, drag, or use the arrows to ride down the timeline</span>
+        <span className="sm:hidden">Swipe or tap the arrows to ride</span>
+      </p>
     </div>
   );
 }

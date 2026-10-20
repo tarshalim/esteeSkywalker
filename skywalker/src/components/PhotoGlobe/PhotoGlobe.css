@@ -21,6 +21,64 @@
   background: radial-gradient(ellipse at 50% 45%, #0b1735 0%, #050a1a 60%, #02040b 100%);
 }
 
+/* Open hand says "drag to spin"; closed while dragging. globe.gl's
+   `.scene-container .clickable` still wins with a pointer over markers.
+   OrbitControls sets touch-action: none itself, so one-finger drags rotate. */
+.photo-globe-wrapper canvas {
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.photo-globe-wrapper canvas:active {
+  cursor: grabbing;
+}
+
+/* Click mode: a crosshair says "the next click anchors the pin". */
+.photo-globe-wrapper.is-placing-pin canvas {
+  cursor: crosshair !important;
+}
+
+/* The red pin anchored where it was dropped/clicked/searched/located. The
+   element is 2x the pin's height so its tip sits on the coordinate (the HTML
+   layer centers elements on their point). */
+.globe-dropped-pin {
+  position: relative;
+  width: 36px;
+  height: 72px;
+  pointer-events: none;
+}
+.globe-dropped-pin-body {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.35));
+  animation: globe-dropped-pin-fall 0.5s cubic-bezier(0.3, 1.5, 0.6, 1) both;
+}
+.globe-dropped-pin-body svg {
+  display: block;
+}
+.globe-dropped-pin-shadow {
+  position: absolute;
+  top: 33px;
+  left: 12px;
+  width: 12px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+}
+@keyframes globe-dropped-pin-fall {
+  0% { transform: translateY(-28px) scale(0.9); opacity: 0; }
+  60% { transform: translateY(0) scaleY(0.85); opacity: 1; }
+  100% { transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .globe-dropped-pin-body {
+    animation: none;
+  }
+}
+
 .globe-tooltip {
   background: var(--bg-panel-strong);
   color: var(--text);

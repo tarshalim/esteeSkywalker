@@ -4,7 +4,7 @@ import animationData from "../../animations/Mum.json";
 import "./CyclistSprite.css";
 
 /** Pedaling sprite that speeds up/slows down with scroll activity and flips with direction. */
-export default function CyclistSprite({ isMoving, direction }) {
+export default function CyclistSprite({ isMoving, direction, inline = false }) {
   const lottieRef = useRef(null);
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export default function CyclistSprite({ isMoving, direction }) {
   }, [isMoving, direction]);
 
   return (
-    <div className={`cyclist-sprite ${direction < 0 ? "is-reversed" : ""}`}>
+    <div className={`cyclist-sprite ${inline ? "is-inline" : ""} ${direction < 0 ? "is-reversed" : ""}`}>
       <Lottie lottieRef={lottieRef} animationData={animationData} loop autoplay className="cyclist-sprite-anim" />
       <div className="cyclist-sprite-shadow" />
     </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { countryCodeToFlagEmoji } from "../../utils/countries";
-import { formatDate } from "../../utils/dateFilters";
+import { formatBlogDate } from "../../utils/dateFilters";
 import "./Signpost.css";
 
 export default function Signpost({ blog, trackX, laneOffset, isNear, onSelect }) {
@@ -33,7 +33,7 @@ export default function Signpost({ blog, trackX, laneOffset, isNear, onSelect })
                 {blog.countryCode && (
                   <span className="signpost-flag">{countryCodeToFlagEmoji(blog.countryCode)}</span>
                 )}
-                {formatDate(blog.postDate ?? blog.date)}
+                {formatBlogDate(blog)}
               </span>
             </div>
           </motion.button>

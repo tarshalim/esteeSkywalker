@@ -41,9 +41,9 @@ export default function PhotoGallery({
     <div className="photo-gallery">
       <div className="photo-gallery-header">
         <span className="photo-gallery-filter">
-          {filterLabel}
+          <span className="photo-gallery-filter-label">{filterLabel}</span>
           {onClearFilter && (
-            <button className="photo-gallery-clear" onClick={onClearFilter} aria-label="Clear filter">
+            <button className="photo-gallery-clear touch-hit" onClick={onClearFilter} aria-label="Clear filter">
               ✕
             </button>
           )}

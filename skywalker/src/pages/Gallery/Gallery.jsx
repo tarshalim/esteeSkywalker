@@ -143,7 +143,7 @@ export default function Gallery() {
             {item.countryCode && (
               <button
                 type="button"
-                className="gallery-item-flag"
+                className="gallery-item-flag touch-hit"
                 onClick={(e) => handleFlagClick(e, item.countryCode)}
                 title={`Filter to ${item.countryName}`}
               >

@@ -1,8 +1,9 @@
 /* The landing page is its own scroll container so scroll-snap can anchor
-   the reader to either the globe or the top of the blog feed. `proximity`
+   the reader to either the top of the blog feed or the globe below it. `proximity`
    only snaps near a boundary, so reading down a long feed stays free. */
 .landing-page {
   height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
   scroll-snap-type: y proximity;
@@ -12,51 +13,39 @@
 
 .landing-globe {
   scroll-snap-align: start;
+  border-top: 1px solid var(--border);
 }
 
 .landing-feed {
   scroll-snap-align: start;
   position: relative;
   min-height: 100vh;
-  border-top: 1px solid var(--border);
   background:
     radial-gradient(ellipse 80% 300px at 50% 0%, color-mix(in srgb, var(--blue) 10%, transparent), transparent),
     var(--bg);
 }
 
-/* Sits in the strip left visible beneath the globe (see
-   .globe-explorer--no-gallery) as the cue to keep scrolling. */
-.landing-feed-peek {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  height: 4.5rem;
-  margin-bottom: 0.5rem;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: clamp(1.1rem, 2vw, 1.4rem);
-  font-weight: 650;
-  letter-spacing: 0.02em;
+.landing-feed-header {
+  width: min(1100px, calc(100% - 3rem));
+  margin: 0 auto 1.25rem;
+}
+.landing-feed-header h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
   color: var(--text-strong);
 }
-
-.landing-feed-peek-icon {
-  animation: landing-peek-bob 1.8s ease-in-out infinite;
+.landing-feed-header p {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
 }
 
-@keyframes landing-peek-bob {
-  0%, 100% { transform: translateY(0); opacity: 0.6; }
-  50% { transform: translateY(4px); opacity: 1; }
-}
-
-.landing-back-to-globe {
+.landing-back-to-stories {
   position: fixed;
   right: 1.25rem;
   bottom: 1.25rem;
-  z-index: 40;
+  z-index: var(--z-hud);
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -72,11 +61,23 @@
   box-shadow: 0 8px 24px var(--shadow-color);
 }
 
+/* Icon-only round button on phones (the label is hidden in the JSX). */
+@media (max-width: 640px) {
+  .landing-back-to-stories {
+    right: 1rem;
+    bottom: calc(1rem + env(safe-area-inset-bottom));
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+  }
+  .landing-feed-header {
+    width: calc(100% - 1.5rem);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-page {
     scroll-behavior: auto;
-  }
-  .landing-feed-peek-icon {
-    animation: none;
   }
 }

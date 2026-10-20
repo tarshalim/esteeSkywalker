@@ -198,4 +198,64 @@
   border: 2px solid var(--blue-deep);
   cursor: nwse-resize;
   z-index: 5;
+  touch-action: none; /* a drag here resizes instead of scrolling the page */
+}
+
+/* Touch screens have no hover, so the hover-revealed controls would be
+   unreachable: keep them visible, in flow above the block instead of
+   floating over its text. */
+@media (hover: none) {
+  .block-chrome-bar {
+    position: static;
+    justify-content: flex-end;
+    margin-bottom: 0.25rem;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .block-chrome {
+    margin: 0 -0.35rem;
+    padding: 0.35rem;
+  }
+  .block-chrome-bar {
+    flex-wrap: wrap;
+  }
+  .block-drag-handle,
+  .block-delete-btn,
+  .block-image-pick-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 0.8rem;
+  }
+  .block-video-url {
+    flex: 1 1 160px;
+    min-width: 0;
+    min-height: 44px;
+  }
+  .block-column-toggle button {
+    min-width: 44px;
+    min-height: 40px;
+    font-size: 0.75rem;
+  }
+  /* Stacked columns: two columns of text don't fit a phone-width canvas. */
+  .block-textbox {
+    column-count: 1 !important;
+  }
+  .block-text-h1 {
+    font-size: 1.6rem;
+  }
+  .block-text-h2 {
+    font-size: 1.25rem;
+  }
+  /* Same 14px look, ~44px grab area. */
+  .block-resize-handle::after {
+    content: "";
+    position: absolute;
+    inset: -15px;
+  }
 }

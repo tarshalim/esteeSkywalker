@@ -1,10 +1,14 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { getBlogById } from "../../lib/blogStore";
+import { getBlogMusic, musicKey } from "../../lib/music";
 import BlockView from "../../components/Editor/BlockView";
+import CanvasReadOnlyView from "../../components/Editor/Canvas/CanvasReadOnlyView";
+import BackgroundAudioPlayer from "../../components/BackgroundAudioPlayer/BackgroundAudioPlayer";
 import { countryCodeToFlagEmoji } from "../../utils/countries";
-import { formatDate } from "../../utils/dateFilters";
+import { formatBlogDate } from "../../utils/dateFilters";
 import { hasCoords } from "../../utils/geo";
+import { GLOBE_HASH } from "../../utils/routes";
 import { useAsync } from "../../hooks/useAsync";
 import { useAuth } from "../../lib/auth";
 import "./BlogDetail.css";
@@ -31,6 +35,8 @@ export default function BlogDetail() {
     );
   }
 
+  const music = getBlogMusic(blog);
+
   return (
     <div className="blog-detail-page">
       <div className="blog-detail-hero" style={{ backgroundImage: `url(${blog.coverImage})` }}>
@@ -50,7 +56,7 @@ export default function BlogDetail() {
                 type="button"
                 className="blog-detail-location"
                 onClick={() =>
-                  navigate("/", {
+                  navigate({ pathname: "/", hash: GLOBE_HASH }, {
                     state: {
                       focusLat: blog.location.lat,
                       focusLng: blog.location.lng,
@@ -68,7 +74,7 @@ export default function BlogDetail() {
                 {countryCodeToFlagEmoji(blog.countryCode)} {blog.countryName}
               </span>
             )}
-            <span>{formatDate(blog.postDate ?? blog.date, "long")}</span>
+            <span>{formatBlogDate(blog, "long")}</span>
           </div>
         </motion.div>
       </div>
@@ -88,12 +94,17 @@ export default function BlogDetail() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.15 }}
-        className="blog-detail-canvas"
+        className={`blog-detail-canvas ${blog.canvas ? "blog-detail-canvas--scrapbook" : ""}`}
       >
-        {(blog.blocks ?? []).map((block) => (
-          <BlockView key={block.id} block={block} editable={false} />
-        ))}
+        {/* Canvas-authored posts render as their scrapbook page; older posts keep the block list. */}
+        {blog.canvas ? (
+          <CanvasReadOnlyView doc={blog.canvas} />
+        ) : (
+          (blog.blocks ?? []).map((block) => <BlockView key={block.id} block={block} editable={false} />)
+        )}
       </motion.div>
+
+      {music && <BackgroundAudioPlayer key={musicKey(music)} music={music} fallbackTitle={blog.title} />}
     </div>
   );
 }

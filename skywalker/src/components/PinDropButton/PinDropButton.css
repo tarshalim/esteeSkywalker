@@ -1,0 +1,288 @@
+/* Positioned by its parent dock (GlobeExplorer's .globe-pin-dock). */
+.pin-drop {
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+  gap: 10px;
+}
+
+.pin-drop-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* Same size, border and shadow as PinModeControls' buttons. */
+  width: var(--dock-button-size, 44px);
+  height: var(--dock-button-size, 44px);
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--pin-red);
+  box-shadow: 0 4px 12px var(--shadow-color);
+  cursor: grab;
+  /* No scroll/zoom gestures while the finger is dragging the pin. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.pin-drop-button:hover {
+  transform: translateY(-1px);
+  border-color: var(--pin-red);
+}
+.pin-drop-button:active {
+  cursor: grabbing;
+}
+.pin-drop-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--pin-red) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* Idle invitation: the icon hops every few seconds and a ring pulses out. */
+.pin-drop-icon {
+  animation: pin-drop-bounce 3.2s ease-in-out infinite;
+  /* Hung from its top, so the hover sway pivots like a pendant. */
+  transform-origin: 50% 0%;
+}
+.pin-drop-pulse {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid var(--pin-red);
+  opacity: 0;
+  pointer-events: none;
+  animation: pin-drop-pulse 2.4s ease-out infinite;
+}
+@keyframes pin-drop-bounce {
+  0%, 70%, 100% { transform: translateY(0); }
+  78% { transform: translateY(-6px); }
+  86% { transform: translateY(0); }
+  92% { transform: translateY(-2px); }
+}
+@keyframes pin-drop-pulse {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Hover: the pin dangles side to side like a pendant caught in a breeze —
+   a big first swing that settles into a gentle, continuous sway. */
+.pin-drop-button:hover .pin-drop-icon {
+  animation: pin-drop-dangle 1.8s ease-in-out infinite;
+}
+@keyframes pin-drop-dangle {
+  0% { transform: rotate(0deg); }
+  12% { transform: rotate(16deg); }
+  30% { transform: rotate(-12deg); }
+  48% { transform: rotate(8deg); }
+  66% { transform: rotate(-5deg); }
+  84% { transform: rotate(2deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* Click mode: waiting for a tap on the globe. */
+.pin-drop.is-placing .pin-drop-button {
+  background: var(--yellow);
+  border-color: var(--pin-red);
+}
+.pin-drop.is-placing .pin-drop-pulse {
+  border-color: var(--yellow);
+}
+
+/* The pin has "left" the button while it's being dragged. */
+.pin-drop.is-dragging .pin-drop-icon {
+  opacity: 0.25;
+  animation: none;
+}
+.pin-drop.is-dragging .pin-drop-pulse {
+  animation: none;
+}
+
+/* Missed the globe: a quick shake as the pin returns. */
+.pin-drop-button.is-snapping-back {
+  animation: pin-drop-shake 0.4s ease;
+}
+@keyframes pin-drop-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+}
+
+.pin-drop-hint {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-strong);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.pin-drop-button:hover + .pin-drop-hint,
+.pin-drop-button:focus-visible + .pin-drop-hint,
+.pin-drop.show-hint .pin-drop-hint,
+.pin-drop.is-placing .pin-drop-hint {
+  opacity: 1;
+  transform: translateX(0);
+}
+.pin-drop.is-dragging .pin-drop-hint {
+  opacity: 0;
+}
+
+/* Follows the pointer; its tip (bottom center) marks the drop point. */
+.pin-drop-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-drag);
+  pointer-events: none;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.3));
+}
+.pin-drop-ghost svg {
+  display: block;
+  margin: -36px 0 0 -18px;
+  opacity: 0.6;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.pin-drop-ghost.is-over-globe svg {
+  opacity: 1;
+  transform: translateY(-6px) scale(1.15);
+}
+.pin-drop-ghost-shadow {
+  position: absolute;
+  top: -3px;
+  left: -6px;
+  width: 12px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.pin-drop-ghost.is-over-globe .pin-drop-ghost-shadow {
+  opacity: 1;
+}
+
+/* Live place badge floating beside the dragged pin's head: the place name
+   leads, the raw coordinates sit underneath as a muted subtitle. */
+.pin-drop-hud {
+  position: absolute;
+  /* Anchored by its bottom edge so the two-line badge grows upward, away
+     from the pin. */
+  bottom: 16px;
+  left: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 7px 14px 7px 12px;
+  border-radius: 14px;
+  background: var(--bg-panel-strong);
+  border: 2px solid var(--pin-red);
+  color: var(--text);
+  backdrop-filter: blur(6px);
+}
+.pin-drop-hud::before {
+  content: "";
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pin-red);
+}
+.pin-drop-hud-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pin-drop-hud-name {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pin-drop-hud-coords {
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.pin-drop-ghost:not(.is-over-globe) .pin-drop-hud {
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+.pin-drop-ghost:not(.is-over-globe) .pin-drop-hud-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.pin-drop-ghost:not(.is-over-globe) .pin-drop-hud::before {
+  background: var(--text-muted);
+}
+/* Still asking the geocoder: the dot breathes. */
+.pin-drop-hud.is-resolving::before {
+  animation: pin-drop-hud-pulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes pin-drop-hud-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.25; }
+}
+
+@media (max-width: 640px) {
+  .pin-drop {
+    flex-direction: row;
+  }
+  /* A finger covers the pin's right side; float the HUD higher instead. */
+  .pin-drop-hud {
+    bottom: 48px;
+    left: 0;
+    max-width: calc(100vw - 32px);
+    transform: translateX(-50%);
+  }
+  .pin-drop-hud-name {
+    font-size: 15px;
+  }
+}
+
+/* Phones and touch screens can't hover to discover what an icon does, so
+   the label stays up as a persistent pill (hidden only mid-drag). */
+@media (max-width: 640px), (hover: none) {
+  .pin-drop-hint {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (hover: none) {
+  .pin-drop-button:hover {
+    transform: none;
+  }
+  .pin-drop-button:hover .pin-drop-icon {
+    animation: pin-drop-bounce 3.2s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-drop-icon,
+  .pin-drop-button:hover .pin-drop-icon,
+  .pin-drop-pulse,
+  .pin-drop-button.is-snapping-back,
+  .pin-drop-hud.is-resolving::before {
+    animation: none;
+  }
+  .pin-drop-button,
+  .pin-drop-hint,
+  .pin-drop-ghost svg {
+    transition: none;
+  }
+}

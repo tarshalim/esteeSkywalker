@@ -1,61 +1,119 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useLocation } from "react-router-dom";
-import { ChevronDown, Globe2 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ArrowUp } from "lucide-react";
 import GlobeExplorer from "../../components/GlobeExplorer/GlobeExplorer";
 import BlogFeed from "../../components/BlogFeed/BlogFeed";
+import TourBanner from "../../components/Tour/TourBanner";
+import HeroCarousel from "../../components/HeroCarousel/HeroCarousel";
 import { getBlogs } from "../../lib/blogStore";
-import { useNavbarHeight } from "../../hooks/useNavbarHeight";
 import { useAsync } from "../../hooks/useAsync";
 import { hasCoords } from "../../utils/geo";
+import { GLOBE_HASH } from "../../utils/routes";
 import "./Landing.css";
 
 export default function Landing() {
-  // Blog -> globe deep link: BlogDetail navigates here with router state
+  // Blog -> globe deep link: BlogDetail navigates to /#globe with router state
   // ({ focusLat, focusLng, focusBlogId }) so the globe can fly straight to
-  // that post's coordinate on arrival.
+  // that post's coordinate on arrival. Keyed on the primitives because every
+  // hash sync below hands back a freshly deserialised state object.
   const location = useLocation();
-  const focusRequest = useMemo(() => {
-    const state = location.state;
+  const navigate = useNavigate();
+  const focusLat = location.state?.focusLat;
+  const focusLng = location.state?.focusLng;
+  const focusBlogId = location.state?.focusBlogId;
+  const focusRequest = useMemo(
     // hasCoords, not truthiness — latitude 0 is a real place.
-    if (!hasCoords({ lat: state?.focusLat, lng: state?.focusLng })) return null;
-    return { lat: state.focusLat, lng: state.focusLng, blogId: state.focusBlogId };
-  }, [location.state]);
+    () => (hasCoords({ lat: focusLat, lng: focusLng }) ? { lat: focusLat, lng: focusLng, blogId: focusBlogId } : null),
+    [focusLat, focusLng, focusBlogId]
+  );
 
-  const navbarHeight = useNavbarHeight();
   const [scrollRoot, setScrollRoot] = useState(null);
   const globeRef = useRef(null);
-  const feedRef = useRef(null);
-  const { data: blogs } = useAsync(getBlogs, [], []);
+  const { data: blogs, loading: blogsLoading } = useAsync(getBlogs, [], []);
   const [globeFilter, setGlobeFilter] = useState(null);
   const [clearSignal, setClearSignal] = useState(0);
-  const [inFeed, setInFeed] = useState(false);
+  // null until the observer first reports, so we never overwrite an incoming
+  // /#globe before we've had a chance to scroll there.
+  const [inGlobe, setInGlobe] = useState(null);
 
-  // Once the globe is mostly scrolled away, the reader is "in" the feed:
-  // swap the peek prompt for a floating way back up.
+  const scrollToGlobe = useCallback((behavior = "smooth") => {
+    globeRef.current?.scrollIntoView({ behavior, block: "start" });
+  }, []);
+  const scrollToTop = useCallback(() => scrollRoot?.scrollTo({ top: 0, behavior: "smooth" }), [scrollRoot]);
+
+  // The globe section counts as the active view once it fills most of the screen.
   useEffect(() => {
     const el = globeRef.current;
     if (!el || !scrollRoot) return;
-    const observer = new IntersectionObserver(([entry]) => setInFeed(entry.intersectionRatio < 0.35), {
+    const observer = new IntersectionObserver(([entry]) => setInGlobe(entry.intersectionRatio >= 0.5), {
       root: scrollRoot,
-      threshold: [0, 0.35, 1],
+      threshold: [0, 0.5, 1],
     });
     observer.observe(el);
     return () => observer.disconnect();
   }, [scrollRoot]);
 
-  const scrollToFeed = () => feedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  const scrollToGlobe = () => scrollRoot?.scrollTo({ top: 0, behavior: "smooth" });
+  // Scroll position -> URL. Replace, not push, so scrolling doesn't fill the
+  // back stack; TopNav reads the hash to light up its globe icon.
+  const writtenHash = useRef(null);
+  const latest = useRef(location);
+  latest.current = location;
+  useEffect(() => {
+    if (inGlobe === null) return;
+    const hash = inGlobe ? GLOBE_HASH : "";
+    if (latest.current.hash === hash) return;
+    writtenHash.current = hash;
+    navigate({ hash }, { replace: true, state: latest.current.state });
+  }, [inGlobe, navigate]);
+
+  // URL -> scroll position, for hash changes we didn't write ourselves:
+  // arriving at /#globe (BlogDetail, a shared link) or the logo taking us
+  // back to "/" from the globe.
+  const pendingInitialGlobe = useRef(false);
+  useEffect(() => {
+    if (!scrollRoot || location.hash === writtenHash.current) return;
+    const firstRun = writtenHash.current === null;
+    writtenHash.current = location.hash;
+    if (location.hash === GLOBE_HASH) {
+      // Jump instantly on arrival; animate when already on the page.
+      scrollToGlobe(firstRun ? "instant" : "smooth");
+      pendingInitialGlobe.current = firstRun;
+    } else if (!firstRun) {
+      scrollToTop();
+    }
+  }, [location.hash, location.key, scrollRoot, scrollToGlobe, scrollToTop]);
+
+  // The feed above the globe fills in after the first jump; re-anchor once
+  // it has, for browsers without CSS scroll anchoring.
+  useEffect(() => {
+    if (blogsLoading || !pendingInitialGlobe.current) return;
+    pendingInitialGlobe.current = false;
+    scrollToGlobe("instant");
+  }, [blogsLoading, scrollToGlobe]);
 
   const handleClearGlobeFilter = useCallback(() => setClearSignal((n) => n + 1), []);
 
   return (
-    <div
-      className="landing-page"
-      ref={setScrollRoot}
-      style={{ scrollPaddingTop: navbarHeight + 16 }}
-    >
-      <section className="landing-globe" ref={globeRef}>
+    <div className="landing-page" ref={setScrollRoot} style={{ scrollPaddingTop: "calc(var(--nav-bottom) + 8px)" }}>
+      <section
+        className="landing-feed"
+        aria-labelledby="landing-feed-title"
+        data-tour="stories"
+        style={{ paddingTop: "calc(var(--nav-bottom) + 20px)" }}
+      >
+        <HeroCarousel title="The next horizon is calling" titleId="landing-feed-title" />
+
+        <BlogFeed
+          blogs={blogs}
+          globeFilter={globeFilter}
+          onClearGlobeFilter={handleClearGlobeFilter}
+          scrollRoot={scrollRoot}
+          tabsTop="calc(var(--nav-bottom) + 12px)"
+        />
+      </section>
+
+      <section id="globe" className="landing-globe" ref={globeRef} aria-label="Interactive globe">
         <GlobeExplorer
           variant="embedded"
           focusRequest={focusRequest}
@@ -65,36 +123,27 @@ export default function Landing() {
         />
       </section>
 
-      <section className="landing-feed" ref={feedRef} aria-labelledby="landing-feed-title">
-        <button type="button" className="landing-feed-peek" onClick={scrollToFeed}>
-          <span id="landing-feed-title">Stories from the road</span>
-          <ChevronDown size={18} className="landing-feed-peek-icon" />
-        </button>
-
-        <BlogFeed
-          blogs={blogs}
-          globeFilter={globeFilter}
-          onClearGlobeFilter={handleClearGlobeFilter}
-          scrollRoot={scrollRoot}
-          tabsTop={navbarHeight + 24}
-        />
-      </section>
-
+      {/* The globe canvas eats wheel/touch drags for zooming, so give an
+          explicit way back up to the stories. */}
       <AnimatePresence>
-        {inFeed && (
+        {inGlobe && (
           <motion.button
             type="button"
-            className="landing-back-to-globe"
-            onClick={scrollToGlobe}
+            className="landing-back-to-stories"
+            onClick={scrollToTop}
+            aria-label="Back to stories"
+            title="Back to stories"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}
             transition={{ duration: 0.25 }}
           >
-            <Globe2 size={16} /> Back to globe
+            <ArrowUp size={18} aria-hidden="true" /> <span className="hidden sm:inline">Back to stories</span>
           </motion.button>
         )}
       </AnimatePresence>
+
+      <TourBanner />
     </div>
   );
 }
