@@ -13,7 +13,7 @@ import "./PhotoGlobe.css";
 const NIGHT_TEXTURE_URL = "/textures/earth-night.jpg";
 const WATER_SPECULAR_URL = "/textures/earth-water.png";
 const BUMP_TEXTURE_URL = "/textures/earth-topology.png";
-const NIGHT_SKY_URL = "/textures/night-sky.png";
+const NIGHT_SKY_URL = "/textures/night-sky.jpg";
 // Guaranteed-available yellow/blue vector globe, swapped in if the night
 // texture ever fails to load so the globe can never render black.
 const FALLBACK_TEXTURE_URL = createYellowBlueGlobeDataUrl();
