@@ -1,17 +1,36 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { getPhotos, createPhoto } from "../../lib/photoStore";
+import { getBlogs } from "../../lib/blogStore";
+import { collectMedia } from "../../lib/media";
+import { useAsync } from "../../hooks/useAsync";
 import { useFilteredItems } from "../../hooks/useFilteredItems";
 import FilterBar from "../../components/FilterBar/FilterBar";
+import MediaView from "../../components/MediaView/MediaView";
+import PhotoLightbox from "../../components/PhotoLightbox/PhotoLightbox";
 import PhotoUploadModal from "../../components/PhotoUploadModal/PhotoUploadModal";
 import { countryCodeToFlagEmoji } from "../../utils/countries";
 import { formatDate } from "../../utils/dateFilters";
 import { useAuth } from "../../lib/auth";
 import "./Gallery.css";
 
+// Module-level so useFilteredItems' memos aren't invalidated every render.
+const MEDIA_ACCESSORS = {
+  getCountryCode: (m) => m.countryCode,
+  getCountryName: (m) => m.countryName,
+  getDate: (m) => m.timestamp,
+  getContinent: (m) => m.continent,
+};
+
+const loadSources = async () => {
+  const [photos, blogs] = await Promise.all([getPhotos(), getBlogs()]);
+  return { photos, blogs };
+};
+
+/** Media-only view: every uploaded photo/video plus images/videos inside published posts. */
 export default function Gallery() {
-  const [photos, setPhotos] = useState([]);
+  const { data: sources, loading, error, setData: setSources } = useAsync(loadSources, [], { photos: [], blogs: [] });
   const [active, setActive] = useState(null);
   const [showUpload, setShowUpload] = useState(false);
   const [searchParams] = useSearchParams();
@@ -19,9 +38,7 @@ export default function Gallery() {
   const navigate = useNavigate();
   const query = (searchParams.get("q") || searchParams.get("location") || "").toLowerCase();
 
-  useEffect(() => {
-    getPhotos().then(setPhotos);
-  }, []);
+  const media = useMemo(() => collectMedia(sources.photos, sources.blogs), [sources]);
 
   const {
     filtered,
@@ -41,16 +58,11 @@ export default function Gallery() {
     setDateRange,
     hasActiveFilters,
     clearFilters,
-  } = useFilteredItems(photos, {
-    getCountryCode: (p) => p.countryCode,
-    getCountryName: (p) => p.countryName,
-    getDate: (p) => p.timestamp,
-    getContinent: (p) => p.continent,
-  });
+  } = useFilteredItems(media, MEDIA_ACCESSORS);
 
   const filteredByQuery = useMemo(() => {
     if (!query) return filtered;
-    return filtered.filter((p) => p.locationName.toLowerCase().includes(query));
+    return filtered.filter((m) => `${m.locationName ?? ""} ${m.countryName ?? ""}`.toLowerCase().includes(query));
   }, [filtered, query]);
 
   const handleFlagClick = (e, countryCode) => {
@@ -58,11 +70,15 @@ export default function Gallery() {
     setCountryFilter([countryCode]);
   };
 
+  // Throws on failure so the modal can show the error and stay open.
   const handleUploadSubmit = async (photoData) => {
     const created = await createPhoto(photoData);
-    setPhotos((prev) => [...prev, created]);
+    setSources((prev) => ({ ...prev, photos: [...prev.photos, created] }));
     setShowUpload(false);
   };
+
+  const count = filteredByQuery.length;
+  const noun = `item${count === 1 ? "" : "s"}`;
 
   return (
     <div className="gallery-page">
@@ -70,15 +86,20 @@ export default function Gallery() {
         <p className="gallery-kicker">My Gallery</p>
         <h1>Snapshots from the road</h1>
         <p className="gallery-subtitle">
-          {query ? (
-            <>Showing results for &ldquo;{query}&rdquo; · {filteredByQuery.length} photo{filteredByQuery.length === 1 ? "" : "s"}</>
+          {loading ? (
+            "Loading…"
+          ) : query ? (
+            <>Showing results for &ldquo;{query}&rdquo; · {count} {noun}</>
           ) : (
-            <>{filteredByQuery.length} photos collected across every waypoint</>
+            <>{count} photos &amp; videos collected across every waypoint</>
           )}
         </p>
-        <button type="button" className="gallery-add-photo" onClick={() => (canEdit ? setShowUpload(true) : navigate("/account", { state: { from: "/gallery" } }))}
+        <button
+          type="button"
+          className="gallery-add-photo"
+          onClick={() => (canEdit ? setShowUpload(true) : navigate("/account", { state: { from: "/gallery" } }))}
         >
-          + Add Photo
+          + Add Media
         </button>
       </div>
 
@@ -98,69 +119,46 @@ export default function Gallery() {
         onDateRangeChange={setDateRange}
         hasActiveFilters={hasActiveFilters}
         onClearFilters={clearFilters}
-        resultCount={filteredByQuery.length}
+        resultCount={count}
       />
 
+      {error && <p className="gallery-subtitle">Couldn&rsquo;t load the gallery: {error.message}</p>}
+      {!loading && !error && count === 0 && <p className="gallery-subtitle">Nothing here yet.</p>}
+
       <div className="gallery-grid">
-        {filteredByQuery.map((photo, i) => (
+        {filteredByQuery.map((item, i) => (
           <motion.div
-            key={photo.id}
-            layoutId={`photo-${photo.id}`}
+            key={item.id}
+            layoutId={`photo-${item.id}`}
             className="gallery-item"
             role="button"
             tabIndex={0}
-            onClick={() => setActive(photo)}
-            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setActive(photo)}
+            onClick={() => setActive(item)}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setActive(item)}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: Math.min(i * 0.04, 0.4), duration: 0.5 }}
           >
-            <img src={photo.thumbUrl} alt={photo.locationName} loading="lazy" />
-            <button
-              type="button"
-              className="gallery-item-flag"
-              onClick={(e) => handleFlagClick(e, photo.countryCode)}
-              title={`Filter to ${photo.countryName}`}
-            >
-              {countryCodeToFlagEmoji(photo.countryCode)}
-            </button>
-            <span className="gallery-item-label">
-              {photo.locationName}
-              <span className="gallery-item-date">{formatDate(photo.timestamp, "short")}</span>
-            </span>
-            {photo.continent && (
-              <span className="gallery-item-exif">
-                🌐 {photo.continent} · {countryCodeToFlagEmoji(photo.countryCode)} {photo.countryName} · 📅 {photo.year}
-              </span>
+            <MediaView item={item} alt={item.locationName} />
+            {item.countryCode && (
+              <button
+                type="button"
+                className="gallery-item-flag"
+                onClick={(e) => handleFlagClick(e, item.countryCode)}
+                title={`Filter to ${item.countryName}`}
+              >
+                {countryCodeToFlagEmoji(item.countryCode)}
+              </button>
             )}
+            <span className="gallery-item-label">
+              {item.locationName}
+              <span className="gallery-item-date">{formatDate(item.timestamp, "short")}</span>
+            </span>
           </motion.div>
         ))}
       </div>
 
-      <AnimatePresence>
-        {active && (
-          <motion.div
-            className="gallery-lightbox"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setActive(null)}
-          >
-            <motion.div layoutId={`photo-${active.id}`} className="gallery-lightbox-card" onClick={(e) => e.stopPropagation()}>
-              <img src={active.url} alt={active.locationName} />
-              <div className="gallery-lightbox-meta">
-                <strong>
-                  {countryCodeToFlagEmoji(active.countryCode)} {active.locationName}
-                </strong>
-                <span>{formatDate(active.timestamp, "long")}</span>
-              </div>
-              <button className="gallery-lightbox-close" onClick={() => setActive(null)} aria-label="Close">
-                ✕
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AnimatePresence>{active && <PhotoLightbox photo={active} onClose={() => setActive(null)} />}</AnimatePresence>
 
       <AnimatePresence>
         {showUpload && <PhotoUploadModal onClose={() => setShowUpload(false)} onSubmit={handleUploadSubmit} />}

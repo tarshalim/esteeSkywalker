@@ -2,15 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MapPin, CalendarDays, ArrowRight, X } from "lucide-react";
+import { formatDate } from "../../utils/dateFilters";
 import "./BlogFeed.css";
 
 const PAGE_SIZE = 6;
 const ALL_TAB = "All";
-
-function formatDate(iso) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
 
 /**
  * Homepage blog feed: continent tabs over a continuously loading card grid.

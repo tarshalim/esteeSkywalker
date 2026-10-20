@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { getBlogById } from "../../lib/blogStore";
 import BlockView from "../../components/Editor/BlockView";
 import { countryCodeToFlagEmoji } from "../../utils/countries";
+import { formatDate } from "../../utils/dateFilters";
+import { hasCoords } from "../../utils/geo";
+import { useAsync } from "../../hooks/useAsync";
 import { useAuth } from "../../lib/auth";
 import "./BlogDetail.css";
 
@@ -11,27 +13,17 @@ export default function BlogDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { canEdit } = useAuth();
-  const [blog, setBlog] = useState(undefined); // undefined = loading, null = not found
+  // A failed fetch used to leave "Loading blog…" up forever.
+  const { data: blog, loading, error } = useAsync(() => getBlogById(id), [id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setBlog(undefined);
-    getBlogById(id).then((b) => {
-      if (!cancelled) setBlog(b);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  if (blog === undefined) {
+  if (loading) {
     return <div className="blog-detail-status">Loading blog…</div>;
   }
 
-  if (blog === null) {
+  if (error || !blog) {
     return (
       <div className="blog-detail-status">
-        <p>We couldn&rsquo;t find that blog post.</p>
+        <p>{error ? "We couldn\u2019t load that blog post." : "We couldn\u2019t find that blog post."}</p>
         <Link to="/blogs" className="blog-detail-back-link">
           ← Back to the journey
         </Link>
@@ -52,7 +44,8 @@ export default function BlogDetail() {
           <span className={`blog-detail-status-pill ${blog.status}`}>{blog.status === "draft" ? "Draft" : "Published"}</span>
           <h1>{blog.title}</h1>
           <div className="blog-detail-meta">
-            {blog.location && (
+            {blog.location && !hasCoords(blog.location) && <span>📍 {blog.location.name}</span>}
+            {hasCoords(blog.location) && (
               <button
                 type="button"
                 className="blog-detail-location"
@@ -75,9 +68,7 @@ export default function BlogDetail() {
                 {countryCodeToFlagEmoji(blog.countryCode)} {blog.countryName}
               </span>
             )}
-            <span>
-              {new Date(blog.postDate ?? blog.date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
-            </span>
+            <span>{formatDate(blog.postDate ?? blog.date, "long")}</span>
           </div>
         </motion.div>
       </div>
@@ -99,7 +90,7 @@ export default function BlogDetail() {
         transition={{ duration: 0.6, delay: 0.15 }}
         className="blog-detail-canvas"
       >
-        {blog.blocks.map((block) => (
+        {(blog.blocks ?? []).map((block) => (
           <BlockView key={block.id} block={block} editable={false} />
         ))}
       </motion.div>

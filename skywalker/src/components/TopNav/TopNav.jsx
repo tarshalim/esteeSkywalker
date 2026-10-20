@@ -11,7 +11,7 @@ export default function TopNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   const accountLabel = user ? `Account (${user.email})` : "Sign in";
 
   const handleSearchSubmit = (e) => {
@@ -111,6 +111,8 @@ export default function TopNav() {
               My Gallery
             </motion.span>
           </Link>
+          {/* Signed-in read-only accounts would just be bounced to /account. */}
+          {(!user || canEdit) && (
           <Link to="/blogs/new">
             <motion.span
               whileHover={{ y: -1 }}
@@ -121,6 +123,7 @@ export default function TopNav() {
               + Create Blog
             </motion.span>
           </Link>
+          )}
 
           <button
             type="button"
@@ -140,7 +143,7 @@ export default function TopNav() {
             style={isActive("/account") ? { background: "var(--blue)", color: "#ffffff" } : undefined}
           >
             {user ? (
-              <span className="text-sm font-bold">{(user.user_metadata?.display_name || user.email)[0].toUpperCase()}</span>
+              <span className="text-sm font-bold">{(user.user_metadata?.display_name || user.email || "?")[0].toUpperCase()}</span>
             ) : (
               <UserRound size={17} strokeWidth={2.25} />
             )}

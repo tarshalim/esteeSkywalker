@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
+import { ROLE_LABELS, useAuth } from "../../lib/auth";
 import "./Account.css";
 
 export default function Account() {
@@ -53,12 +53,21 @@ function SignInForm() {
     setError(null);
     setNotice(null);
 
-    const { data, error } =
-      mode === "signin"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/account" } });
+    let result;
+    try {
+      result =
+        mode === "signin"
+          ? await supabase.auth.signInWithPassword({ email, password })
+          : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/account" } });
+    } catch (err) {
+      // Network failures throw instead of returning { error } — without this
+      // the button stayed on "…" forever.
+      result = { error: err };
+    } finally {
+      setBusy(false);
+    }
 
-    setBusy(false);
+    const { data, error } = result;
     if (error) return setError(error.message);
     if (!data.session) return setNotice("Check your inbox to confirm your email, then sign in.");
     navigate(location.state?.from ?? "/", { replace: true });
@@ -114,6 +123,7 @@ function SignInForm() {
 }
 
 function Profile({ user }) {
+  const { role, isAdmin, isSuperAdmin } = useAuth();
   const [displayName, setDisplayName] = useState(user.user_metadata?.display_name ?? "");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
@@ -121,15 +131,29 @@ function Profile({ user }) {
   const handleSave = async (e) => {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.auth.updateUser({ data: { display_name: displayName.trim() } });
-    setBusy(false);
-    setStatus(error ? { error: error.message } : { notice: "Saved." });
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { display_name: displayName.trim() } });
+      setStatus(error ? { error: error.message } : { notice: "Saved." });
+    } catch (err) {
+      setStatus({ error: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) setStatus({ error: error.message });
   };
 
   return (
     <>
       <h1>Hi, {user.user_metadata?.display_name || user.email}</h1>
       <p className="account-muted">Signed in as {user.email}</p>
+      <p className={`account-role account-role--${role}`}>{ROLE_LABELS[role]}</p>
+      {!isAdmin && (
+        <p className="account-muted">Your account is read-only. Ask a super admin to make you an admin to edit.</p>
+      )}
 
       <form className="account-form" onSubmit={handleSave}>
         <label>
@@ -143,9 +167,68 @@ function Profile({ user }) {
         </button>
       </form>
 
-      <button type="button" className="account-link" onClick={() => supabase.auth.signOut()}>
+      {isSuperAdmin && <AccountsPanel currentUserId={user.id} />}
+
+      <button type="button" className="account-link" onClick={handleSignOut}>
         Sign out
       </button>
     </>
+  );
+}
+
+// Super-admin only: list every account and change its role. The database
+// enforces this too (profiles RLS + set_user_role), so this is just the UI.
+function AccountsPanel({ currentUserId }) {
+  const [accounts, setAccounts] = useState(null);
+  const [savingId, setSavingId] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    supabase
+      .from("profiles")
+      .select("id, email, role")
+      .order("created_at")
+      .then(({ data, error }) => {
+        if (error) setError(error.message);
+        else setAccounts(data);
+      });
+  }, []);
+
+  const changeRole = async (id, role) => {
+    setSavingId(id);
+    setError(null);
+    const { error } = await supabase.rpc("set_user_role", { target: id, new_role: role });
+    setSavingId(null);
+    if (error) return setError(error.message);
+    setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, role } : a)));
+  };
+
+  return (
+    <section className="account-admin">
+      <h2>Accounts</h2>
+      {error && <p className="account-error">{error}</p>}
+      {!accounts ? (
+        !error && <p className="account-muted">Loading…</p>
+      ) : (
+        <ul className="account-admin-list">
+          {accounts.map((a) => (
+            <li key={a.id}>
+              <span className="account-admin-email">{a.email}</span>
+              {a.id === currentUserId ? (
+                <span className="account-admin-you">{ROLE_LABELS[a.role]} (you)</span>
+              ) : (
+                <select value={a.role} disabled={savingId === a.id} onChange={(e) => changeRole(a.id, e.target.value)}>
+                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

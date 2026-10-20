@@ -30,13 +30,17 @@ function PageTransition({ children }) {
 
 function AppShell() {
   const location = useLocation();
-  const showGlobalNav = !HIDE_GLOBAL_NAV_PREFIXES.some((p) => location.pathname.startsWith(p));
+  const isEditorRoute = HIDE_GLOBAL_NAV_PREFIXES.some((p) => location.pathname.startsWith(p));
+  const showGlobalNav = !isEditorRoute;
+  // Keying by pathname alone remounted the editor (fade out/in, refetch, lost
+  // keystrokes) when "Save as Draft" swapped /blogs/new for /blogs/edit/:id.
+  const transitionKey = isEditorRoute ? "editor" : location.pathname;
 
   return (
     <>
       {showGlobalNav && <TopNav />}
       <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
+        <Routes location={location} key={transitionKey}>
           <Route path="/" element={<PageTransition><Landing /></PageTransition>} />
           <Route path="/gallery" element={<PageTransition><Gallery /></PageTransition>} />
           <Route path="/blogs" element={<PageTransition><BlogsJourney /></PageTransition>} />

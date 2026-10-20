@@ -20,3 +20,8 @@ export function readJSON(key, fallback) {
 export function writeJSON(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
+
+// Date.now() alone collides when two items are created in the same ms.
+export function makeId(prefix) {
+  return `${prefix}_${crypto.randomUUID().slice(0, 8)}${Date.now().toString(36)}`;
+}

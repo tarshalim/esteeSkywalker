@@ -95,19 +95,18 @@ export function useFilteredItems(items, { getCountryCode, getCountryName, getDat
   };
 
   const setContinentFilter = (continent) => {
-    setContinentFilterState((prev) => {
-      const next = prev === continent ? null : continent;
-      // Selecting/clearing a continent changes which countries+years are even
-      // valid, so prune stale selections rather than leaving an invisible
-      // filter active that silently zeroes out results.
-      if (next) {
-        setCountryFilter((codes) =>
-          codes.filter((code) => items.some((item) => getCountryCode(item) === code && getContinent?.(item) === next))
-        );
-      }
-      setYearFilter([]);
-      return next;
-    });
+    const next = continentFilter === continent ? null : continent;
+    // Selecting/clearing a continent changes which countries+years are even
+    // valid, so prune stale selections rather than leaving an invisible
+    // filter active that silently zeroes out results. (Kept out of a state
+    // updater: updaters must be pure, and StrictMode double-invokes them.)
+    if (next) {
+      setCountryFilter((codes) =>
+        codes.filter((code) => items.some((item) => getCountryCode(item) === code && getContinent?.(item) === next))
+      );
+    }
+    setYearFilter([]);
+    setContinentFilterState(next);
   };
 
   const clearFilters = () => {

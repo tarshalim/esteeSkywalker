@@ -6,10 +6,10 @@ import PhotoLightbox from "../PhotoLightbox/PhotoLightbox";
 import GlobeSearchBar from "../GlobeSearchBar/GlobeSearchBar";
 import PinToolbox from "../PinToolbox/PinToolbox";
 import PinNamePopover from "../PinNamePopover/PinNamePopover";
-import { fetchPhotos } from "../../data/photos";
+import { getPhotos } from "../../lib/photoStore";
 import { getBlogs } from "../../lib/blogStore";
 import * as pinStore from "../../lib/pinStore";
-import { isPointInView, clusterPhotosByLocation } from "../../utils/geo";
+import { isPointInView, clusterPhotosByLocation, hasCoords } from "../../utils/geo";
 import { useNavbarHeight } from "../../hooks/useNavbarHeight";
 import { useAuth } from "../../lib/auth";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -64,32 +64,41 @@ export default function GlobeExplorer({
   const location = useLocation();
   const hoverFlyTimeoutRef = useRef(null);
 
+  // Real store, not the hard-coded mock: uploads used to never reach the globe.
+  // Each source fails independently so one bad request doesn't blank the rest.
   useEffect(() => {
-    fetchPhotos().then(setPhotos);
-    getBlogs().then(setBlogs);
-    pinStore.getPins().then(setCustomPins);
+    const report = (what) => (err) => console.error(`Failed to load ${what}`, err);
+    getPhotos().then(setPhotos, report("photos"));
+    getBlogs().then(setBlogs, report("blogs"));
+    pinStore.getPins().then(setCustomPins, report("pins"));
   }, []);
 
-  // Blog -> globe deep link: fly to the blog's coordinate on arrival, and if
-  // any photo is linked to it, pre-select that pin so the gallery arrives
-  // already filtered.
-  useEffect(() => {
-    if (!focusRequest) return;
-    setFlyTarget({ lat: focusRequest.lat, lng: focusRequest.lng });
-    if (focusRequest.blogId) {
-      const pin = clusterPhotosByLocation(photos).find((p) =>
-        p.photos.some((photo) => photo.blogId === focusRequest.blogId)
-      );
-      if (pin) {
-        setSelectedCountry(null);
-        setSelectedLocationId(pin.id);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusRequest]);
+  useEffect(() => () => clearTimeout(hoverFlyTimeoutRef.current), []);
 
   const photoPins = useMemo(() => clusterPhotosByLocation(photos), [photos]);
   const blogsById = useMemo(() => new Map(blogs.map((b) => [b.id, b])), [blogs]);
+  // Globe markers/search are a public showcase: published, geolocated posts only.
+  const mappableBlogs = useMemo(
+    () => blogs.filter((b) => b.status === "published" && hasCoords(b.location)),
+    [blogs]
+  );
+
+  // Blog -> globe deep link: fly to the blog's coordinate on arrival.
+  useEffect(() => {
+    if (focusRequest) setFlyTarget({ lat: focusRequest.lat, lng: focusRequest.lng });
+  }, [focusRequest]);
+
+  // ...and once photos have loaded, pre-select the pin linked to that blog so
+  // the gallery arrives filtered. (This used to run only on mount, while
+  // `photos` was still [], so it never matched.)
+  useEffect(() => {
+    if (!focusRequest?.blogId) return;
+    const pin = photoPins.find((p) => p.photos.some((photo) => photo.blogId === focusRequest.blogId));
+    if (pin) {
+      setSelectedCountry(null);
+      setSelectedLocationId(pin.id);
+    }
+  }, [focusRequest, photoPins]);
 
   const { filteredPhotos, filterLabel, hasManualFilter } = useMemo(() => {
     if (selectedLocationId) {
@@ -117,7 +126,7 @@ export default function GlobeExplorer({
       };
     }
     return {
-      filteredPhotos: viewport ? photos.filter((p) => isPointInView(viewport, p.lat, p.lng)) : photos,
+      filteredPhotos: viewport ? photos.filter((p) => hasCoords(p) && isPointInView(viewport, p.lat, p.lng)) : photos,
       filterLabel: "Current view",
       hasManualFilter: false,
     };
@@ -182,7 +191,7 @@ export default function GlobeExplorer({
   // the instant the mouse leaves the grid.
   const handlePhotoFlyTo = useCallback(
     (photo) => {
-      if (!photo) return;
+      if (!hasCoords(photo)) return;
       flyToDebounced({ lat: photo.lat, lng: photo.lng });
     },
     [flyToDebounced]
@@ -190,7 +199,7 @@ export default function GlobeExplorer({
 
   const handlePhotoClick = useCallback((photo) => {
     setActivePhotoId(photo.id);
-    setFlyTarget({ lat: photo.lat, lng: photo.lng });
+    if (hasCoords(photo)) setFlyTarget({ lat: photo.lat, lng: photo.lng });
     setLightboxPhoto(photo);
   }, []);
 
@@ -224,14 +233,21 @@ export default function GlobeExplorer({
   const handleCreatePin = useCallback(
     async ({ title, note }) => {
       if (!pendingPinCoords) return;
-      const pin = await pinStore.createPin({ ...pendingPinCoords, title, note });
-      setCustomPins((prev) => [...prev, pin]);
-      setPendingPinCoords(null);
+      try {
+        const pin = await pinStore.createPin({ ...pendingPinCoords, title, note });
+        setCustomPins((prev) => [...prev, pin]);
+        setPendingPinCoords(null);
+      } catch (err) {
+        console.error(err);
+        window.alert(`Couldn't save pin: ${err.message}`);
+      }
     },
     [pendingPinCoords]
   );
 
   const handleCancelPendingPin = useCallback(() => setPendingPinCoords(null), []);
+
+  const handleBlogClick = useCallback((blog) => navigate(`/blogs/${blog.id}`), [navigate]);
 
   return (
     <div
@@ -239,7 +255,7 @@ export default function GlobeExplorer({
       style={{ paddingTop: navbarHeight }}
     >
       <div className="globe-explorer-stage">
-        <GlobeSearchBar pins={photoPins} customPins={customPins} blogs={blogs} onSelect={handleSearchSelect} />
+        <GlobeSearchBar pins={photoPins} customPins={customPins} blogs={mappableBlogs} onSelect={handleSearchSelect} />
         <PinToolbox
           labelMode={labelMode}
           onToggleLabelMode={handleToggleLabelMode}
@@ -253,6 +269,7 @@ export default function GlobeExplorer({
         <PhotoGlobe
           photos={photos}
           customPins={customPins}
+          blogs={mappableBlogs}
           selectedCountryCode={selectedCountry?.code ?? null}
           selectedLocationId={selectedLocationId}
           selectedCustomPinId={selectedCustomPinId}
@@ -266,6 +283,7 @@ export default function GlobeExplorer({
           onPinHover={handlePinHover}
           onCustomPinClick={handleCustomPinClick}
           onPinDropAt={handlePinDropAt}
+          onBlogClick={handleBlogClick}
         />
         {pendingPinCoords && (
           <PinNamePopover onConfirm={handleCreatePin} onCancel={handleCancelPendingPin} />

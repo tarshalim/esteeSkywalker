@@ -1,28 +1,17 @@
 import { mockPhotos } from "../data/mockData";
-import { delay, readJSON, writeJSON } from "./storage";
-import { supabase, unwrap, fromRows } from "./supabase";
+import { makeId } from "./storage";
+import { createCollection } from "./collection";
 
-// Photos API: Supabase `photos` table when configured, otherwise a localStorage
-// mock mirroring blogStore.js/pinStore.js's pattern. Every function returns a
-// Promise so callers (Gallery) don't care which backend is active.
+// Media uploads API (photos and videos): Supabase `photos` table when
+// configured, otherwise a localStorage mock. Every function returns a Promise
+// so callers (Gallery, GlobeExplorer) don't care which backend is active.
 
-const PHOTOS_KEY = "skywalker.photos.v1";
+const photos = createCollection({ table: "photos", storageKey: "skywalker.photos.v1", seed: mockPhotos });
 
-function ensureSeeded() {
-  if (localStorage.getItem(PHOTOS_KEY) == null) {
-    writeJSON(PHOTOS_KEY, mockPhotos);
-  }
-}
+export const getPhotos = photos.list;
 
-export async function getPhotos() {
-  if (supabase) {
-    return fromRows(unwrap(await supabase.from("photos").select("data").order("created_at")));
-  }
-  ensureSeeded();
-  return delay(readJSON(PHOTOS_KEY, []));
-}
-
-export async function createPhoto({
+export function createPhoto({
+  type = "image",
   url,
   thumbUrl,
   lat = null,
@@ -34,8 +23,9 @@ export async function createPhoto({
   timestamp,
   blogId = null,
 }) {
-  const photo = {
-    id: `photo_${Date.now().toString(36)}`,
+  return photos.insert({
+    id: makeId("photo"),
+    type,
     url,
     thumbUrl: thumbUrl || url,
     lat,
@@ -47,14 +37,5 @@ export async function createPhoto({
     timestamp,
     year: new Date(timestamp).getFullYear(),
     blogId,
-  };
-  if (supabase) {
-    unwrap(await supabase.from("photos").insert({ id: photo.id, data: photo }));
-    return photo;
-  }
-  ensureSeeded();
-  const photos = readJSON(PHOTOS_KEY, []);
-  photos.push(photo);
-  writeJSON(PHOTOS_KEY, photos);
-  return delay(photo);
+  });
 }

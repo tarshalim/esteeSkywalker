@@ -39,7 +39,8 @@
   overflow: hidden;
   margin-bottom: 0.75rem;
 }
-.upload-modal-picker img {
+.upload-modal-picker img,
+.upload-modal-picker video {
   width: 100%;
   height: 100%;
   object-fit: cover;

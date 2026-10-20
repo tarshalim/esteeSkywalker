@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import MediaView from "../MediaView/MediaView";
 import "./PhotoGallery.css";
 
 // Narrow band near the top of the scroll container: the photo whose card
@@ -67,7 +68,7 @@ export default function PhotoGallery({
                 onClick={() => onPhotoClick(photo)}
                 title={photo.locationName}
               >
-                <img src={photo.thumbUrl} alt={photo.locationName} loading="lazy" />
+                <MediaView item={photo} alt={photo.locationName} />
                 <span className="photo-gallery-item-label">{photo.locationName}</span>
               </button>
               {photo.blog && (

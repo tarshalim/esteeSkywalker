@@ -1,5 +1,21 @@
 const DEG2RAD = Math.PI / 180;
 
+/** True when `point` has finite lat/lng (0 is a valid coordinate). */
+export function hasCoords(point) {
+  return Number.isFinite(point?.lat) && Number.isFinite(point?.lng);
+}
+
+/** Centroid of the geojson feature for an ISO_A2 code — a fallback location. */
+export function centroidForCountryCode(code, countryFeatures) {
+  const feature = countryFeatures.find((f) => f.properties?.ISO_A2 === code || f.properties?.WB_A2 === code);
+  return feature ? getFeatureCentroid(feature) : null;
+}
+
+/** Escapes text for react-globe.gl's HTML-string tooltips. */
+export function escapeHtml(text) {
+  return String(text ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
 /**
  * Great-circle angular distance between two lat/lng points, in degrees.
  * Used instead of an exact bounding box because react-globe.gl (an orthographic-ish
@@ -164,7 +180,9 @@ export function findCountryForPoint(lat, lng, countryFeatures) {
  */
 export function clusterPhotosByLocation(photos, precision = 0.05) {
   const groups = new Map();
-  for (const photo of photos) {
+  // Uploads without GPS have null coords; Math.round(null) is 0, so without
+  // this guard they'd all pile into one bogus pin at 0°N 0°E.
+  for (const photo of photos.filter(hasCoords)) {
     const key = `${Math.round(photo.lat / precision)}:${Math.round(photo.lng / precision)}`;
     if (!groups.has(key)) {
       groups.set(key, {

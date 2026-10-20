@@ -6,6 +6,8 @@ import GlobeExplorer from "../../components/GlobeExplorer/GlobeExplorer";
 import BlogFeed from "../../components/BlogFeed/BlogFeed";
 import { getBlogs } from "../../lib/blogStore";
 import { useNavbarHeight } from "../../hooks/useNavbarHeight";
+import { useAsync } from "../../hooks/useAsync";
+import { hasCoords } from "../../utils/geo";
 import "./Landing.css";
 
 export default function Landing() {
@@ -15,7 +17,8 @@ export default function Landing() {
   const location = useLocation();
   const focusRequest = useMemo(() => {
     const state = location.state;
-    if (!state?.focusLat) return null;
+    // hasCoords, not truthiness — latitude 0 is a real place.
+    if (!hasCoords({ lat: state?.focusLat, lng: state?.focusLng })) return null;
     return { lat: state.focusLat, lng: state.focusLng, blogId: state.focusBlogId };
   }, [location.state]);
 
@@ -23,14 +26,10 @@ export default function Landing() {
   const [scrollRoot, setScrollRoot] = useState(null);
   const globeRef = useRef(null);
   const feedRef = useRef(null);
-  const [blogs, setBlogs] = useState([]);
+  const { data: blogs } = useAsync(getBlogs, [], []);
   const [globeFilter, setGlobeFilter] = useState(null);
   const [clearSignal, setClearSignal] = useState(0);
   const [inFeed, setInFeed] = useState(false);
-
-  useEffect(() => {
-    getBlogs().then(setBlogs);
-  }, []);
 
   // Once the globe is mostly scrolled away, the reader is "in" the feed:
   // swap the peek prompt for a floating way back up.

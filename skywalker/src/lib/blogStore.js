@@ -1,13 +1,14 @@
 import { mockBlogs } from "../data/blogs";
-import { delay, readJSON, writeJSON } from "./storage";
+import { delay, readJSON, writeJSON, makeId } from "./storage";
 import { supabase, unwrap, fromRows } from "./supabase";
+import { createCollection } from "./collection";
 
 // Blogs/templates API: Supabase `blogs`/`templates` tables when configured,
 // otherwise a localStorage mock. Every function returns a Promise so callers
 // don't care which backend is active.
 
 const BLOGS_KEY = "skywalker.blogs.v1";
-const TEMPLATES_KEY = "skywalker.templates.v1";
+const templates = createCollection({ table: "templates", storageKey: "skywalker.templates.v1" });
 
 function ensureSeeded() {
   if (localStorage.getItem(BLOGS_KEY) == null) {
@@ -83,6 +84,9 @@ export async function upsertBlog(blog) {
       const updated = {
         ...blogs[idx],
         ...blog,
+        // Shallow-merging would replace `location` wholesale and drop the
+        // lat/lng the globe needs whenever the payload only carries a name.
+        location: { ...blogs[idx].location, ...blog.location },
         date: postDate,
         postDate,
         year: new Date(postDate).getFullYear(),
@@ -117,47 +121,17 @@ export async function upsertBlog(blog) {
   return saveBlog(created, blogs);
 }
 
-export async function getTemplates() {
-  if (supabase) {
-    return fromRows(unwrap(await supabase.from("templates").select("data").order("created_at")));
-  }
-  return delay(readJSON(TEMPLATES_KEY, []));
-}
+export const getTemplates = templates.list;
+export const getTemplateById = templates.get;
+export const deleteTemplate = templates.remove;
 
-export async function saveTemplate({ name, title, coverImage, blocks }) {
-  const template = {
-    id: `tpl_${Date.now().toString(36)}`,
+export function saveTemplate({ name, title, coverImage, blocks }) {
+  return templates.insert({
+    id: makeId("tpl"),
     name,
     title,
     coverImage,
     blocks,
     createdAt: new Date().toISOString(),
-  };
-  if (supabase) {
-    unwrap(await supabase.from("templates").insert({ id: template.id, data: template }));
-    return template;
-  }
-  const templates = readJSON(TEMPLATES_KEY, []);
-  templates.push(template);
-  writeJSON(TEMPLATES_KEY, templates);
-  return delay(template);
-}
-
-export async function getTemplateById(id) {
-  if (supabase) {
-    const row = unwrap(await supabase.from("templates").select("data").eq("id", id).maybeSingle());
-    return row?.data ?? null;
-  }
-  const templates = readJSON(TEMPLATES_KEY, []);
-  return delay(templates.find((t) => t.id === id) ?? null);
-}
-
-export async function deleteTemplate(id) {
-  if (supabase) {
-    unwrap(await supabase.from("templates").delete().eq("id", id));
-    return true;
-  }
-  const templates = readJSON(TEMPLATES_KEY, []).filter((t) => t.id !== id);
-  writeJSON(TEMPLATES_KEY, templates);
-  return delay(true);
+  });
 }

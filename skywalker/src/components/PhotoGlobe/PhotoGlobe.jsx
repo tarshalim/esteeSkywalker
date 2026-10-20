@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import Globe from "react-globe.gl";
-import { clusterPhotosByLocation } from "../../utils/geo";
+import { clusterPhotosByLocation, escapeHtml } from "../../utils/geo";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import {
   createYellowBlueGlobeDataUrl,
@@ -35,6 +35,7 @@ const PALETTES = {
     pinSelected: "#f59e0b",
     customPin: "#2563eb",
     customPinSelected: "#eab308",
+    blogPin: "#e11d48",
     ringColor: "30, 64, 175",
     atmosphereColor: "#93c5fd",
     atmosphereAltitude: 0.16,
@@ -55,6 +56,7 @@ const PALETTES = {
     pinSelected: "#ffffff",
     customPin: "#7dd3fc",
     customPinSelected: "#fef9c3",
+    blogPin: "#fb7185",
     ringColor: "253, 224, 71",
     atmosphereColor: "#3b82f6",
     atmosphereAltitude: 0.24,
@@ -75,6 +77,7 @@ const ZOOM_DEBOUNCE_MS = 150;
 export default function PhotoGlobe({
   photos,
   customPins,
+  blogs = [],
   selectedCountryCode,
   selectedLocationId,
   selectedCustomPinId,
@@ -88,6 +91,7 @@ export default function PhotoGlobe({
   onPinHover,
   onCustomPinClick,
   onPinDropAt,
+  onBlogClick,
 }) {
   const globeEl = useRef();
   const wrapperRef = useRef();
@@ -98,6 +102,12 @@ export default function PhotoGlobe({
   const { theme } = useTheme();
   const palette = PALETTES[theme] ?? PALETTES.light;
   const [globeImageUrl, setGlobeImageUrl] = useState(palette.globeImageUrl);
+  // Read by onGlobeReady: a deep-link fly target can arrive before the globe
+  // is ready, and the default camera reset used to overwrite it.
+  const flyToTargetRef = useRef(flyToTarget);
+  flyToTargetRef.current = flyToTarget;
+
+  useEffect(() => () => clearTimeout(zoomTimeoutRef.current), []);
 
   // Never render a black globe: verify the theme's texture actually loads,
   // and fall back to the stylized yellow/blue vector texture if it errors.
@@ -178,22 +188,25 @@ export default function PhotoGlobe({
     return () => observer.disconnect();
   }, []);
 
+  // Countries with a photo *or* a post are clickable, so blog-only countries
+  // can still filter the homepage feed.
   const visitedCountryCodes = useMemo(
-    () => new Set(photos.map((p) => p.countryCode)),
-    [photos]
+    () => new Set([...photos.map((p) => p.countryCode), ...blogs.map((b) => b.countryCode)].filter(Boolean)),
+    [photos, blogs]
   );
 
   const photoPins = useMemo(() => clusterPhotosByLocation(photos), [photos]);
 
-  // Photo pins (from clustered photos) and custom annotation pins (from the
-  // toolbox) share one react-globe.gl points layer, tagged by `kind` so click/
+  // Photo pins (clustered photos), custom annotation pins (toolbox) and blog
+  // posts share one react-globe.gl points layer, tagged by `kind` so click/
   // hover/color/label logic can dispatch to the right handler and dataset.
   const combinedPins = useMemo(
     () => [
       ...photoPins.map((pin) => ({ ...pin, kind: "photo" })),
       ...customPins.map((pin) => ({ ...pin, kind: "custom" })),
+      ...blogs.map((blog) => ({ id: blog.id, lat: blog.location.lat, lng: blog.location.lng, blog, kind: "blog" })),
     ],
-    [photoPins, customPins]
+    [photoPins, customPins, blogs]
   );
 
   useEffect(() => {
@@ -216,7 +229,8 @@ export default function PhotoGlobe({
   );
 
   const handleGlobeReady = useCallback(() => {
-    globeEl.current.pointOfView({ lat: 15, lng: 95, altitude: 2.1 }, 0);
+    const target = flyToTargetRef.current;
+    globeEl.current.pointOfView(target ? { ...target, altitude: 0.45 } : { lat: 15, lng: 95, altitude: 2.1 }, 0);
     onViewportChange(globeEl.current.pointOfView());
     setIsReady(true);
 
@@ -244,7 +258,7 @@ export default function PhotoGlobe({
     (feature) => {
       const iso2 = feature.properties.ISO_A2;
       const count = photos.filter((p) => p.countryCode === iso2).length;
-      return `<div class="globe-tooltip"><strong>${feature.properties.NAME}</strong><br/>${
+      return `<div class="globe-tooltip"><strong>${escapeHtml(feature.properties.NAME)}</strong><br/>${
         count > 0 ? `${count} photo${count === 1 ? "" : "s"}` : "No photos yet"
       }</div>`;
     },
@@ -253,6 +267,7 @@ export default function PhotoGlobe({
 
   const pointColor = useCallback(
     (d) => {
+      if (d.kind === "blog") return palette.blogPin;
       if (d.kind === "custom") {
         return d.id === selectedCustomPinId ? palette.customPinSelected : palette.customPin;
       }
@@ -268,33 +283,43 @@ export default function PhotoGlobe({
   );
 
   const pointRadius = useCallback(
-    (d) => (d.kind === "custom" ? 0.22 : Math.min(0.15 + d.photos.length * 0.03, 0.45)),
+    (d) => (d.kind === "photo" ? Math.min(0.15 + d.photos.length * 0.03, 0.45) : d.kind === "blog" ? 0.28 : 0.22),
     []
   );
 
+  // User-entered text is injected as HTML here, so it must be escaped.
   const pointLabel = useCallback((d) => {
-    if (d.kind === "custom") {
-      return `<div class="globe-tooltip"><strong>${d.title}</strong>${d.note ? `<br/>${d.note}` : ""}</div>`;
+    if (d.kind === "blog") {
+      return `<div class="globe-tooltip"><strong>${escapeHtml(d.blog.title)}</strong><br/>${escapeHtml(
+        d.blog.location.name
+      )} · click to read</div>`;
     }
-    return `<div class="globe-tooltip"><strong>${d.locationName}</strong><br/>${d.photos.length} photo${
+    if (d.kind === "custom") {
+      return `<div class="globe-tooltip"><strong>${escapeHtml(d.title)}</strong>${
+        d.note ? `<br/>${escapeHtml(d.note)}` : ""
+      }</div>`;
+    }
+    return `<div class="globe-tooltip"><strong>${escapeHtml(d.locationName)}</strong><br/>${d.photos.length} photo${
       d.photos.length === 1 ? "" : "s"
     }</div>`;
   }, []);
 
   const handlePointClick = useCallback(
     (d) => {
-      if (d.kind === "custom") {
+      if (d.kind === "blog") {
+        onBlogClick?.(d.blog);
+      } else if (d.kind === "custom") {
         onCustomPinClick(d.id === selectedCustomPinId ? null : d);
       } else {
         onPinClick(d.id === selectedLocationId ? null : d);
       }
     },
-    [onCustomPinClick, onPinClick, selectedCustomPinId, selectedLocationId]
+    [onBlogClick, onCustomPinClick, onPinClick, selectedCustomPinId, selectedLocationId]
   );
 
   const handlePointHover = useCallback(
     (d) => {
-      if (d?.kind === "custom") return; // custom pins don't drive gallery filtering
+      if (d && d.kind !== "photo") return; // only photo pins drive gallery filtering
       onPinHover(d ?? null);
     },
     [onPinHover]
@@ -305,9 +330,12 @@ export default function PhotoGlobe({
     [labelMode, combinedPins]
   );
 
-  const labelText = useCallback((d) => (d.kind === "custom" ? d.title : d.locationName), []);
+  const labelText = useCallback(
+    (d) => (d.kind === "blog" ? d.blog.title : d.kind === "custom" ? d.title : d.locationName),
+    []
+  );
   const labelColor = useCallback(
-    (d) => (d.kind === "custom" ? palette.customPin : palette.pinColor),
+    (d) => (d.kind === "blog" ? palette.blogPin : d.kind === "custom" ? palette.customPin : palette.pinColor),
     [palette]
   );
 

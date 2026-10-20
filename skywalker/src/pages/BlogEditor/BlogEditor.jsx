@@ -15,7 +15,8 @@ import CountrySelect from "../../components/CountrySelect/CountrySelect";
 import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata } from "../../lib/exif";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { findCountryForPoint, continentForCountryCode } from "../../utils/geo";
+import { findCountryForPoint, continentForCountryCode, centroidForCountryCode, hasCoords } from "../../utils/geo";
+import { PLACEHOLDER_COVER } from "../../lib/media";
 import { COUNTRY_TO_CONTINENT } from "../../utils/countries";
 import "./BlogEditor.css";
 
@@ -33,6 +34,7 @@ export default function BlogEditor() {
   const [title, setTitle] = useState("");
   const [coverImage, setCoverImage] = useState("");
   const [locationName, setLocationName] = useState("");
+  const [coords, setCoords] = useState(null); // { lat, lng } | null — what the globe pins
   const [country, setCountry] = useState(null); // { code, name } | null
   const [postDate, setPostDate] = useState(todayISO());
   const [postDateTouched, setPostDateTouched] = useState(false);
@@ -45,41 +47,66 @@ export default function BlogEditor() {
   const [templates, setTemplates] = useState([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const [loadState, setLoadState] = useState(isEditMode ? "loading" : "ready"); // loading | ready | missing | error
+  const loadedIdRef = useRef(null);
   const draggedIdRef = useRef(null);
   const toastTimer = useRef(null);
   const coverInputRef = useRef(null);
 
   useEffect(() => {
-    getTemplates().then(setTemplates);
+    getTemplates()
+      .then(setTemplates)
+      .catch((err) => console.error("Failed to load templates", err));
   }, []);
 
   useEffect(() => {
     if (isEditMode) {
-      getBlogById(id).then((blog) => {
-        if (!blog) return;
-        setBlogId(blog.id);
-        setTitle(blog.title);
-        setCoverImage(blog.coverImage || "");
-        setLocationName(blog.location?.name || "");
-        setCountry(blog.countryCode ? { code: blog.countryCode, name: blog.countryName || blog.countryCode } : null);
-        setPostDate(blog.postDate || blog.date || todayISO());
-        setPostDateTouched(true);
-        setBlocks(blog.blocks?.length ? blog.blocks : [createTextBlock("paragraph", "")]);
-        setStatus(blog.status || "draft");
-      });
-      return;
+      // Saving a new draft swaps the URL to /blogs/edit/:id; the editor is
+      // already holding that post, so re-fetching would only clobber edits
+      // typed since the save.
+      if (id === loadedIdRef.current) return;
+      let cancelled = false;
+      setLoadState("loading");
+      getBlogById(id)
+        .then((blog) => {
+          if (cancelled) return;
+          if (!blog) return setLoadState("missing");
+          loadedIdRef.current = blog.id;
+          setBlogId(blog.id);
+          setTitle(blog.title);
+          setCoverImage(blog.coverImage || "");
+          setLocationName(blog.location?.name || "");
+          setCoords(hasCoords(blog.location) ? { lat: blog.location.lat, lng: blog.location.lng } : null);
+          setCountry(blog.countryCode ? { code: blog.countryCode, name: blog.countryName || blog.countryCode } : null);
+          setPostDate(blog.postDate || blog.date || todayISO());
+          setPostDateTouched(true);
+          setBlocks(blog.blocks?.length ? blog.blocks : [createTextBlock("paragraph", "")]);
+          setStatus(blog.status || "draft");
+          setLoadState("ready");
+        })
+        .catch((err) => {
+          console.error(err);
+          if (!cancelled) setLoadState("error");
+        });
+      return () => {
+        cancelled = true;
+      };
     }
     const templateId = searchParams.get("template");
     if (templateId) {
-      getTemplateById(templateId).then((tpl) => {
-        if (!tpl) return;
-        setTitle(tpl.title || "");
-        setCoverImage(tpl.coverImage || "");
-        setBlocks(tpl.blocks?.length ? tpl.blocks.map((b) => ({ ...b, id: makeBlockId() })) : [createTextBlock("paragraph", "")]);
-      });
+      getTemplateById(templateId)
+        .then(applyTemplate)
+        .catch((err) => console.error("Failed to load template", err));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  function applyTemplate(tpl) {
+    if (!tpl) return;
+    setTitle(tpl.title || "");
+    setCoverImage(tpl.coverImage || "");
+    setBlocks(tpl.blocks?.length ? tpl.blocks.map((b) => ({ ...b, id: makeBlockId() })) : [createTextBlock("paragraph", "")]);
+  }
 
   const showToast = (text) => {
     setToast(text);
@@ -141,7 +168,14 @@ export default function BlogEditor() {
   const handleCoverPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const [dataUrl, metadata] = await Promise.all([fileToUrl(file), extractPhotoMetadata(file)]);
+    let dataUrl, metadata;
+    try {
+      [dataUrl, metadata] = await Promise.all([fileToUrl(file), extractPhotoMetadata(file)]);
+    } catch (err) {
+      console.error(err);
+      showToast(`Couldn't upload cover image: ${err.message}`);
+      return;
+    }
     setCoverImage(dataUrl);
 
     // Auto-fill Country/Date from the cover photo's EXIF, but never clobber
@@ -151,6 +185,9 @@ export default function BlogEditor() {
     if (metadata.dateTaken && !postDateTouched) {
       setPostDate(metadata.dateTaken.slice(0, 10));
       detected.push(metadata.dateTaken.slice(0, 10));
+    }
+    if (metadata.lat != null && metadata.lng != null && !coords) {
+      setCoords({ lat: metadata.lat, lng: metadata.lng });
     }
     if (metadata.lat != null && metadata.lng != null && !country && countries.length > 0) {
       const match = findCountryForPoint(metadata.lat, metadata.lng, countries);
@@ -164,11 +201,15 @@ export default function BlogEditor() {
     }
   };
 
+  // Without lat/lng a post can never be pinned on, searched on, or deep-linked
+  // to from the globe — fall back to the country's centroid.
+  const resolveCoords = () => coords ?? (country ? centroidForCountryCode(country.code, countries) : null);
+
   const buildPayload = (nextStatus) => ({
     id: blogId ?? undefined,
     title: title.trim() || "Untitled Blog Post",
-    coverImage: coverImage || "https://picsum.photos/seed/new-post/1600/900",
-    location: { name: locationName.trim() || "Unnamed waypoint" },
+    coverImage: coverImage || PLACEHOLDER_COVER,
+    location: { name: locationName.trim() || country?.name || "Unnamed waypoint", ...resolveCoords() },
     countryCode: country?.code ?? "",
     countryName: country?.name ?? "",
     continent: country ? continentForCountryCode(country.code, countries, COUNTRY_TO_CONTINENT) : "",
@@ -177,12 +218,28 @@ export default function BlogEditor() {
     status: nextStatus,
   });
 
-  const handleSaveDraft = async () => {
+  // Shared by draft + publish. Previously a rejected upsert (RLS, network)
+  // left `saving` true — both buttons disabled for good, with no message.
+  const persist = async (nextStatus) => {
     setSaving(true);
-    const saved = await upsertBlog(buildPayload("draft"));
-    setSaving(false);
-    setBlogId(saved.id);
-    setStatus("draft");
+    try {
+      const saved = await upsertBlog(buildPayload(nextStatus));
+      loadedIdRef.current = saved.id;
+      setBlogId(saved.id);
+      setStatus(saved.status);
+      return saved;
+    } catch (err) {
+      console.error(err);
+      showToast(`Couldn't save: ${err.message}`);
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    const saved = await persist("draft");
+    if (!saved) return;
     showToast("Saved as draft");
     if (!isEditMode) navigate(`/blogs/edit/${saved.id}`, { replace: true });
   };
@@ -192,30 +249,49 @@ export default function BlogEditor() {
       showToast("Select a country before publishing");
       return;
     }
-    setSaving(true);
-    const saved = await upsertBlog(buildPayload("published"));
-    setSaving(false);
-    navigate(`/blogs/${saved.id}`);
+    const saved = await persist("published");
+    if (saved) navigate(`/blogs/${saved.id}`);
   };
 
   const handleSaveAsTemplate = async () => {
     if (!templateName.trim()) return;
-    const tpl = await saveTemplate({ name: templateName.trim(), title, coverImage, blocks });
-    setTemplates((prev) => [...prev, tpl]);
-    setShowTemplateModal(false);
-    setTemplateName("");
-    showToast(`Saved layout as “${tpl.name}”`);
+    try {
+      const tpl = await saveTemplate({ name: templateName.trim(), title, coverImage, blocks });
+      setTemplates((prev) => [...prev, tpl]);
+      setShowTemplateModal(false);
+      setTemplateName("");
+      showToast(`Saved layout as “${tpl.name}”`);
+    } catch (err) {
+      showToast(`Couldn't save template: ${err.message}`);
+    }
   };
 
   const handleLoadTemplate = async (templateId) => {
     if (!templateId) return;
     if (blocks.some((b) => b.html) && !window.confirm("Replace the current draft with this template?")) return;
-    const tpl = await getTemplateById(templateId);
-    if (!tpl) return;
-    setTitle(tpl.title || "");
-    setCoverImage(tpl.coverImage || "");
-    setBlocks(tpl.blocks?.length ? tpl.blocks.map((b) => ({ ...b, id: makeBlockId() })) : [createTextBlock("paragraph", "")]);
+    try {
+      applyTemplate(await getTemplateById(templateId));
+    } catch (err) {
+      showToast(`Couldn't load template: ${err.message}`);
+    }
   };
+
+  if (loadState !== "ready") {
+    return (
+      <div className="editor-page">
+        <div className="editor-canvas">
+          {loadState === "loading" ? (
+            <p>Loading post…</p>
+          ) : (
+            <p>
+              {loadState === "missing" ? "That post doesn't exist." : "Couldn't load this post."}{" "}
+              <Link to="/blogs">← Back to the journey</Link>
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="editor-page">
@@ -229,7 +305,7 @@ export default function BlogEditor() {
         <div className="editor-actions">
           <select
             className="editor-template-select"
-            defaultValue=""
+            value=""
             onChange={(e) => handleLoadTemplate(e.target.value)}
           >
             <option value="" disabled>

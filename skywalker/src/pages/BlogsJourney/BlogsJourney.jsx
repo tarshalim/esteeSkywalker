@@ -7,6 +7,7 @@ import Signpost from "../../components/Signpost/Signpost";
 import FilterBar from "../../components/FilterBar/FilterBar";
 import { useFilteredItems } from "../../hooks/useFilteredItems";
 import { useNavbarHeight } from "../../hooks/useNavbarHeight";
+import { useAsync } from "../../hooks/useAsync";
 import "./BlogsJourney.css";
 
 const CYCLIST_SCREEN_RATIO = 0.18;
@@ -14,10 +15,18 @@ const NEAR_THRESHOLD_PX = 90;
 const END_BUFFER_PX = 900;
 const IDLE_TIMEOUT_MS = 160;
 
+// Module-level so useFilteredItems' memos survive the per-scroll re-renders.
+const BLOG_ACCESSORS = {
+  getCountryCode: (b) => b.countryCode,
+  getCountryName: (b) => b.countryName,
+  getDate: (b) => b.postDate ?? b.date,
+  getContinent: (b) => b.continent,
+};
+
 export default function BlogsJourney() {
   const navigate = useNavigate();
   const trackRef = useRef(null);
-  const [blogs, setBlogs] = useState([]);
+  const { data: blogs } = useAsync(getBlogs, [], []);
   const [progress, setProgress] = useState(0);
   const [isMoving, setIsMoving] = useState(false);
   const [direction, setDirection] = useState(1);
@@ -26,10 +35,6 @@ export default function BlogsJourney() {
   const idleTimer = useRef(null);
   const dragState = useRef(null);
   const navbarHeight = useNavbarHeight();
-
-  useEffect(() => {
-    getBlogs().then(setBlogs);
-  }, []);
 
   const {
     filtered: filteredBlogs,
@@ -48,12 +53,7 @@ export default function BlogsJourney() {
     setDateRange,
     hasActiveFilters,
     clearFilters,
-  } = useFilteredItems(blogs, {
-    getCountryCode: (b) => b.countryCode,
-    getCountryName: (b) => b.countryName,
-    getDate: (b) => b.postDate ?? b.date,
-    getContinent: (b) => b.continent,
-  });
+  } = useFilteredItems(blogs, BLOG_ACCESSORS);
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth);

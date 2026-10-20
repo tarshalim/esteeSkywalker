@@ -10,6 +10,9 @@ export function formatDate(dateStr, style = "medium") {
       : style === "short"
       ? { month: "short", day: "numeric" }
       : { month: "short", day: "numeric", year: "numeric" };
+  // "2024-02-11" parses as UTC midnight, which renders as Feb 10 west of
+  // Greenwich — format date-only tags in UTC so the day never shifts.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) opts.timeZone = "UTC";
   return new Date(dateStr).toLocaleDateString(undefined, opts);
 }
 
