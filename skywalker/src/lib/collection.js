@@ -3,8 +3,11 @@ import { supabase, unwrap, fromRows } from "./supabase";
 
 // One `{ id, data jsonb }` table (Supabase) or one localStorage array (mock),
 // behind the same Promise API. photoStore, pinStore and blogStore's templates
-// were each hand-rolling this same branch.
-export function createCollection({ table, storageKey, seed = null }) {
+// were each hand-rolling this same branch. `toRow` adds real columns (foreign
+// keys, filter fields) next to `data` on Supabase writes.
+export function createCollection({ table, storageKey, seed = null, toRow = null }) {
+  const row = (item) => ({ id: item.id, data: item, ...toRow?.(item) });
+
   const readLocal = () => {
     if (seed && localStorage.getItem(storageKey) == null) writeJSON(storageKey, seed);
     return readJSON(storageKey, []);
@@ -26,10 +29,18 @@ export function createCollection({ table, storageKey, seed = null }) {
 
     async insert(item) {
       if (supabase) {
-        unwrap(await supabase.from(table).insert({ id: item.id, data: item }));
-        return item;
+        // Triggers may fill in derived fields (e.g. a gallery item's location), so read back.
+        return unwrap(await supabase.from(table).insert(row(item)).select("data").single()).data;
       }
       writeJSON(storageKey, [...readLocal(), item]);
+      return delay(item);
+    },
+
+    async update(item) {
+      if (supabase) {
+        return unwrap(await supabase.from(table).update(row(item)).eq("id", item.id).select("data").single()).data;
+      }
+      writeJSON(storageKey, readLocal().map((existing) => (existing.id === item.id ? item : existing)));
       return delay(item);
     },
 

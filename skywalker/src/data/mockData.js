@@ -39,6 +39,8 @@ import { COUNTRY_TO_CONTINENT } from "../utils/countries";
  * @property {number} year          - Derived from startDate, for the Year filter tier.
  * @property {string} [city]
  * @property {string[]} [vibes]     - Ids from VIBES (src/lib/blogTaxonomy.js).
+ * @property {import("../lib/weather").Weather} [weather] - Story weather, auto-filled or set by the writer.
+ * @property {boolean} [favorite]   - Starred by the writer; the trail's Favorites filter.
  * @property {"draft"|"published"} status
  * @property {number} trackX        - Horizontal position along the BlogsJourney timeline (unrelated to the globe).
  * @property {number} laneOffset    - Vertical nudge along the BlogsJourney timeline (unrelated to the globe).

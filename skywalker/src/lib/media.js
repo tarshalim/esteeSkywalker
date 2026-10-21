@@ -33,6 +33,10 @@ export function audioEmbedSrc(element) {
 function blogMediaBase(blog) {
   return {
     blogId: blog.id,
+    // Embedded media is "blog-attached" and inherits the post's place in the hierarchy.
+    tripId: blog.tripId ?? null,
+    pinId: blog.pinId ?? null,
+    tags: blog.tags ?? [],
     locationName: blog.location?.name || blog.countryName || "",
     countryCode: blog.countryCode ?? "",
     countryName: blog.countryName ?? "",

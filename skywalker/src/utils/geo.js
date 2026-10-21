@@ -35,6 +35,74 @@ export function angularDistanceDeg(lat1, lng1, lat2, lng2) {
   return c / DEG2RAD;
 }
 
+const toUnitVector = (lat, lng) => {
+  const phi = lat * DEG2RAD;
+  const lambda = lng * DEG2RAD;
+  return [Math.cos(phi) * Math.cos(lambda), Math.cos(phi) * Math.sin(lambda), Math.sin(phi)];
+};
+
+/**
+ * Spherical linear interpolation between two lat/lng points (t in 0..1):
+ * follows the great circle, so camera flights take the shortest way round
+ * and never swing through the poles or the long way across the antimeridian.
+ */
+export function slerpLatLng(from, to, t) {
+  const a = toUnitVector(from.lat, from.lng);
+  const b = toUnitVector(to.lat, to.lng);
+  const dot = Math.min(1, Math.max(-1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]));
+  const omega = Math.acos(dot);
+  const sinOmega = Math.sin(omega);
+  // Same or exactly opposite points: no unique great circle, lerp instead.
+  if (sinOmega < 1e-6) return { lat: from.lat + (to.lat - from.lat) * t, lng: from.lng + (to.lng - from.lng) * t };
+  const k0 = Math.sin((1 - t) * omega) / sinOmega;
+  const k1 = Math.sin(t * omega) / sinOmega;
+  const [x, y, z] = [0, 1, 2].map((i) => k0 * a[i] + k1 * b[i]);
+  return { lat: Math.asin(Math.max(-1, Math.min(1, z))) / DEG2RAD, lng: Math.atan2(y, x) / DEG2RAD };
+}
+
+/**
+ * Camera framing for a country: the area-weighted centroid of its largest
+ * polygon (so France centres on the mainland, not between it and Guiana)
+ * and an altitude that fits that polygon's extent.
+ * @returns {?{lat:number,lng:number,altitude:number}}
+ */
+export function featureView(feature) {
+  const geometry = feature?.geometry;
+  if (!geometry) return null;
+  const polygons = geometry.type === "MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
+
+  let best = null;
+  for (const [ring] of polygons) {
+    if (!ring?.length) continue;
+    // Shoelace in plain lng/lat degrees: fine for picking and centring one polygon.
+    let area = 0;
+    let cx = 0;
+    let cy = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [x0, y0] = ring[j];
+      const [x1, y1] = ring[i];
+      const cross = x0 * y1 - x1 * y0;
+      area += cross;
+      cx += (x0 + x1) * cross;
+      cy += (y0 + y1) * cross;
+    }
+    if (!best || Math.abs(area) > Math.abs(best.area)) best = { area, cx, cy, ring };
+  }
+  if (!best) return null;
+
+  const center =
+    Math.abs(best.area) > 1e-9
+      ? { lat: best.cy / (3 * best.area), lng: best.cx / (3 * best.area) }
+      : { lat: best.ring[0][1], lng: best.ring[0][0] };
+  const lngs = best.ring.map((p) => p[0]);
+  const lats = best.ring.map((p) => p[1]);
+  const span = Math.max(
+    (Math.max(...lngs) - Math.min(...lngs)) * Math.cos(center.lat * DEG2RAD),
+    Math.max(...lats) - Math.min(...lats)
+  );
+  return { ...center, altitude: Math.min(Math.max(span / 40, 0.25), 2) };
+}
+
 /**
  * Maps camera altitude (react-globe.gl's `pointOfView().altitude`, roughly
  * "globe radii above the surface") to a visible angular radius in degrees.

@@ -4,8 +4,9 @@ import { motion } from "framer-motion";
  * Teardrop map pin that frames a post's cover image and bobs gently in place.
  * The bob is a CSS keyframe on `translate` (compositor-only); Framer handles hover/tap scale.
  * `ref` targets the pin head so the transition can zoom from its exact centre.
+ * `glow` adds a pulsing halo (navbar search match).
  */
-export default function CoverPin({ ref, blog, index, isActive, onClick }) {
+export default function CoverPin({ ref, blog, index, isActive, glow = false, onClick }) {
   const phase = { animationDelay: `${(index % 4) * 0.45}s` };
 
   return (
@@ -19,6 +20,18 @@ export default function CoverPin({ ref, blog, index, isActive, onClick }) {
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.94 }}
       >
+        {glow && (
+          <>
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -inset-3 rounded-full bg-yellow-300/50 blur-md motion-safe:animate-pulse"
+            />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -inset-2 animate-halo rounded-full border-4 border-yellow-300 motion-reduce:hidden"
+            />
+          </>
+        )}
         <motion.div
           ref={ref}
           animate={{ scale: isActive ? 1.1 : 1 }}

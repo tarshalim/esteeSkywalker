@@ -13,6 +13,7 @@ import Drafts from "./pages/Drafts/Drafts";
 import { AuthProvider, RequireAuth } from "./lib/auth";
 import { GlobePrefsProvider } from "./lib/globePrefs";
 import { TourProvider } from "./lib/tour";
+import { SearchProvider } from "./lib/search";
 import Tour from "./components/Tour/Tour";
 import FlashToast from "./components/FlashToast/FlashToast";
 import { GLOBE_PATH } from "./utils/routes";
@@ -76,7 +77,9 @@ const App = () => {
         <GlobePrefsProvider>
           <Router>
             <TourProvider>
-              <AppShell />
+              <SearchProvider>
+                <AppShell />
+              </SearchProvider>
             </TourProvider>
           </Router>
         </GlobePrefsProvider>

@@ -1,18 +1,42 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Sun, Moon, UserRound, CircleHelp, BookOpen, Images, Plus, Search, X, Globe2 } from "lucide-react";
+import {
+  Sun,
+  Moon,
+  UserRound,
+  CircleHelp,
+  BookOpen,
+  Images,
+  Plus,
+  Search,
+  X,
+  Globe2,
+  Signpost,
+  MapPin,
+  MapPinPlus,
+  Flag,
+  Image as ImageIcon,
+  Luggage,
+  Menu,
+} from "lucide-react";
 import { useTheme } from "../../lib/theme";
 import { GLOBE_HASH, GLOBE_PATH } from "../../utils/routes";
 import { useAuth } from "../../lib/auth";
 import { useTour } from "../../lib/tour";
+import { useSearch } from "../../lib/search";
 import Avatar from "../Avatar/Avatar";
+
+// 44px hit areas on phones and any touch screen; mouse users keep the
+// compact 36px bar. (Tailwind 4.0 has no `pointer-coarse:` variant yet.)
+const TAP_SQUARE = "max-sm:h-11 max-sm:w-11 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11";
+const TAP_PILL = "max-sm:h-11 max-sm:min-w-11 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:min-w-11";
 
 // Icon-only until lg, where the text label fits too (`keepIcon` shows both).
 // Same 36px height, 1px border and hover lift as the `.theme-toggle` buttons;
 // only the fill tells primary / active / idle apart.
-function NavPill({ to, icon: Icon, label, active, primary, tour, keepIcon }) {
+function NavPill({ to, icon: Icon, label, active, primary, tour, keepIcon, className = "" }) {
   const style = primary
     ? { background: "linear-gradient(135deg, var(--yellow-bright), var(--yellow))", color: "var(--blue-deep)", borderColor: "var(--border)" }
     : active
@@ -25,12 +49,12 @@ function NavPill({ to, icon: Icon, label, active, primary, tour, keepIcon }) {
       aria-label={label}
       title={label}
       aria-current={active ? "page" : undefined}
-      className="shrink-0"
+      className={`shrink-0 ${className}`}
     >
       <motion.span
         whileHover={{ y: -1 }}
         whileTap={{ scale: 0.97 }}
-        className={`inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-full border text-sm transition-colors lg:px-4 ${
+        className={`inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-full border text-sm transition-colors lg:px-4 ${TAP_PILL} ${
           primary ? "font-semibold" : "font-medium"
         }`}
         style={style}
@@ -44,9 +68,219 @@ function NavPill({ to, icon: Icon, label, active, primary, tour, keepIcon }) {
 
 const SEARCH_LABEL = "Search destinations, dates, moments";
 
+const RESULT_ICON = {
+  signpost: { icon: Signpost, color: "var(--yellow)" },
+  photo: { icon: ImageIcon, color: "var(--blue)" },
+  pin: { icon: MapPin, color: "#dc2626" },
+  customPin: { icon: MapPin, color: "#dc2626" },
+  blog: { icon: BookOpen, color: "var(--blue)" },
+  country: { icon: Flag, color: "var(--text-muted)" },
+  place: { icon: MapPinPlus, color: "#dc2626" },
+  trip: { icon: Luggage, color: "var(--yellow)" },
+};
+
+const RESULT_KIND_LABEL = { blog: "Blog post", signpost: "Signpost", trip: "Trip", customPin: "Location" };
+const NO_RESULTS = [];
+
+/**
+ * Live hits under the nav search, from the page's usePageSearch. Rows keep
+ * focus in the input (mousedown is swallowed) so arrow keys keep working.
+ */
+function SearchResults({ id, results, pending, highlight, onHighlight, onSelect }) {
+  return (
+    <ul
+      id={id}
+      role="listbox"
+      className="glass-panel absolute top-full right-0 left-0 mt-2 max-h-[min(60vh,420px)] overflow-y-auto rounded-2xl border p-1.5 shadow-xl"
+      style={{ borderColor: "var(--border-strong)", background: "var(--bg-panel-strong)" }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {results.map((r, i) => {
+        const { icon: Icon, color } = RESULT_ICON[r.kind] ?? RESULT_ICON.pin;
+        const active = i === highlight;
+        return (
+          <li key={`${r.kind}-${r.id}`} role="presentation">
+            {r.group && r.group !== results[i - 1]?.group && (
+              <div
+                className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide uppercase"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {r.group}
+              </div>
+            )}
+            <div
+              id={`${id}-${i}`}
+              role="option"
+              aria-selected={active}
+              onMouseEnter={() => onHighlight(i)}
+              onClick={() => onSelect(r)}
+              className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 transition-colors"
+              style={{ background: active ? "color-mix(in srgb, var(--blue) 12%, transparent)" : undefined }}
+            >
+              <span
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}
+                aria-hidden="true"
+              >
+                <Icon size={16} strokeWidth={2.25} />
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
+                  {r.label}
+                </span>
+                <span className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
+                  {[RESULT_KIND_LABEL[r.kind], r.sublabel].filter(Boolean).join(" · ")}
+                </span>
+              </span>
+            </div>
+          </li>
+        );
+      })}
+      {results.length === 0 && (
+        <li className="px-3 py-2.5 text-sm" style={{ color: "var(--text-muted)" }}>
+          {pending ? "Searching…" : "No matches"}
+        </li>
+      )}
+    </ul>
+  );
+}
+
+const MENU_ROW =
+  "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors hover:bg-[color-mix(in_srgb,var(--blue)_10%,transparent)]";
+
+/**
+ * Phones only: the avatar opens a dropdown holding what no longer fits in
+ * the bar (My Blogs, My Gallery, tour, theme) plus the Account link. Pinned
+ * `right-0` under the trigger, which sits at the bar's right edge, so the
+ * panel always opens inside the viewport.
+ */
+function MobileMenu({ user, accountLabel, theme, onToggleTheme, onStartTour, isActive }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelId = useId();
+  const location = useLocation();
+
+  // Browser back/forward while open.
+  useEffect(() => setOpen(false), [location.pathname]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (e) => {
+      if (!rootRef.current?.contains(e.target)) setOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const close = () => setOpen(false);
+  const rowStyle = (active) =>
+    active
+      ? { background: "var(--blue)", color: "#ffffff" }
+      : { color: "var(--text)" };
+
+  return (
+    <div ref={rootRef} className="relative shrink-0 sm:hidden">
+      <button
+        ref={triggerRef}
+        type="button"
+        data-tour="nav-menu"
+        onClick={() => setOpen((o) => !o)}
+        className={`theme-toggle relative ${TAP_SQUARE} ${user ? "p-0" : ""}`}
+        aria-label="Open menu"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls={panelId}
+        style={
+          isActive("/account") || open
+            ? user
+              ? { boxShadow: "0 0 0 2px var(--blue)" }
+              : { background: "var(--blue)", color: "#ffffff" }
+            : undefined
+        }
+      >
+        {user ? (
+          <Avatar user={user} className="h-full! w-full!" />
+        ) : (
+          <UserRound size={18} strokeWidth={2.25} />
+        )}
+        {/* Says "there's more in here" without spending width on a label. */}
+        <span
+          className="absolute -right-0.5 -bottom-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border"
+          style={{ background: "var(--bg-elevated)", borderColor: "var(--border-strong)", color: "var(--text)" }}
+          aria-hidden="true"
+        >
+          <Menu size={10} strokeWidth={3} />
+        </span>
+      </button>
+
+      {open && (
+        <div
+          id={panelId}
+          className="glass-panel absolute top-full right-0 mt-2 w-60 max-w-[calc(100vw-1rem)] rounded-2xl border p-1.5 shadow-xl"
+          style={{ borderColor: "var(--border-strong)", background: "var(--bg-panel-strong)" }}
+        >
+          <nav aria-label="More" className="flex flex-col gap-0.5">
+            <Link to="/blogs" onClick={close} className={MENU_ROW} style={rowStyle(isActive("/blogs"))}
+              aria-current={isActive("/blogs") ? "page" : undefined}>
+              <BookOpen size={18} strokeWidth={2.25} aria-hidden="true" />
+              My Blogs
+            </Link>
+            <Link to="/gallery" onClick={close} className={MENU_ROW} style={rowStyle(isActive("/gallery"))}
+              aria-current={isActive("/gallery") ? "page" : undefined}>
+              <Images size={18} strokeWidth={2.25} aria-hidden="true" />
+              My Gallery
+            </Link>
+            <Link to="/account" onClick={close} className={MENU_ROW} style={rowStyle(isActive("/account"))}
+              aria-current={isActive("/account") ? "page" : undefined}>
+              <UserRound size={18} strokeWidth={2.25} aria-hidden="true" />
+              <span className="min-w-0 truncate">{accountLabel}</span>
+            </Link>
+            <div className="mx-3 my-1 h-px" style={{ background: "var(--border)" }} aria-hidden="true" />
+            <button
+              type="button"
+              onClick={() => {
+                close();
+                onStartTour();
+              }}
+              className={MENU_ROW}
+              style={rowStyle(false)}
+            >
+              <CircleHelp size={18} strokeWidth={2.25} aria-hidden="true" />
+              Take the tour
+            </button>
+            {/* Stays open so the switch is visible. */}
+            <button type="button" onClick={onToggleTheme} className={MENU_ROW} style={rowStyle(false)}>
+              {theme === "dark" ? (
+                <Sun size={18} strokeWidth={2.25} aria-hidden="true" />
+              ) : (
+                <Moon size={18} strokeWidth={2.25} aria-hidden="true" />
+              )}
+              {theme === "dark" ? "Light mode" : "Dark mode"}
+            </button>
+          </nav>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TopNav() {
-  const [query, setQuery] = useState("");
+  // The query lives in context so the page on screen can filter by it live;
+  // the page also supplies the placeholder and dropdown results (usePageSearch).
+  const { query, setQuery, page } = useSearch();
   const [searchActive, setSearchActive] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const listId = useId();
   // Phones: the search field is a button that expands over the whole bar.
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const inputRef = useRef(null);
@@ -79,12 +313,43 @@ export default function TopNav() {
     };
   }, []);
 
+  const results = page?.results ?? NO_RESULTS;
+  const showDropdown = Boolean(page) && searchActive && query.trim().length > 0;
+  const placeholder = page?.placeholder ?? "Search destinations, dates, moments…";
+
+  // A fresh result list starts from the top hit.
+  useEffect(() => setHighlight(0), [results]);
+
+  const selectResult = (result) => {
+    page.onSelect(result);
+    setSearchActive(false);
+    setMobileSearchOpen(false);
+    inputRef.current?.blur();
+  };
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    if (page) {
+      // Pages filter as you type; Enter picks the highlighted hit.
+      if (results[highlight]) selectResult(results[highlight]);
+      else inputRef.current?.blur();
+      return;
+    }
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     setMobileSearchOpen(false);
     navigate(`/gallery?${params.toString()}`);
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === "Escape") {
+      if (showDropdown) setSearchActive(false);
+      else setMobileSearchOpen(false);
+    } else if (showDropdown && results.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setHighlight((h) => (h + step + results.length) % results.length);
+    }
   };
 
   // Render the field synchronously, then focus inside the same tap so iOS
@@ -110,7 +375,7 @@ export default function TopNav() {
       className="fixed top-2 left-1/2 z-(--z-nav) w-[min(1100px,calc(100vw-1rem))] -translate-x-1/2 sm:top-4 sm:w-[min(1100px,94vw)]"
     >
       <div
-        className="glass-panel relative flex items-center gap-1 rounded-2xl px-2 py-1.5 sm:gap-2 md:gap-3 md:px-4 md:py-2"
+        className="glass-panel relative flex min-w-0 items-center gap-1.5 rounded-2xl px-3 py-1.5 md:gap-3 md:px-4 md:py-2"
         style={{ borderColor: "var(--border-strong)" }}
       >
         <Link
@@ -135,7 +400,7 @@ export default function TopNav() {
         <form
           onSubmit={handleSearchSubmit}
           role="search"
-          className={`group min-w-0 flex-1 items-center rounded-full border-2 transition-all duration-300 ease-out sm:static sm:z-auto sm:flex md:ml-2 ${
+          className={`group min-w-0 flex-1 items-center rounded-full border-2 transition-all duration-300 ease-out sm:relative sm:inset-auto sm:z-auto sm:flex md:ml-2 ${
             mobileSearchOpen ? "absolute inset-1 z-10 flex" : "hidden"
           }`}
           style={{
@@ -143,7 +408,7 @@ export default function TopNav() {
             background: searchActive || mobileSearchOpen ? "var(--bg-elevated)" : "var(--bg-panel)",
             boxShadow: searchActive ? "0 0 0 3px color-mix(in srgb, var(--yellow) 35%, transparent)" : "none",
           }}
-          onKeyDown={(e) => e.key === "Escape" && setMobileSearchOpen(false)}
+          onKeyDown={handleSearchKeyDown}
         >
           <svg
             viewBox="0 0 24 24"
@@ -160,61 +425,107 @@ export default function TopNav() {
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSearchActive(true);
+            }}
             onFocus={() => setSearchActive(true)}
             onBlur={() => setSearchActive(false)}
-            placeholder="Search destinations, dates, moments…"
-            aria-label={SEARCH_LABEL}
+            placeholder={placeholder}
+            aria-label={page?.placeholder.replace(/…$/, "") ?? SEARCH_LABEL}
+            role="combobox"
+            aria-expanded={showDropdown}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={showDropdown && results[highlight] ? `${listId}-${highlight}` : undefined}
             className="w-full min-w-0 bg-transparent px-3 py-1.5 text-sm outline-none md:py-2"
             style={{ color: "var(--text)" }}
           />
+          {query && (
+            <button
+              type="button"
+              // Keep focus in the field so the results stay open.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setQuery("")}
+              className="touch-hit mr-1 hidden h-7 w-7 shrink-0 items-center justify-center rounded-full sm:inline-flex"
+              style={{ color: "var(--text-muted)" }}
+              aria-label="Clear search"
+            >
+              <X size={15} strokeWidth={2.25} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setMobileSearchOpen(false)}
-            className="mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full sm:hidden"
+            className="mr-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full sm:hidden"
             style={{ color: "var(--text-muted)" }}
             aria-label="Close search"
           >
             <X size={17} strokeWidth={2.25} />
           </button>
+
+          {showDropdown && (
+            <SearchResults
+              id={listId}
+              results={results}
+              pending={page.pending}
+              highlight={highlight}
+              onHighlight={setHighlight}
+              onSelect={selectResult}
+            />
+          )}
         </form>
 
         <button
           type="button"
           onClick={openMobileSearch}
-          className="theme-toggle sm:hidden"
+          className={`theme-toggle sm:hidden ${TAP_SQUARE}`}
           aria-label={SEARCH_LABEL}
           title="Search"
         >
           <Search size={17} strokeWidth={2.25} />
         </button>
 
-        <nav className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <nav className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <NavPill to={GLOBE_PATH} icon={Globe2} label="Globe" active={globeActive} keepIcon />
-          <NavPill to="/blogs" icon={BookOpen} label="My Blogs" active={isActive("/blogs")} />
-          <NavPill to="/gallery" icon={Images} label="My Gallery" active={isActive("/gallery")} tour="gallery" />
+          {/* Phones: these two live in the avatar menu (MobileMenu). */}
+          <NavPill to="/blogs" icon={BookOpen} label="My Blogs" active={isActive("/blogs")} className="max-sm:hidden" />
+          <NavPill
+            to="/gallery"
+            icon={Images}
+            label="My Gallery"
+            active={isActive("/gallery")}
+            tour="gallery"
+            className="max-sm:hidden"
+          />
           {/* Signed-in read-only accounts would just be bounced to /account. */}
           {(!user || canEdit) && <NavPill to="/blogs/new" icon={Plus} label="Create Blog" primary tour="create-blog" />}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          {/* Dropped on the very narrowest phones so the row still fits;
-              first-time visitors still get the tour banner. */}
+        <MobileMenu
+          user={user}
+          accountLabel={accountLabel}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onStartTour={startTour}
+          isActive={isActive}
+        />
+
+        <div className="flex shrink-0 items-center gap-2 max-sm:hidden">
           <button
             type="button"
             onClick={startTour}
-            className="theme-toggle max-[399px]:hidden"
+            className={`theme-toggle ${TAP_SQUARE}`}
             aria-label="Take the tour"
             title="Take the tour"
           >
             <CircleHelp size={17} strokeWidth={2.25} />
           </button>
 
-          {/* Phones: the wordmark needs the room; Account has the same switch. */}
           <button
             type="button"
             onClick={toggleTheme}
-            className="theme-toggle max-sm:hidden"
+            className={`theme-toggle ${TAP_SQUARE}`}
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >
@@ -223,7 +534,7 @@ export default function TopNav() {
 
           <Link
             to="/account"
-            className={`theme-toggle${user ? " overflow-hidden p-0" : ""}`}
+            className={`theme-toggle ${TAP_SQUARE}${user ? " overflow-hidden p-0" : ""}`}
             aria-label={accountLabel}
             title={accountLabel}
             style={
@@ -235,7 +546,7 @@ export default function TopNav() {
             }
           >
             {user ? (
-              <Avatar user={user} size={34} />
+              <Avatar user={user} className="h-full! w-full!" />
             ) : (
               <UserRound size={17} strokeWidth={2.25} />
             )}

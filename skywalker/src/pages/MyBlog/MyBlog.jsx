@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FileClock } from "lucide-react";
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useTransform } from "framer-motion";
-import { getBlogs } from "../../lib/blogStore";
+import { getBlogs, upsertBlog } from "../../lib/blogStore";
+import { getTrips } from "../../lib/tripStore";
+import { companionOptions, companionsForPost, tripsReferencedBy } from "../../lib/hierarchy";
 import { useAuth } from "../../lib/auth";
+import { useVibes } from "../../lib/vibes";
 import { useAsync } from "../../hooks/useAsync";
 import { useTrailScroll } from "../../hooks/useTrailScroll";
 import TrailBackdrop from "../../components/BlogTrail/TrailBackdrop";
@@ -15,7 +18,18 @@ import TrailControls from "../../components/BlogTrail/TrailControls";
 import ExpeditionTransition from "../../components/BlogTrail/ExpeditionTransition";
 import { riderProgressAt, signpostPercent, worldWidthFor } from "../../components/BlogTrail/trailLayout";
 import BlogFilterBar from "../../components/BlogFilterBar/BlogFilterBar";
-import { EMPTY_FILTERS, filterHeading, locationOptions, matchesFilters } from "../../lib/blogTaxonomy";
+import {
+  EMPTY_FILTERS,
+  cityOf,
+  filterHeading,
+  hasActiveFilters,
+  labelFor,
+  locationOptions,
+  matchesFilters,
+} from "../../lib/blogTaxonomy";
+import { formatWeather } from "../../lib/weather";
+import { usePageSearch, useSearch } from "../../lib/search";
+import { matchesQuery } from "../../utils/search";
 
 /** Vertical scroll distance per px of horizontal trail — lower rides faster. */
 const SCROLL_PER_TRAIL_PX = 0.9;
@@ -23,6 +37,30 @@ const SCROLL_PER_TRAIL_PX = 0.9;
 const ACTIVE_RANGE = 0.12;
 const ZOOM_SCALE = 2.6;
 const CREATE_STOP_ID = "__create__";
+const MAX_SEARCH_RESULTS = 8;
+
+const stripHtml = (html) => (html ?? "").replace(/<[^>]*>/g, " ");
+
+/**
+ * Everything the navbar search matches a post on: title, places, its trip and
+ * who was along, tags, excerpt and the story text.
+ */
+function searchFields(blog, vibes, trip) {
+  return [
+    blog.title,
+    trip?.title,
+    companionsForPost(blog, trip),
+    blog.excerpt,
+    blog.location?.name,
+    blog.countryName,
+    cityOf(blog),
+    blog.continent,
+    blog.tags,
+    (blog.vibes ?? []).map((v) => labelFor(vibes, v)).filter(Boolean),
+    formatWeather(blog.weather),
+    (blog.blocks ?? []).map((b) => stripHtml(b.html)),
+  ];
+}
 
 function useViewportWidth() {
   const [width, setWidth] = useState(() => window.innerWidth);
@@ -48,17 +86,33 @@ export default function MyBlog() {
   const canCreate = !user || canEdit;
   const sectionRef = useRef(null);
   const stageRef = useRef(null);
-  const { data: allBlogs, loading } = useAsync(getBlogs, [], []);
+  const { data: allBlogs, loading, setData: setAllBlogs } = useAsync(getBlogs, [], []);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const { data: tripList } = useAsync(getTrips, [], []);
+  const tripsById = useMemo(() => new Map(tripList.map((t) => [t.id, t])), [tripList]);
 
   // Drafts live on their own page; the trail is published stories only. Filter
   // options still come from both, so a place you're drafting is already listed.
   const { countries, cities } = useMemo(() => locationOptions(allBlogs), [allBlogs]);
   const published = useMemo(() => allBlogs.filter((b) => b.status !== "draft"), [allBlogs]);
   const draftCount = allBlogs.length - published.length;
-  const blogs = useMemo(() => published.filter((b) => matchesFilters(b, filters)), [published, filters]);
-  const hasFilters = Object.values(filters).some(Boolean);
-  const heading = filterHeading(filters, countries.find((c) => c.code === filters.country)?.name ?? "");
+  // Trip tier: trips with a published post in the chosen place/dates. People:
+  // everyone on the chosen trip, else on any of those trips.
+  const tripOptions = useMemo(() => {
+    const placeOnly = { ...filters, trip: "", companion: "", favoritesOnly: false };
+    return tripsReferencedBy(tripList, published.filter((b) => matchesFilters(b, placeOnly)));
+  }, [tripList, published, filters]);
+  const companionChoices = useMemo(() => {
+    const chosen = tripsById.get(filters.trip);
+    return companionOptions(chosen ? [chosen] : tripOptions);
+  }, [tripsById, filters.trip, tripOptions]);
+  const blogs = useMemo(() => published.filter((b) => matchesFilters(b, filters, tripsById)), [published, filters, tripsById]);
+  const hasFilters = hasActiveFilters(filters);
+  const heading = filterHeading(
+    filters,
+    countries.find((c) => c.code === filters.country)?.name ?? "",
+    tripsById.get(filters.trip)?.title ?? ""
+  );
 
   const slotCount = blogs.length + (canCreate ? 1 : 0);
   const worldWidth = worldWidthFor(slotCount, viewportWidth);
@@ -110,6 +164,23 @@ export default function MyBlog() {
     [seek]
   );
 
+  // Optimistic: the heart flips at once and flips back if the save fails.
+  // Stable (setAllBlogs is a state-setter wrapper) so memoised signposts don't re-render.
+  const setAllBlogsRef = useRef(setAllBlogs);
+  setAllBlogsRef.current = setAllBlogs;
+  const toggleFavorite = useCallback(async (blog) => {
+    const favorite = !blog.favorite;
+    const apply = (value) =>
+      setAllBlogsRef.current((prev) => prev.map((b) => (b.id === blog.id ? { ...b, favorite: value } : b)));
+    apply(favorite);
+    try {
+      await upsertBlog({ id: blog.id, favorite });
+    } catch (err) {
+      console.error("Couldn't update favorite", err);
+      apply(!favorite);
+    }
+  }, []);
+
   const [trip, setTrip] = useState(null);
   const tripRef = useRef(null);
   // Stable so memoised signposts don't re-render when the rider's state changes.
@@ -129,6 +200,55 @@ export default function MyBlog() {
     },
     [navigate, reduceMotion]
   );
+  // Navbar search: matching signposts glow, the rest fade back; picking a
+  // result rides there. Highlighting rather than removing stops keeps the
+  // trail (and scroll position) from rebuilding on every keystroke.
+  const { query, setQuery } = useSearch();
+  const searchQuery = useDeferredValue(query.trim());
+  const { vibes } = useVibes();
+  const searchIndex = useMemo(
+    () => new Map(blogs.map((b) => [b.id, searchFields(b, vibes, tripsById.get(b.tripId))])),
+    [blogs, vibes, tripsById]
+  );
+  const matchIds = useMemo(
+    () => (searchQuery ? new Set(blogs.filter((b) => matchesQuery(searchQuery, searchIndex.get(b.id))).map((b) => b.id)) : null),
+    [blogs, searchIndex, searchQuery]
+  );
+  const searchResults = useMemo(
+    () =>
+      matchIds
+        ? blogs
+            .filter((b) => matchIds.has(b.id))
+            .slice(0, MAX_SEARCH_RESULTS)
+            .map((b) => ({
+              id: b.id,
+              kind: "signpost",
+              label: b.title,
+              sublabel: [tripsById.get(b.tripId)?.title, b.location?.name || b.countryName, b.excerpt].filter(Boolean).join(" · "),
+            }))
+        : [],
+    [blogs, matchIds, tripsById]
+  );
+  const rideToStop = useCallback(
+    (result) => {
+      const stop = stops.find((s) => s.id === result.id);
+      if (stop) seek(stop.progress, true);
+      setQuery(result.label);
+    },
+    [stops, seek, setQuery]
+  );
+  usePageSearch({ placeholder: "Search signposts & stories…", results: searchResults, onSelect: rideToStop });
+
+  const draftsLink = canEdit && (
+    <Link
+      to="/blogs/drafts"
+      className="inline-flex h-7 w-fit shrink-0 items-center gap-1 rounded-full bg-slate-900/70 px-2.5 text-[11px] font-semibold text-white hover:bg-slate-900/85 sm:text-xs"
+    >
+      <FileClock size={12} aria-hidden="true" />
+      Saved Drafts{draftCount > 0 && ` (${draftCount})`}
+    </Link>
+  );
+
   const finishTrip = useCallback(() => trip && navigate(`/blogs/${trip.blog.id}`), [trip, navigate]);
 
   return (
@@ -159,7 +279,9 @@ export default function MyBlog() {
                 index={i}
                 leftPct={pct}
                 isActive={activeId === id}
+                searchMatch={matchIds ? matchIds.has(id) : null}
                 onOpen={openBlog}
+                onToggleFavorite={canEdit ? toggleFavorite : undefined}
               />
             ) : (
               <CreateStorySignpost
@@ -176,42 +298,51 @@ export default function MyBlog() {
 
         <header
           data-tour="journey-header"
-          className="absolute top-[calc(var(--nav-bottom)+12px)] right-4 left-4 z-40 flex flex-col gap-2 text-white sm:right-8 sm:left-8"
+          className="absolute top-[calc(var(--nav-bottom)+12px)] right-4 left-4 z-40 flex flex-col gap-3 text-white sm:right-8 sm:left-8 md:flex-row md:items-center md:justify-between md:gap-4"
         >
-          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-            <div className="min-w-0">
+          <div className="min-w-0 md:shrink">
+            <div className="flex min-w-0 items-center gap-2">
               <h1
                 aria-live="polite"
                 className="truncate text-2xl font-black tracking-tight [-webkit-text-stroke:2px_black] [paint-order:stroke_fill] drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] sm:text-3xl"
               >
                 {heading.title}
               </h1>
-              <p className="text-base font-bold [-webkit-text-stroke:1.5px_black] [paint-order:stroke_fill] drop-shadow sm:text-lg">
-                {loading
-                  ? "Packing the saddlebags…"
-                  : [heading.subtitle, `${blogs.length} ${blogs.length === 1 ? "stop" : "stops"} on the trail`]
-                      .filter(Boolean)
-                      .join(" · ")}
-              </p>
+              {draftsLink && <div className="ml-auto md:hidden">{draftsLink}</div>}
             </div>
-            {canEdit && (
-              <Link
-                to="/blogs/drafts"
-                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-slate-900/70 px-2.5 text-xs font-semibold text-white hover:bg-slate-900/85"
-              >
-                <FileClock size={12} aria-hidden="true" />
-                Saved Drafts{draftCount > 0 && ` (${draftCount})`}
-              </Link>
-            )}
+            <p className="truncate text-base font-bold [-webkit-text-stroke:1.5px_black] [paint-order:stroke_fill] drop-shadow sm:text-lg">
+              {loading
+                ? "Packing the saddlebags…"
+                : [heading.subtitle, `${blogs.length} ${blogs.length === 1 ? "stop" : "stops"} on the trail`]
+                    .filter(Boolean)
+                    .join(" · ")}
+            </p>
           </div>
-          {!loading && allBlogs.length > 0 && (
-            <BlogFilterBar filters={filters} onChange={changeFilters} countries={countries} cities={cities} />
+          {!loading && allBlogs.length > 0 ? (
+            <BlogFilterBar
+              filters={filters}
+              onChange={changeFilters}
+              countries={countries}
+              cities={cities}
+              trips={tripOptions}
+              companions={companionChoices}
+            >
+              {draftsLink && <div className="hidden md:block">{draftsLink}</div>}
+            </BlogFilterBar>
+          ) : (
+            draftsLink && <div className="hidden md:block">{draftsLink}</div>
           )}
         </header>
 
         {!loading && blogs.length === 0 && (hasFilters || !canCreate) && (
           <p className="absolute inset-x-4 top-1/2 z-40 text-center text-lg font-semibold text-white drop-shadow-md">
             {hasFilters ? "No published stories match these filters." : "No posts on the trail yet."}
+          </p>
+        )}
+
+        {matchIds && matchIds.size === 0 && blogs.length > 0 && (
+          <p className="absolute inset-x-4 top-1/2 z-40 text-center text-lg font-semibold text-white drop-shadow-md">
+            No signposts match &ldquo;{searchQuery}&rdquo;.
           </p>
         )}
 

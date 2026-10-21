@@ -29,13 +29,19 @@
   position: fixed;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px;
-  border-radius: 18px;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
   background: var(--bg-elevated);
   border: 2px solid var(--border-strong);
   box-shadow: var(--shadow-sharp), 0 16px 40px var(--shadow-color);
   color: var(--text);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.tour-popover:active {
+  cursor: grabbing;
 }
 
 .tour-popover-head {
@@ -54,15 +60,15 @@
 
 .tour-title {
   margin: 0;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-strong);
 }
 
 .tour-body {
   margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .tour-dots {
@@ -85,8 +91,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 2px;
 }
 .tour-actions-nav {
   display: flex;
@@ -94,9 +100,9 @@
 }
 
 .tour-btn {
-  padding: 7px 14px;
+  padding: 5px 12px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   border: 1px solid transparent;
   cursor: pointer;
@@ -136,8 +142,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   border: none;
   background: transparent;
@@ -231,15 +237,15 @@
     flex-wrap: wrap;
   }
   .tour-btn {
-    min-height: 44px;
-    padding-inline: 16px;
+    min-height: 36px;
+    padding-inline: 14px;
   }
   .tour-btn--ghost {
-    padding-inline: 10px;
+    padding-inline: 8px;
   }
   .tour-close {
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
   }
 }
 

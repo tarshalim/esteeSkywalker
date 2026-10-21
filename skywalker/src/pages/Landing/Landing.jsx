@@ -120,6 +120,7 @@ export default function Landing() {
           showGallery={false}
           onFilterChange={setGlobeFilter}
           clearSignal={clearSignal}
+          searchActive={Boolean(inGlobe)}
         />
       </section>
 

@@ -10,7 +10,7 @@
 }
 
 .upload-modal {
-  width: min(420px, 100%);
+  width: min(520px, 100%);
   max-height: 90vh;
   overflow-y: auto;
   border-radius: 1rem;
@@ -141,4 +141,18 @@
     flex: 1;
     min-height: 44px;
   }
+}
+
+/* Location -> Trip -> post cascade. */
+.upload-modal-cascade {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+.upload-modal-cascade .upload-modal-field {
+  margin-bottom: 0;
 }

@@ -29,11 +29,16 @@ function writeStatus(status) {
 export function TourProvider({ children }) {
   const [status, setStatus] = useState(readStatus);
   const [isActive, setIsActive] = useState(false);
+  // UI the current step asks a page to show (a step's `preview`), held here
+  // rather than sent as an event so a page that mounts after the step starts
+  // (route change + page transition) still sees it.
+  const [preview, setPreview] = useState(null);
 
   const settle = useCallback((next) => {
     writeStatus(next);
     setStatus(next);
     setIsActive(false);
+    setPreview(null);
   }, []);
 
   const start = useCallback(() => setIsActive(true), []);
@@ -42,6 +47,8 @@ export function TourProvider({ children }) {
     isActive,
     shouldOffer: status === null && !isActive,
     start,
+    preview,
+    setPreview,
     finish: useCallback(() => settle("completed"), [settle]),
     skip: useCallback(() => settle("skipped"), [settle]),
     dismissOffer: useCallback(() => settle("dismissed"), [settle]),

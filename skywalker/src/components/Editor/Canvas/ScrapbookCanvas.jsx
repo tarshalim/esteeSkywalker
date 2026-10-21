@@ -199,7 +199,7 @@ export default function ScrapbookCanvas({ onError }) {
           {doc.elements.length === 0 && !menu && (
             <div className="pointer-events-none absolute inset-x-0 top-40 flex flex-col items-center gap-3 px-10 text-center text-slate-500">
               <MousePointerClick size={36} strokeWidth={1.5} />
-              <p className="max-w-sm text-lg font-medium">Click anywhere on the page to add text, photos, videos or scrapbook pieces.</p>
+              <p className="max-w-md text-xl font-medium">Click anywhere on the page to add text, photos, videos or scrapbook pieces.</p>
               <p className="text-sm opacity-80">Drag to move · corner handle to resize · top handle to rotate · tap a text twice to write</p>
             </div>
           )}
@@ -243,6 +243,7 @@ export default function ScrapbookCanvas({ onError }) {
                 setPaperOpen((o) => !o);
               }}
               aria-expanded={paperOpen}
+              data-tour="editor-paper"
             >
               <Palette size={16} /> Paper
             </button>

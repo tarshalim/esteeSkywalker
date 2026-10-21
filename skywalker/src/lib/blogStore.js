@@ -4,6 +4,9 @@ import { supabase, unwrap, fromRows } from "./supabase";
 import { createCollection } from "./collection";
 import { deleteBlogAudio, getBlogMusic } from "./music";
 import { collectMediaPaths, deleteMediaFiles } from "./files";
+import { notifyDataChanged } from "./liveSync";
+import { hasCoords } from "../utils/geo";
+import { findBuiltInTemplate, normalizeTemplate } from "./templates";
 
 // Blogs/templates API: Supabase `blogs`/`templates` tables when configured,
 // otherwise a localStorage mock. Every function returns a Promise so callers
@@ -25,6 +28,9 @@ function toBlogRow(blog) {
     status: blog.status ?? "draft",
     start_date: blog.startDate ?? null,
     end_date: blog.endDate ?? null,
+    // A trip implies its location; the blogs trigger derives location_id from it.
+    location_id: blog.pinId ?? null,
+    trip_id: blog.tripId ?? null,
     data: blog,
     updated_at: blog.updatedAt ?? new Date().toISOString(),
   };
@@ -63,10 +69,12 @@ async function loadBlogs() {
 async function saveBlog(blog, blogs) {
   if (supabase) {
     unwrap(await supabase.from("blogs").upsert(toBlogRow(blog)));
-    return blog;
+  } else {
+    writeJSON(BLOGS_KEY, blogs);
+    await delay();
   }
-  writeJSON(BLOGS_KEY, blogs);
-  return delay(blog);
+  notifyDataChanged("blogs");
+  return blog;
 }
 
 function slugify(text) {
@@ -147,7 +155,7 @@ async function deleteOrphanedMedia(blog) {
   const paths = collectMediaPaths(blog);
   if (paths.size === 0) return;
   try {
-    const results = await Promise.all(["blogs", "templates", "photos", "pins"].map((t) => supabase.from(t).select("data")));
+    const results = await Promise.all(["blogs", "templates", "gallery_items", "locations"].map((t) => supabase.from(t).select("data")));
     const stillUsed = new Set();
     for (const rows of results.map(unwrap)) for (const row of rows) collectMediaPaths(row.data, stillUsed);
     await deleteMediaFiles([...paths].filter((p) => !stillUsed.has(p)));
@@ -163,26 +171,67 @@ export async function deleteBlog(id) {
     const deleted = unwrap(await supabase.from("blogs").delete().eq("id", id).select("id"));
     if (deleted.length === 0) throw new Error("This post may already be gone, or you don't have permission to delete it.");
     // The post is gone either way; leftover files are only logged.
+    notifyDataChanged("blogs");
     await Promise.all([deleteBlogAudio(getBlogMusic(blog)?.storagePath), deleteOrphanedMedia(blog)]);
     return true;
   }
   const blogs = await loadBlogs();
   writeJSON(BLOGS_KEY, blogs.filter((b) => b.id !== id));
-  return delay(true);
+  await delay();
+  notifyDataChanged("blogs");
+  return true;
 }
 
-export const getTemplates = templates.list;
-export const getTemplateById = templates.get;
+/**
+ * Files posts under a globe pin (`pin` null unpins them). A post with no
+ * coordinates of its own takes the pin's, so it can be placed and searched
+ * like any other; posts that have their own exact spot keep it. A trip lives
+ * at one location, so moving a post elsewhere takes it out of its trip.
+ * @param {string[]} blogIds
+ * @param {?import("./pinStore").Pin} pin
+ */
+export async function setBlogsPin(blogIds, pin) {
+  const saved = [];
+  // One at a time: upsertBlog rewrites the whole list in mock mode.
+  for (const id of blogIds) {
+    const blog = await getBlogById(id);
+    if (!blog) continue;
+    const location =
+      pin && !hasCoords(blog.location)
+        ? { name: blog.location?.name || pin.placeName || pin.title, lat: pin.lat, lng: pin.lng }
+        : undefined;
+    const tripId = pin && blog.pinId === pin.id ? blog.tripId ?? null : null;
+    saved.push(await upsertBlog({ id, pinId: pin?.id ?? null, tripId, ...(location && { location }) }));
+  }
+  return saved;
+}
+
+/** The user's saved templates (built-ins live in lib/templates). */
+export async function getTemplates() {
+  return (await templates.list()).map(normalizeTemplate);
+}
+
+/** A saved or built-in template by id, normalized; null if there's none. */
+export async function getTemplateById(id) {
+  return findBuiltInTemplate(id) ?? normalizeTemplate(await templates.get(id));
+}
+
 export const deleteTemplate = templates.remove;
 
-export function saveTemplate({ name, title, coverImage, blocks, canvas }) {
-  return templates.insert({
+export async function saveTemplate({ name, description = "", title, excerpt = "", coverImage, vibes = [], weather = null, blocks, canvas }) {
+  const saved = await templates.insert({
     id: makeId("tpl"),
     name,
+    category: "My template",
+    description,
     title,
+    excerpt,
     coverImage,
+    vibes,
+    weather,
     blocks,
     canvas,
     createdAt: new Date().toISOString(),
   });
+  return normalizeTemplate(saved);
 }

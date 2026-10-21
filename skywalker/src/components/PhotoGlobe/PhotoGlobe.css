@@ -39,6 +39,15 @@
   cursor: crosshair !important;
 }
 
+/* Explore-only (the globe picker's Explore mode): clicks do nothing, so keep
+   the hand even over land and markers instead of globe.gl's pointer. */
+.photo-globe-wrapper.is-pan-only canvas {
+  cursor: grab !important;
+}
+.photo-globe-wrapper.is-pan-only canvas:active {
+  cursor: grabbing !important;
+}
+
 /* The red pin anchored where it was dropped/clicked/searched/located. The
    element is 2x the pin's height so its tip sits on the coordinate (the HTML
    layer centers elements on their point). */
@@ -68,13 +77,27 @@
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.35);
 }
+/* Suggested (GPS) pin: a halo pulses under the tip until the user picks. */
+.globe-dropped-pin.is-suggested .globe-dropped-pin-shadow::after {
+  content: "";
+  position: absolute;
+  inset: -10px -14px;
+  border-radius: 50%;
+  border: 2px solid var(--pin-red);
+  animation: globe-suggested-pulse 1.6s ease-out infinite;
+}
+@keyframes globe-suggested-pulse {
+  0% { transform: scale(0.4); opacity: 0.9; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
 @keyframes globe-dropped-pin-fall {
   0% { transform: translateY(-28px) scale(0.9); opacity: 0; }
   60% { transform: translateY(0) scaleY(0.85); opacity: 1; }
   100% { transform: translateY(0) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .globe-dropped-pin-body {
+  .globe-dropped-pin-body,
+  .globe-dropped-pin.is-suggested .globe-dropped-pin-shadow::after {
     animation: none;
   }
 }

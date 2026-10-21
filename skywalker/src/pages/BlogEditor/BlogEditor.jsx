@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, FolderOpen, LayoutTemplate, LoaderCircle, Send, Trash2 } from "lucide-react";
-import { getBlogById, upsertBlog, deleteBlog, getTemplates, getTemplateById, saveTemplate } from "../../lib/blogStore";
+import { ArrowLeft, BookmarkPlus, LayoutTemplate, LoaderCircle, Send, Trash2 } from "lucide-react";
+import { getBlogById, upsertBlog, deleteBlog, getTemplates, getTemplateById, saveTemplate, deleteTemplate } from "../../lib/blogStore";
+import { normalizeTemplate } from "../../lib/templates";
+import { useVibes } from "../../lib/vibes";
+import { useTour } from "../../lib/tour";
+import TemplateGallery from "./TemplateGallery";
 import { CanvasProvider } from "../../components/Editor/Canvas/CanvasProvider";
 import ScrapbookCanvas from "../../components/Editor/Canvas/ScrapbookCanvas";
 import { createEmptyCanvasDoc } from "../../lib/canvasElements";
@@ -11,13 +15,22 @@ import CountrySelect from "../../components/CountrySelect/CountrySelect";
 import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata } from "../../lib/exif";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { findCountryForPoint, continentForCountryCode, centroidForCountryCode, hasCoords } from "../../utils/geo";
+import { findCountryForPoint, continentForCountryCode, centroidForCountryCode, formatCoords, hasCoords } from "../../utils/geo";
 import { PLACEHOLDER_COVER } from "../../lib/media";
 import { COUNTRY_TO_CONTINENT } from "../../utils/countries";
-import { VIBES } from "../../lib/blogTaxonomy";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
 import DeletePostDialog from "./DeletePostDialog";
 import BackgroundMusicField from "./BackgroundMusicField";
+import WeatherField from "./WeatherField";
+import VibesField from "./VibesField";
+import LocationField from "./LocationField";
+import { searchPlaces } from "../../lib/geocode";
+import { autoPinFor, createPin, getPinById, getPins } from "../../lib/pinStore";
+import { getTripById, getTrips, saveTrip } from "../../lib/tripStore";
+import { NEW_TRIP, companionsForPost, emptyTripDraft, isWithinTrip, validateTrip } from "../../lib/hierarchy";
+import { formatDateRange } from "../../utils/dateFilters";
+import TripSelect from "../../components/TripPicker/TripSelect";
+import { useDataChanges } from "../../lib/liveSync";
 import { deleteBlogAudio, getBlogMusic } from "../../lib/music";
 import "./BlogEditor.css";
 
@@ -33,9 +46,22 @@ export default function BlogEditor() {
 
   const [blogId, setBlogId] = useState(id ?? null);
   const [title, setTitle] = useState("");
+  const [excerpt, setExcerpt] = useState(""); // the summary shown on feed cards
   const [coverImage, setCoverImage] = useState("");
   const [locationName, setLocationName] = useState("");
   const [coords, setCoords] = useState(null); // { lat, lng } | null — what the globe pins
+  // Resolved "Kyoto, Japan" for the picked coords; names a new pin on save.
+  const [placeLabel, setPlaceLabel] = useState(null);
+  const [pinChoice, setPinChoice] = useState("auto"); // see LocationField's PinChoice
+  const [pins, setPins] = useState([]);
+  const [pinsLoaded, setPinsLoaded] = useState(false);
+  // Step 2 of the cascade: the trip at the chosen location ("" none, an id, or NEW_TRIP).
+  const [trips, setTrips] = useState([]);
+  const [tripsLoaded, setTripsLoaded] = useState(false);
+  const [tripId, setTripId] = useState("");
+  const [tripDraft, setTripDraft] = useState(() => emptyTripDraft());
+  // A location pick fills an empty Country once the country outlines are in.
+  const countryFromCoordsRef = useRef(false);
   const [country, setCountry] = useState(null); // { code, name } | null
   const [startDate, setStartDate] = useState(todayISO());
   const [startDateTouched, setStartDateTouched] = useState(false);
@@ -43,6 +69,10 @@ export default function BlogEditor() {
   const [endDate, setEndDate] = useState("");
   const [city, setCity] = useState("");
   const [vibes, setVibes] = useState([]);
+  const [weather, setWeather] = useState(null); // see lib/weather.js
+  // Bumped when a template sets the weather, so WeatherField re-reads its status.
+  const [weatherKey, setWeatherKey] = useState(0);
+  const { vibes: vibeList } = useVibes();
   const [music, setMusic] = useState(null);
   // The track as last loaded/saved: its file must survive until a save replaces it.
   const savedMusicRef = useRef(null);
@@ -56,7 +86,10 @@ export default function BlogEditor() {
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [loadState, setLoadState] = useState(isEditMode ? "loading" : "ready"); // loading | ready | missing | error
   const loadedIdRef = useRef(null);
   const toastTimer = useRef(null);
@@ -79,6 +112,57 @@ export default function BlogEditor() {
       .catch((err) => console.error("Failed to load templates", err));
   }, []);
 
+  // The walkthrough opens the gallery to show it off, and closes it again.
+  const showTourGallery = useTour().preview === "template-gallery";
+  useEffect(() => setGalleryOpen(showTourGallery), [showTourGallery]);
+
+  const loadPins = useCallback(() => {
+    getPins()
+      .then((list) => {
+        setPins(list);
+        setPinsLoaded(true);
+      })
+      .catch((err) => console.error("Failed to load pins", err));
+  }, []);
+  useEffect(loadPins, [loadPins]);
+  useDataChanges(["locations"], loadPins);
+
+  const loadTrips = useCallback(() => {
+    getTrips()
+      .then((list) => {
+        setTrips(list);
+        setTripsLoaded(true);
+      })
+      .catch((err) => console.error("Failed to load trips", err));
+  }, []);
+  useEffect(loadTrips, [loadTrips]);
+  useDataChanges(["trips", "trip_companions"], loadTrips);
+
+  useEffect(() => {
+    if (!countryFromCoordsRef.current || !coords || countries.length === 0) return;
+    countryFromCoordsRef.current = false;
+    if (country) return;
+    const match = findCountryForPoint(coords.lat, coords.lng, countries);
+    if (match) setCountry({ code: match.code, name: match.name });
+  }, [coords, countries, country]);
+
+  // Search pick, "Current location", globe pick — or null to clear. A new
+  // point is re-matched to the nearest pin ("auto").
+  const handleLocationPick = (place) => {
+    setPinChoice("auto");
+    if (!place) {
+      setCoords(null);
+      setPlaceLabel(null);
+      return;
+    }
+    setCoords({ lat: place.lat, lng: place.lng });
+    setPlaceLabel(place.placeName ?? null);
+    // A search pick names the waypoint ("Gion"); GPS/globe only fill a blank one.
+    if (place.label) setLocationName(place.label);
+    else if (!locationName.trim() && place.placeName) setLocationName(place.placeName);
+    countryFromCoordsRef.current = true;
+  };
+
   useEffect(() => {
     if (isEditMode) {
       // Saving a new draft swaps the URL to /blogs/edit/:id; the editor is
@@ -94,10 +178,13 @@ export default function BlogEditor() {
           if (!blog) return setLoadState("missing");
           loadedIdRef.current = blog.id;
           setBlogId(blog.id);
-          setTitle(blog.title);
+          setTitle(blog.title ?? "");
+          setExcerpt(blog.excerpt ?? "");
           setCoverImage(blog.coverImage || "");
           setLocationName(blog.location?.name || "");
           setCoords(hasCoords(blog.location) ? { lat: blog.location.lat, lng: blog.location.lng } : null);
+          setPinChoice(blog.pinId ?? "auto");
+          setTripId(blog.tripId ?? "");
           setCountry(blog.countryCode ? { code: blog.countryCode, name: blog.countryName || blog.countryCode } : null);
           setStartDate(blog.startDate || blog.postDate || blog.date || todayISO());
           setStartDateTouched(true);
@@ -105,6 +192,7 @@ export default function BlogEditor() {
           setEndDate(blog.endDate || "");
           setCity(blog.city || "");
           setVibes(blog.vibes ?? []);
+          setWeather(blog.weather ?? null);
           savedMusicRef.current = getBlogMusic(blog);
           setMusic(savedMusicRef.current);
           seedCanvas(blog.canvas ? blog.canvas : blocksToCanvas(blog.blocks));
@@ -125,6 +213,31 @@ export default function BlogEditor() {
         .then(applyTemplate)
         .catch((err) => console.error("Failed to load template", err));
     }
+    // "New story" from a globe pin's quick card: start at that pin, and in
+    // that trip when it came from one (a trip implies its pin).
+    const startAtPin = (pinId) =>
+      getPinById(pinId)
+        .then((pin) => {
+          if (!pin) return;
+          setCoords({ lat: pin.lat, lng: pin.lng });
+          setPlaceLabel(pin.placeName ?? null);
+          setLocationName((prev) => prev || pin.placeName || pin.title);
+          setPinChoice(pin.id);
+          countryFromCoordsRef.current = true;
+        })
+        .catch((err) => console.error("Failed to load pin", err));
+    const pinId = searchParams.get("pin");
+    const tripParam = searchParams.get("trip");
+    if (pinId) startAtPin(pinId);
+    if (tripParam) {
+      getTripById(tripParam)
+        .then((trip) => {
+          if (!trip) return;
+          applyTrip(trip);
+          if (!pinId) startAtPin(trip.locationId);
+        })
+        .catch((err) => console.error("Failed to load trip", err));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -134,11 +247,25 @@ export default function BlogEditor() {
     setCanvasSeed((prev) => ({ key: prev.key + 1, doc }));
   }
 
-  function applyTemplate(tpl) {
+  // A template replaces the scrapbook layout but only fills fields the writer
+  // left empty: a typed title, summary or cover, chosen vibes and hand-set
+  // weather all survive. (Previously a template without a title or cover
+  // blanked the post's.)
+  function applyTemplate(raw) {
+    const tpl = normalizeTemplate(raw);
     if (!tpl) return;
-    setTitle(tpl.title || "");
-    setCoverImage(tpl.coverImage || "");
-    seedCanvas(tpl.canvas ? cloneCanvasDoc(tpl.canvas) : blocksToCanvas(tpl.blocks));
+    setTitle((prev) => (prev.trim() ? prev : tpl.title));
+    setExcerpt((prev) => (prev.trim() ? prev : tpl.excerpt));
+    setCoverImage((prev) => prev || tpl.coverImage);
+    // Vibes the user has since deleted from their list would be invisible chips.
+    const known = new Set(vibeList.map((v) => v.id));
+    setVibes((prev) => [...new Set([...prev, ...tpl.vibes.filter((v) => known.has(v))])]);
+    if (tpl.weather) {
+      // A template's weather is a deliberate pick, so auto-sync mustn't overwrite it.
+      setWeather((prev) => (prev?.source === "manual" ? prev : { ...tpl.weather, source: "manual" }));
+      setWeatherKey((k) => k + 1);
+    }
+    seedCanvas(cloneCanvasDoc(tpl.canvas));
     templateDirtyRef.current = true;
   }
 
@@ -147,8 +274,61 @@ export default function BlogEditor() {
     if (canvasBaselineRef.current === null) canvasBaselineRef.current = doc;
   }, []);
 
-  const fieldsSnapshot = () =>
-    JSON.stringify([title, coverImage, locationName, coords, country?.code, startDate, isDateRange && endDate, city, vibes, music]);
+  // The pin a save would file under: the chosen one, the nearest ("auto"),
+  // "new", or null when there's no exact spot / the post isn't pinned.
+  const resolvedPinId = !coords || pinChoice === "none" ? null : pinChoice === "auto" ? autoPinFor(pins, coords) : pinChoice;
+  // A trip lives at one location: only that location's trips are offered,
+  // and a trip left behind by moving the post elsewhere no longer applies
+  // (kept as-is until both lists have loaded, so a slow load can't drop it).
+  const tripOptions = trips.filter((t) => t.locationId === resolvedPinId);
+  const effectiveTripId =
+    !pinsLoaded || !tripsLoaded || tripId === "" || (resolvedPinId && tripId === NEW_TRIP) || tripOptions.some((t) => t.id === tripId)
+      ? tripId
+      : "";
+  const selectedTrip = tripOptions.find((t) => t.id === effectiveTripId) ?? null;
+  const tripDisabledReason = !coords
+    ? "Pick an exact location first"
+    : pinChoice === "none"
+    ? "Pin the story on the globe to add it to a trip"
+    : null;
+
+  // Picking a trip hands its dates to the story; the writer can narrow them to a day or a stretch.
+  function applyTrip(trip) {
+    setTripId(trip.id);
+    setStartDate(trip.startDate);
+    setStartDateTouched(true);
+    const isRange = trip.endDate !== trip.startDate;
+    setIsDateRange(isRange);
+    setEndDate(isRange ? trip.endDate : "");
+  }
+
+  const handleTripChange = (value) => {
+    const trip = tripOptions.find((t) => t.id === value);
+    if (trip) return applyTrip(trip);
+    setTripId(value);
+    // A new trip starts from the story's own dates.
+    if (value === NEW_TRIP && !tripDraft.title) setTripDraft(emptyTripDraft(startDate, isDateRange && endDate ? endDate : startDate));
+  };
+
+  // `pin`/`trip` let a save snapshot what it just resolved before that state lands.
+  const fieldsSnapshot = (pin = pinChoice, trip = effectiveTripId) =>
+    JSON.stringify([
+      title,
+      excerpt,
+      coverImage,
+      locationName,
+      coords,
+      pin,
+      trip,
+      trip === NEW_TRIP && tripDraft,
+      country?.code,
+      startDate,
+      isDateRange && endDate,
+      city,
+      vibes,
+      weather,
+      music,
+    ]);
 
   // Take the field baseline once the loaded post (or blank form) has rendered.
   useEffect(() => {
@@ -161,8 +341,8 @@ export default function BlogEditor() {
     (fieldsBaselineRef.current !== null && fieldsSnapshot() !== fieldsBaselineRef.current) ||
     (canvasBaselineRef.current !== null && canvasDocRef.current !== canvasBaselineRef.current);
 
-  const markClean = () => {
-    fieldsBaselineRef.current = fieldsSnapshot();
+  const markClean = (pin, trip) => {
+    fieldsBaselineRef.current = fieldsSnapshot(pin, trip);
     canvasBaselineRef.current = canvasDocRef.current;
     templateDirtyRef.current = false;
   };
@@ -228,6 +408,21 @@ export default function BlogEditor() {
   // to from the globe — fall back to the country's centroid.
   const resolveCoords = () => coords ?? (country ? centroidForCountryCode(country.code, countries) : null);
 
+  // Where to look up the weather: the pinned point, else the typed city /
+  // waypoint geocoded, else the country's centroid.
+  // The country outlines load async; they only matter when the centroid is all we have.
+  const centroidOnly = !coords && !city.trim() && !locationName.trim();
+  const weatherPlaceKey = JSON.stringify([coords, city.trim(), locationName.trim(), country?.code, centroidOnly && countries.length > 0]);
+  const resolveWeatherPoint = async (signal) => {
+    if (coords) return coords;
+    const place = city.trim() ? [city.trim(), country?.name].filter(Boolean).join(", ") : locationName.trim();
+    if (place) {
+      const [hit] = await searchPlaces(place, { signal });
+      if (hit) return { lat: hit.lat, lng: hit.lng };
+    }
+    return country ? centroidForCountryCode(country.code, countries) : null;
+  };
+
   // ISO yyyy-mm-dd strings compare correctly as plain strings.
   const dateRangeError = !isDateRange
     ? null
@@ -237,6 +432,17 @@ export default function BlogEditor() {
     ? "End date can't be before the start date"
     : null;
 
+  // A story inside a trip has to happen during it.
+  const storyEnd = isDateRange && endDate ? endDate : startDate;
+  const tripBounds = selectedTrip ?? (effectiveTripId === NEW_TRIP ? tripDraft : null);
+  const tripDraftError = effectiveTripId === NEW_TRIP && !tripDisabledReason ? validateTrip(tripDraft) : null;
+  const tripError =
+    tripDraftError ??
+    (tripBounds && !tripDisabledReason && !isWithinTrip(tripBounds, startDate, storyEnd)
+      ? `Story dates must fall within the trip (${formatDateRange(tripBounds.startDate, tripBounds.endDate)})`
+      : null);
+  const storyCompanions = selectedTrip ? companionsForPost({ startDate, endDate: storyEnd }, selectedTrip) : [];
+
   const toggleDateRange = (on) => {
     setIsDateRange(on);
     if (on && !endDate) setEndDate(startDate);
@@ -245,6 +451,7 @@ export default function BlogEditor() {
   const buildPayload = (nextStatus) => ({
     id: blogId ?? undefined,
     title: title.trim() || "Untitled Blog Post",
+    excerpt: excerpt.trim(),
     coverImage: coverImage || PLACEHOLDER_COVER,
     location: { name: locationName.trim() || country?.name || "Unnamed waypoint", ...resolveCoords() },
     countryCode: country?.code ?? "",
@@ -254,6 +461,7 @@ export default function BlogEditor() {
     endDate: isDateRange && endDate ? endDate : null,
     city: city.trim(),
     vibes,
+    weather,
     music,
     // Legacy field older readers use; also clears a stale one when music changes.
     audioUrl: music?.type === "upload" ? music.url : "",
@@ -263,20 +471,61 @@ export default function BlogEditor() {
     status: nextStatus,
   });
 
+  // The pin this post is filed under: an exact location joins the chosen (or
+  // nearest) pin, or creates one. Only real coordinates are pinned — never
+  // the country-centroid fallback.
+  const resolvePinId = async () => {
+    if (!coords || pinChoice === "none") return null;
+    const choice = pinChoice === "auto" ? autoPinFor(pins, coords) : pinChoice;
+    if (choice !== "new") return choice;
+    const pin = await createPin({
+      countryCode: country?.code ?? "",
+      countryName: country?.name ?? "",
+      city: city.trim(),
+      lat: coords.lat,
+      lng: coords.lng,
+      title:
+        placeLabel ||
+        locationName.trim() ||
+        [city.trim(), country?.name].filter(Boolean).join(", ") ||
+        formatCoords(coords.lat, coords.lng),
+      placeName: placeLabel,
+    });
+    setPins((prev) => [...prev, pin]);
+    return pin.id;
+  };
+
+  // The trip this post is filed under, creating a new one at `pinId` if asked.
+  const resolveTripId = async (pinId) => {
+    if (!pinId || !effectiveTripId) return null;
+    if (effectiveTripId !== NEW_TRIP) return effectiveTripId;
+    const trip = await saveTrip({ ...tripDraft, locationId: pinId });
+    setTrips((prev) => [trip, ...prev]);
+    return trip.id;
+  };
+
   // Shared by draft + publish. Previously a rejected upsert (RLS, network)
   // left `saving` true — both buttons disabled for good, with no message.
   const persist = async (nextStatus) => {
-    if (dateRangeError) {
-      showToast(dateRangeError);
+    if (dateRangeError || tripError) {
+      showToast(dateRangeError || tripError);
       return null;
     }
     setSaving(true);
     try {
-      const saved = await upsertBlog(buildPayload(nextStatus));
+      const pinId = await resolvePinId();
+      // Pin the choice down, so a retry after a failed save reuses a pin it
+      // just created and later saves don't drift to a newer nearby pin.
+      const nextPinChoice = pinId ?? pinChoice;
+      setPinChoice(nextPinChoice);
+      // Same for a trip it just created.
+      const savedTripId = await resolveTripId(pinId);
+      setTripId(savedTripId ?? "");
+      const saved = await upsertBlog({ ...buildPayload(nextStatus), pinId, tripId: savedTripId });
       loadedIdRef.current = saved.id;
       setBlogId(saved.id);
       setStatus(saved.status);
-      markClean();
+      markClean(nextPinChoice, savedTripId ?? "");
       // The saved post no longer points at the previous upload, so its file can go.
       const previousMusic = savedMusicRef.current;
       savedMusicRef.current = music;
@@ -352,8 +601,6 @@ export default function BlogEditor() {
     });
   };
 
-  const toggleVibe = (id) => setVibes((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
-
   const handlePublish = async () => {
     if (!country) {
       showToast("Select a country before publishing");
@@ -363,34 +610,59 @@ export default function BlogEditor() {
     if (saved) navigate(`/blogs/${saved.id}`);
   };
 
+  const closeTemplateModal = () => {
+    setShowTemplateModal(false);
+    setTemplateName("");
+    setTemplateDescription("");
+  };
+
   const handleSaveAsTemplate = async () => {
-    if (!templateName.trim()) return;
+    if (!templateName.trim() || savingTemplate) return;
+    setSavingTemplate(true);
     try {
       const tpl = await saveTemplate({
         name: templateName.trim(),
+        description: templateDescription.trim(),
         title,
+        excerpt,
         coverImage,
+        vibes,
+        weather,
         canvas: canvasDocRef.current,
         blocks: canvasToBlocks(canvasDocRef.current),
       });
       setTemplates((prev) => [...prev, tpl]);
-      setShowTemplateModal(false);
-      setTemplateName("");
+      closeTemplateModal();
       showToast(`Saved layout as “${tpl.name}”`);
     } catch (err) {
       showToast(`Couldn't save template: ${err.message}`);
+    } finally {
+      setSavingTemplate(false);
     }
   };
 
-  const handleLoadTemplate = async (templateId) => {
-    if (!templateId) return;
-    if (canvasDocRef.current.elements.length > 0 && !window.confirm("Replace the current draft with this template?")) return;
+  const handleApplyTemplate = (tpl) => {
+    if (
+      canvasDocRef.current.elements.length > 0 &&
+      !window.confirm(`Replace your scrapbook page with the “${tpl.name}” layout? Fields you've filled in are kept.`)
+    )
+      return;
+    applyTemplate(tpl);
+    setGalleryOpen(false);
+    showToast(`Applied “${tpl.name}”`);
+  };
+
+  const handleDeleteTemplate = async (tpl) => {
+    if (!window.confirm(`Delete the template “${tpl.name}”? Posts made from it aren't affected.`)) return;
     try {
-      applyTemplate(await getTemplateById(templateId));
+      await deleteTemplate(tpl.id);
+      setTemplates((prev) => prev.filter((t) => t.id !== tpl.id));
     } catch (err) {
-      showToast(`Couldn't load template: ${err.message}`);
+      showToast(`Couldn't delete template: ${err.message}`);
     }
   };
+
+  const closeGallery = useCallback(() => setGalleryOpen(false), []);
 
   if (loadState !== "ready") {
     return (
@@ -428,31 +700,24 @@ export default function BlogEditor() {
           {isEditMode ? `Editing · ${status === "draft" ? "Draft" : "Published"}` : "New Blog Post"}
         </span>
         <div className="editor-actions">
-          <label className="editor-template-picker" title="Load template">
-            <FolderOpen size={16} className="editor-template-picker-icon" aria-hidden="true" />
-            <select
-              className="editor-template-select"
-              value=""
-              aria-label="Load template"
-              onChange={(e) => handleLoadTemplate(e.target.value)}
-            >
-              <option value="" disabled>
-                Load template…
-              </option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <button
             className="editor-btn"
+            data-tour="editor-templates"
+            onClick={() => setGalleryOpen(true)}
+            aria-label="Browse templates"
+            title="Browse templates"
+          >
+            <LayoutTemplate size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Templates</span>
+          </button>
+          <button
+            className="editor-btn"
+            data-tour="editor-save-template"
             onClick={() => setShowTemplateModal(true)}
             aria-label="Save as Template"
             title="Save as Template"
           >
-            <LayoutTemplate size={16} className="sm:hidden" aria-hidden="true" />
+            <BookmarkPlus size={16} className="sm:hidden" aria-hidden="true" />
             <span className="hidden sm:inline">Save as Template</span>
           </button>
           <button className="editor-btn editor-btn-primary" onClick={handlePublish} disabled={saving || deleting}>
@@ -475,15 +740,47 @@ export default function BlogEditor() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
+        <textarea
+          className="editor-summary-input"
+          placeholder="Add a one-line summary for your story card (optional)"
+          aria-label="Summary"
+          rows={2}
+          maxLength={200}
+          value={excerpt}
+          onChange={(e) => setExcerpt(e.target.value)}
+        />
 
-        <label className="editor-location">
-          📍
-          <input
-            placeholder="Location waypoint (e.g. Hanoi, Vietnam)"
-            value={locationName}
-            onChange={(e) => setLocationName(e.target.value)}
+        <LocationField
+          name={locationName}
+          onNameChange={setLocationName}
+          coords={coords}
+          onPick={handleLocationPick}
+          pins={pins}
+          pinChoice={pinChoice}
+          onPinChoiceChange={setPinChoice}
+          onError={showToast}
+        />
+
+        <div className="editor-trip-field">
+          <TripSelect
+            trips={tripOptions}
+            value={effectiveTripId}
+            onChange={handleTripChange}
+            draft={tripDraft}
+            onDraftChange={setTripDraft}
+            draftError={tripDraftError}
+            disabledReason={tripDisabledReason}
+            noneLabel="Not part of a trip"
           />
-        </label>
+          {tripError && !tripDraftError && (
+            <span className="editor-field-error" role="alert">
+              {tripError}
+            </span>
+          )}
+          {storyCompanions.length > 0 && (
+            <p className="editor-trip-companions">With {storyCompanions.join(", ")} on these dates</p>
+          )}
+        </div>
 
         <div className="editor-metadata">
           <div className="editor-metadata-field">
@@ -542,20 +839,16 @@ export default function BlogEditor() {
           </div>
         </div>
 
-        <div className="editor-vibes" role="group" aria-label="Vibe / activity">
-          <span className="editor-metadata-label">Vibe</span>
-          {VIBES.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              className={`editor-vibe-chip${vibes.includes(o.id) ? " is-on" : ""}`}
-              aria-pressed={vibes.includes(o.id)}
-              onClick={() => toggleVibe(o.id)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <WeatherField
+          key={weatherKey}
+          value={weather}
+          onChange={setWeather}
+          date={startDate}
+          placeKey={weatherPlaceKey}
+          resolvePoint={resolveWeatherPoint}
+        />
+
+        <VibesField value={vibes} onChange={setVibes} />
 
         <div data-tour="editor-music">
           <BackgroundMusicField value={music} onChange={handleMusicChange} onError={showToast} />
@@ -595,8 +888,19 @@ export default function BlogEditor() {
       </div>
 
       <AnimatePresence>
+        {galleryOpen && (
+          <TemplateGallery
+            savedTemplates={templates}
+            onApply={handleApplyTemplate}
+            onDelete={handleDeleteTemplate}
+            onClose={closeGallery}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {showTemplateModal && (
-          <motion.div className="editor-modal-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowTemplateModal(false)}>
+          <motion.div className="editor-modal-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeTemplateModal}>
             <motion.div
               className="editor-modal glass-panel"
               initial={{ opacity: 0, scale: 0.94, y: 12 }}
@@ -605,17 +909,30 @@ export default function BlogEditor() {
               onClick={(e) => e.stopPropagation()}
             >
               <h3>Save this layout as a template</h3>
+              <p className="editor-modal-hint">
+                Saves the scrapbook page plus the title, summary, cover, vibes and weather, ready to reuse from Templates.
+              </p>
               <input
                 autoFocus
                 placeholder="Template name…"
+                aria-label="Template name"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSaveAsTemplate()}
               />
+              <input
+                className="mt-2"
+                placeholder="Short description (optional)"
+                aria-label="Template description"
+                maxLength={120}
+                value={templateDescription}
+                onChange={(e) => setTemplateDescription(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveAsTemplate()}
+              />
               <div className="editor-modal-actions">
-                <button onClick={() => setShowTemplateModal(false)}>Cancel</button>
-                <button className="editor-btn-primary" onClick={handleSaveAsTemplate}>
-                  Save Template
+                <button onClick={closeTemplateModal}>Cancel</button>
+                <button className="editor-btn-primary" onClick={handleSaveAsTemplate} disabled={!templateName.trim() || savingTemplate}>
+                  {savingTemplate ? "Saving…" : "Save Template"}
                 </button>
               </div>
             </motion.div>

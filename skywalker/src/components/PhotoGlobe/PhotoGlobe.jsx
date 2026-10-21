@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import Globe from "react-globe.gl";
-import { clusterPhotosByLocation, escapeHtml } from "../../utils/geo";
+import { angularDistanceDeg, clusterPhotosByLocation, escapeHtml, slerpLatLng } from "../../utils/geo";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { createIdyllicTexture, createYellowBlueGlobeDataUrl, enhanceTexture } from "../../utils/proceduralGlobeTexture";
 import { useTheme } from "../../lib/theme";
@@ -72,16 +72,19 @@ const PIN_SVG = `<svg class="red-pin-icon" xmlns="http://www.w3.org/2000/svg" wi
 
 // The HTML layer centers each element on its coordinate, so the marker is
 // twice the pin's height with the pin in the top half: its tip lands exactly
-// on the spot.
-function createDroppedPinElement() {
+// on the spot. A `suggested` pin (e.g. from GPS, not yet chosen) pulses.
+function createDroppedPinElement(d) {
   const el = document.createElement("div");
-  el.className = "globe-dropped-pin";
+  el.className = `globe-dropped-pin${d?.suggested ? " is-suggested" : ""}`;
   el.innerHTML = `<span class="globe-dropped-pin-body">${PIN_SVG}</span><span class="globe-dropped-pin-shadow"></span>`;
   return el;
 }
 
 const ZOOM_DEBOUNCE_MS = 150;
 const DEFAULT_VIEW = { lat: 15, lng: 95, altitude: 2.1 };
+// Fly-to framing when the target doesn't carry its own altitude.
+const FLY_TO_ALTITUDE = 0.45;
+const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 // Lat/lng graticule for the "grid lines" setting: a meridian every 15° and a
 // parallel every 15° (poles excluded), sampled every 5° so lines hug the sphere.
@@ -94,13 +97,25 @@ const graticulePoints = (line) => line;
 const graticuleLat = (point) => point[0];
 const graticuleLng = (point) => point[1];
 
+// A custom pin that holds blog posts is a story hub: red, larger, and opens
+// GlobeExplorer's quick card.
+const isStoryPin = (d) => d.kind === "custom" && d.posts?.length > 0;
+
 /**
  * Thin wrapper around react-globe.gl that owns only rendering + raw camera/click
  * events. All filtering/selection state lives in GlobeExplorer — this component
  * is a dumb view + event source so it stays easy to swap for Mapbox/Cesium later.
  *
+ * `customPins` may carry `posts` (pinStore.buildStoryPins); `blogs` only
+ * marks countries as visited — posts are drawn through their pins.
+ *
  * `ref` exposes coordsAtClientPoint(clientX, clientY) -> {lat,lng} | null, used
  * by the draggable pin to resolve where it was released.
+ *
+ * `flyToTarget` ({lat, lng, altitude?}) flies the camera along the great
+ * circle (slerp); a new object re-flies even to the same spot. `lockRotation`
+ * stops drag-to-rotate (zoom still works) and `panOnly` keeps the grab cursor
+ * over land and markers — the globe picker's Pin and Explore modes.
  */
 export default function PhotoGlobe({
   ref,
@@ -120,6 +135,8 @@ export default function PhotoGlobe({
   markerScale = 1,
   initialView = DEFAULT_VIEW,
   isPlacingPin,
+  lockRotation = false,
+  panOnly = false,
   pendingPin = null,
   flyToTarget,
   onViewportChange,
@@ -129,7 +146,6 @@ export default function PhotoGlobe({
   onPinHover,
   onCustomPinClick,
   onPinDropAt,
-  onBlogClick,
 }) {
   const globeEl = useRef();
   const wrapperRef = useRef();
@@ -150,7 +166,14 @@ export default function PhotoGlobe({
   const flyToTargetRef = useRef(flyToTarget);
   flyToTargetRef.current = flyToTarget;
 
-  useEffect(() => () => clearTimeout(zoomTimeoutRef.current), []);
+  const flightRef = useRef(0);
+  useEffect(
+    () => () => {
+      clearTimeout(zoomTimeoutRef.current);
+      cancelAnimationFrame(flightRef.current);
+    },
+    []
+  );
   // The settings preview mounts/unmounts with its page; free the GPU program.
   useEffect(() => () => globeMaterial.dispose(), [globeMaterial]);
   const initialViewRef = useRef(initialView);
@@ -235,26 +258,47 @@ export default function PhotoGlobe({
 
   const photoPins = useMemo(() => clusterPhotosByLocation(photos), [photos]);
 
-  // Photo pins (clustered photos), custom annotation pins (toolbox) and blog
-  // posts share one react-globe.gl points layer, tagged by `kind` so click/
-  // hover/color/label logic can dispatch to the right handler and dataset.
+  // Photo pins (clustered photos) and custom/story pins share one
+  // react-globe.gl points layer, tagged by `kind` so click/hover/color/label
+  // logic can dispatch to the right handler and dataset.
   const combinedPins = useMemo(
     () => [
       ...photoPins.map((pin) => ({ ...pin, kind: "photo" })),
       ...customPins.map((pin) => ({ ...pin, kind: "custom" })),
-      ...blogs.map((blog) => ({ id: blog.id, lat: blog.location.lat, lng: blog.location.lng, blog, kind: "blog" })),
     ],
-    [photoPins, customPins, blogs]
+    [photoPins, customPins]
   );
 
-  useEffect(() => {
-    if (flyToTarget && globeEl.current) {
-      globeEl.current.pointOfView(
-        { lat: flyToTarget.lat, lng: flyToTarget.lng, altitude: 0.45 },
-        1200
-      );
+  // react-globe.gl's own pointOfView tween lerps lat/lng, which bends long
+  // hops through odd routes; slerp the camera's direction instead, and lift
+  // it mid-flight on long hops so the route stays in view.
+  const flyTo = useCallback((target) => {
+    const globe = globeEl.current;
+    if (!globe) return;
+    cancelAnimationFrame(flightRef.current);
+    const from = globe.pointOfView();
+    const toAltitude = target.altitude ?? FLY_TO_ALTITUDE;
+    const arcDeg = angularDistanceDeg(from.lat, from.lng, target.lat, target.lng);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      globe.pointOfView({ lat: target.lat, lng: target.lng, altitude: toAltitude }, 0);
+      return;
     }
-  }, [flyToTarget]);
+    const duration = Math.min(Math.max(700 + arcDeg * 9, 900), 2200);
+    const lift = Math.max(0, Math.min(arcDeg / 60, 1.8) - Math.max(from.altitude, toAltitude));
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min((now - start) / duration, 1);
+      const e = easeInOutCubic(t);
+      const altitude = from.altitude + (toAltitude - from.altitude) * e + lift * Math.sin(Math.PI * e);
+      globe.pointOfView({ ...slerpLatLng(from, target, e), altitude }, 0);
+      if (t < 1) flightRef.current = requestAnimationFrame(step);
+    };
+    flightRef.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => {
+    if (flyToTarget && isReady) flyTo(flyToTarget);
+  }, [flyToTarget, isReady, flyTo]);
 
   const handleZoom = useCallback(
     (pov) => {
@@ -268,7 +312,10 @@ export default function PhotoGlobe({
 
   const handleGlobeReady = useCallback(() => {
     const target = flyToTargetRef.current;
-    globeEl.current.pointOfView(target ? { ...target, altitude: 0.45 } : initialViewRef.current, 0);
+    globeEl.current.pointOfView(
+      target ? { lat: target.lat, lng: target.lng, altitude: target.altitude ?? FLY_TO_ALTITUDE } : initialViewRef.current,
+      0
+    );
     onViewportChange(globeEl.current.pointOfView());
     setIsReady(true);
 
@@ -278,11 +325,17 @@ export default function PhotoGlobe({
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.autoRotateSpeed = 0.8;
+    // Grabbing the globe mid-flight hands the camera back to the user.
+    controls.addEventListener("start", () => cancelAnimationFrame(flightRef.current));
   }, [onViewportChange]);
 
   useEffect(() => {
     if (isReady && globeEl.current) globeEl.current.controls().autoRotate = autoRotate;
   }, [isReady, autoRotate]);
+
+  useEffect(() => {
+    if (isReady && globeEl.current) globeEl.current.controls().enableRotate = !lockRotation;
+  }, [isReady, lockRotation]);
 
   const polygonCapColor = useCallback(
     (feature) => {
@@ -308,9 +361,9 @@ export default function PhotoGlobe({
 
   const pointColor = useCallback(
     (d) => {
-      if (d.kind === "blog") return palette.blogPin;
       if (d.kind === "custom") {
-        return d.id === selectedCustomPinId ? palette.customPinSelected : palette.customPin;
+        if (d.id === selectedCustomPinId) return palette.customPinSelected;
+        return isStoryPin(d) ? palette.blogPin : palette.customPin;
       }
       return d.id === selectedLocationId ? palette.pinSelected : palette.pinColor;
     },
@@ -326,16 +379,21 @@ export default function PhotoGlobe({
   const pointRadius = useCallback(
     (d) =>
       markerScale *
-      (d.kind === "photo" ? Math.min(0.15 + d.photos.length * 0.03, 0.45) : d.kind === "blog" ? 0.28 : 0.22),
+      (d.kind === "photo"
+        ? Math.min(0.15 + d.photos.length * 0.03, 0.45)
+        : isStoryPin(d)
+        ? Math.min(0.26 + d.posts.length * 0.03, 0.42)
+        : 0.22),
     [markerScale]
   );
 
   // User-entered text is injected as HTML here, so it must be escaped.
   const pointLabel = useCallback((d) => {
-    if (d.kind === "blog") {
-      return `<div class="globe-tooltip"><strong>${escapeHtml(d.blog.title)}</strong><br/>${escapeHtml(
-        d.blog.location.name
-      )} · click to read</div>`;
+    if (isStoryPin(d)) {
+      const count = d.posts.length;
+      return `<div class="globe-tooltip"><strong>${escapeHtml(d.title)}</strong>${
+        d.placeName && d.placeName !== d.title ? `<br/>${escapeHtml(d.placeName)}` : ""
+      }<br/>${count} stor${count === 1 ? "y" : "ies"} · click to preview</div>`;
     }
     if (d.kind === "custom") {
       return `<div class="globe-tooltip"><strong>${escapeHtml(d.title)}</strong>${
@@ -349,15 +407,13 @@ export default function PhotoGlobe({
 
   const handlePointClick = useCallback(
     (d) => {
-      if (d.kind === "blog") {
-        onBlogClick?.(d.blog);
-      } else if (d.kind === "custom") {
+      if (d.kind === "custom") {
         onCustomPinClick(d.id === selectedCustomPinId ? null : d);
       } else {
         onPinClick(d.id === selectedLocationId ? null : d);
       }
     },
-    [onBlogClick, onCustomPinClick, onPinClick, selectedCustomPinId, selectedLocationId]
+    [onCustomPinClick, onPinClick, selectedCustomPinId, selectedLocationId]
   );
 
   const handlePointHover = useCallback(
@@ -374,11 +430,11 @@ export default function PhotoGlobe({
   );
 
   const labelText = useCallback(
-    (d) => (d.kind === "blog" ? d.blog.title : d.kind === "custom" ? d.title : d.locationName),
+    (d) => (d.kind === "custom" ? d.title : d.locationName),
     []
   );
   const labelColor = useCallback(
-    (d) => (d.kind === "blog" ? palette.blogPin : d.kind === "custom" ? palette.customPin : palette.pinColor),
+    (d) => (isStoryPin(d) ? palette.blogPin : d.kind === "custom" ? palette.customPin : palette.pinColor),
     [palette]
   );
 
@@ -436,7 +492,9 @@ export default function PhotoGlobe({
 
   return (
     <div
-      className={`photo-globe-wrapper photo-globe-wrapper--${theme}${isPlacingPin ? " is-placing-pin" : ""}`}
+      className={`photo-globe-wrapper photo-globe-wrapper--${theme}${isPlacingPin ? " is-placing-pin" : ""}${
+        panOnly ? " is-pan-only" : ""
+      }`}
       ref={wrapperRef}
     >
       <Globe

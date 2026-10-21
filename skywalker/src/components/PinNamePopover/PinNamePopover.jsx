@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { MapPin } from "lucide-react";
+import { ChevronRight, MapPin } from "lucide-react";
 import { usePlaceName } from "../../hooks/usePlaceName";
 import { formatCoords, isWaterName } from "../../utils/geo";
+import { emptyTripDraft, validateTrip } from "../../lib/hierarchy";
+import TripFields from "../TripPicker/TripFields";
 import "./PinNamePopover.css";
 
 /**
@@ -17,11 +19,19 @@ import "./PinNamePopover.css";
  * @param {{lat:number,lng:number}} coords
  * @param {?string} placeName - already-known name (drag HUD / search pick);
  *   when absent it's resolved here.
- * @param {function({title:string,note:string,placeName:?string})} onConfirm
+ * @param {function({title:string,note:string,placeName:?string,trip:?import("../../types/hierarchy").TripDraft})} onConfirm -
+ *   `trip` is set when "Start a trip here" was filled in (step 2 of the cascade).
+ * @param {?(import("../../lib/pinStore").StoryPin & {distanceKm:number})} nearbyPin -
+ *   an existing pin close enough to be the same place; offered instead of a
+ *   duplicate so its stories stay together.
+ * @param {?function(): void} onUseExisting
  */
-export default function PinNamePopover({ coords, placeName = null, onConfirm, onCancel }) {
+export default function PinNamePopover({ coords, placeName = null, nearbyPin = null, onConfirm, onCancel, onUseExisting }) {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
+  const [withTrip, setWithTrip] = useState(false);
+  const [tripDraft, setTripDraft] = useState(() => emptyTripDraft());
+  const [tripError, setTripError] = useState(null);
   const resolved = usePlaceName(placeName ? null : coords);
   // Saving mid-lookup still stores the local fallback (country / ocean).
   const place = placeName ?? resolved.name;
@@ -33,7 +43,9 @@ export default function PinNamePopover({ coords, placeName = null, onConfirm, on
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) return;
-    onConfirm({ title: title.trim(), note: note.trim(), placeName: place });
+    const invalid = withTrip ? validateTrip(tripDraft) : null;
+    if (invalid) return setTripError(invalid);
+    onConfirm({ title: title.trim(), note: note.trim(), placeName: place, trip: withTrip ? tripDraft : null });
   };
 
   return createPortal(
@@ -43,20 +55,23 @@ export default function PinNamePopover({ coords, placeName = null, onConfirm, on
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
         aria-labelledby="pin-name-popover-place"
+        data-tour="pin-name"
       >
         <div className="pin-name-popover-place">
           <MapPin className="red-pin-icon" size={28} strokeWidth={2} aria-hidden="true" />
           <div className="pin-name-popover-place-text">
             <h2 id="pin-name-popover-place" className="pin-name-popover-title" aria-live="polite" aria-busy={isResolving}>
+              {/* Lead-in and place are separate lines so a long place name
+                  wraps on its own instead of reflowing the whole sentence. */}
+              <span className="pin-name-popover-eyebrow">
+                Pinning your story {isResolving ? "at" : preposition}
+              </span>{" "}
               {isResolving ? (
-                <>
-                  Pinning your story at{" "}
-                  <span className="pin-name-popover-skeleton">Fetching location…</span>
-                </>
+                <span className="pin-name-popover-skeleton">Fetching location…</span>
               ) : (
-                <>
-                  Pinning your story {preposition} <span className="pin-name-popover-place-name">{place}</span>
-                </>
+                <span className="pin-name-popover-place-name" title={place}>
+                  {place}
+                </span>
               )}
             </h2>
             {/* Before the country polygons load, the title already is the coordinates. */}
@@ -64,7 +79,20 @@ export default function PinNamePopover({ coords, placeName = null, onConfirm, on
           </div>
         </div>
 
-        <h3>Name this pin</h3>
+        {nearbyPin && (
+          <button type="button" className="pin-name-popover-existing" onClick={onUseExisting}>
+            <span>
+              <strong>{nearbyPin.title}</strong> is already pinned{" "}
+              {nearbyPin.distanceKm < 1 ? "here" : `${Math.round(nearbyPin.distanceKm)} km away`}
+              {nearbyPin.posts.length > 0 &&
+                ` with ${nearbyPin.posts.length} ${nearbyPin.posts.length === 1 ? "story" : "stories"}`}
+              . Add a story there instead
+            </span>
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        )}
+
+        <h3>{nearbyPin ? "…or name a new pin" : "Name this pin"}</h3>
         <input
           type="text"
           value={title}
@@ -81,6 +109,22 @@ export default function PinNamePopover({ coords, placeName = null, onConfirm, on
           aria-label="Note"
           rows={3}
         />
+        <label className="pin-name-popover-trip-toggle">
+          <input type="checkbox" checked={withTrip} onChange={(e) => setWithTrip(e.target.checked)} />
+          Start a trip here
+        </label>
+        {withTrip && (
+          <div className="pin-name-popover-trip">
+            <TripFields
+              draft={tripDraft}
+              onChange={(next) => {
+                setTripDraft(next);
+                setTripError(null);
+              }}
+              error={tripError}
+            />
+          </div>
+        )}
         <div className="pin-name-popover-actions">
           <button type="button" className="pin-name-popover-cancel" onClick={onCancel}>
             Cancel

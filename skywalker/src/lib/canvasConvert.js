@@ -72,10 +72,14 @@ export function canvasToBlocks(doc) {
 
 /** Deep-ish copy with fresh element ids, for stamping out templates. */
 export function cloneCanvasDoc(doc) {
+  const empty = createEmptyCanvasDoc();
   return {
-    ...createEmptyCanvasDoc(),
+    ...empty,
     ...doc,
-    theme: { ...createEmptyCanvasDoc().theme, ...doc.theme },
-    elements: (doc.elements ?? []).map((el) => ({ ...el, id: makeElementId() })),
+    // Nested objects are copied too, so edits to the stamped-out doc can't
+    // reach back into the template it came from.
+    size: { ...empty.size, ...doc.size },
+    theme: { ...empty.theme, ...doc.theme, paper: { ...empty.theme.paper, ...doc.theme?.paper } },
+    elements: (doc.elements ?? []).map((el) => ({ ...structuredClone(el), id: makeElementId() })),
   };
 }

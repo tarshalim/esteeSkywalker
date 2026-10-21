@@ -1,31 +1,52 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { AnimatePresence } from "framer-motion";
 import PhotoGlobe from "../PhotoGlobe/PhotoGlobe";
 import PhotoGallery from "../PhotoGallery/PhotoGallery";
 import PhotoLightbox from "../PhotoLightbox/PhotoLightbox";
-import GlobeSearchBar from "../GlobeSearchBar/GlobeSearchBar";
 import PinDropButton from "../PinDropButton/PinDropButton";
 import PinNamePopover from "../PinNamePopover/PinNamePopover";
 import PinModeControls from "../PinModeControls/PinModeControls";
 import ErrorBoundary from "../ErrorBoundary/ErrorBoundary";
+import PinQuickCard from "../PinQuickCard/PinQuickCard";
+import AttachStoriesDialog from "../PinQuickCard/AttachStoriesDialog";
+import TripDialog from "../TripPicker/TripDialog";
 import { getPhotos } from "../../lib/photoStore";
-import { getBlogs } from "../../lib/blogStore";
+import { deleteTrip, getTrips, saveTrip } from "../../lib/tripStore";
+import { allCompanions } from "../../lib/hierarchy";
+import { getBlogs, setBlogsPin } from "../../lib/blogStore";
 import * as pinStore from "../../lib/pinStore";
+import { buildStoryPins, materializePin, pinsNear } from "../../lib/pinStore";
+import { useDataChanges } from "../../lib/liveSync";
 import { isPointInView, clusterPhotosByLocation, hasCoords } from "../../utils/geo";
 import { useAuth } from "../../lib/auth";
 import { useGlobePrefs } from "../../lib/globePrefs";
+import { usePageSearch, useSearch } from "../../lib/search";
+import { matchesQuery } from "../../utils/search";
+import { useGlobeSearch } from "../../hooks/useGlobeSearch";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./GlobeExplorer.css";
 
 const HOVER_FLY_DEBOUNCE_MS = 250;
+// On phones the quick card is a bottom sheet; aim the camera this many degrees
+// south of a picked pin so the pin sits above the sheet instead of under it.
+const SHEET_LAT_OFFSET_DEG = 3;
+
+const reportLoadError = (what) => (err) => console.error(`Failed to load ${what}`, err);
+
+/** "pin=…&trip=…" for the editor/gallery deep links that start inside a location (and trip). */
+const hierarchyQuery = (pin, trip) => new URLSearchParams({ pin: pin.id, ...(trip && { trip: trip.id }) }).toString();
 
 /**
  * State-owning container for the interactive globe experience — rendered
  * both embedded in the homepage (Landing.jsx, below the blog feed) and standalone
- * at /globe (MapTab.jsx), so the two never drift apart. `variant` only
- * affects outer sizing CSS.
+ * at /globe (MapTab.jsx), so the two never drift apart: same pins, data
+ * sync, controls and display prefs. `variant` only affects outer sizing CSS.
+ * Search always comes from the navbar (no search bar of its own).
  *
  * @param {"standalone"|"embedded"} variant
+ * @param {boolean} searchActive - whether the navbar search currently drives
+ *   this globe. The homepage turns it on only while the globe section is on
+ *   screen, so the field keeps its default behaviour over the blog feed.
  * @param {?{lat:number,lng:number,blogId?:string}} focusRequest - set by a
  *   blog's "back to the globe" link (BlogDetail -> Landing router state).
  * @param {boolean} showGallery - the homepage swaps the photo gallery for
@@ -40,10 +61,14 @@ export default function GlobeExplorer({
   showGallery = true,
   onFilterChange = null,
   clearSignal = 0,
+  searchActive = true,
 }) {
   const [photos, setPhotos] = useState([]);
   const [blogs, setBlogs] = useState([]);
   const [customPins, setCustomPins] = useState([]);
+  const [trips, setTrips] = useState([]);
+  // Trip create/edit from the quick card: { trip: null } creates, { trip } edits.
+  const [tripDialog, setTripDialog] = useState(null);
 
   const [viewport, setViewport] = useState(null);
   const [selectedCountry, setSelectedCountry] = useState(null); // { code, name } | null
@@ -61,6 +86,8 @@ export default function GlobeExplorer({
   // naming dialog is open. placeName is known when it came from the drag HUD
   // or a search pick; otherwise PinNamePopover resolves it.
   const [pendingPin, setPendingPin] = useState(null);
+  const [isAttachOpen, setIsAttachOpen] = useState(false);
+  const [cardBusy, setCardBusy] = useState(null); // label of the quick-card action in flight
 
   // Display settings live on the Account page; changes there apply here live.
   const { prefs } = useGlobePrefs();
@@ -69,15 +96,24 @@ export default function GlobeExplorer({
   const location = useLocation();
   const hoverFlyTimeoutRef = useRef(null);
   const globeRef = useRef(null);
+  const stageRef = useRef(null);
+  const handledFocusRef = useRef(null);
 
+  // The whole hierarchy: locations -> trips -> posts and gallery items.
   // Real store, not the hard-coded mock: uploads used to never reach the globe.
   // Each source fails independently so one bad request doesn't blank the rest.
-  useEffect(() => {
-    const report = (what) => (err) => console.error(`Failed to load ${what}`, err);
-    getPhotos().then(setPhotos, report("photos"));
-    getBlogs().then(setBlogs, report("blogs"));
-    pinStore.getPins().then(setCustomPins, report("pins"));
+  const loadStories = useCallback(() => {
+    getBlogs().then(setBlogs, reportLoadError("blogs"));
+    pinStore.getPins().then(setCustomPins, reportLoadError("pins"));
+    getTrips().then(setTrips, reportLoadError("trips"));
+    getPhotos().then(setPhotos, reportLoadError("photos"));
   }, []);
+
+  useEffect(loadStories, [loadStories]);
+
+  // Publishing/editing a post or (un)linking it to a pin — here, in another
+  // tab, or by another editor — refreshes the pins without a page reload.
+  useDataChanges(["blogs", "locations", "trips", "trip_companions", "gallery_items"], loadStories);
 
   useEffect(() => () => clearTimeout(hoverFlyTimeoutRef.current), []);
 
@@ -87,6 +123,52 @@ export default function GlobeExplorer({
   const mappableBlogs = useMemo(
     () => blogs.filter((b) => b.status === "published" && hasCoords(b.location)),
     [blogs]
+  );
+  // Pins with their posts joined on. Editors also see drafts filed under a
+  // pin (RLS already hides drafts from viewers on Supabase; this covers the
+  // local mock). Unpinned posts only get a stand-in pin once published.
+  const storyPins = useMemo(() => {
+    const visible = canEdit ? blogs : blogs.filter((b) => b.status === "published");
+    return buildStoryPins(customPins, visible, (b) => b.status === "published", { trips, photos });
+  }, [customPins, blogs, canEdit, trips, photos]);
+  // Stand-in pins are already searchable as their post.
+  const searchablePins = useMemo(() => storyPins.filter((p) => !p.virtual), [storyPins]);
+  const selectedStoryPin = useMemo(
+    () => storyPins.find((p) => p.id === selectedCustomPinId) ?? null,
+    [storyPins, selectedCustomPinId]
+  );
+  const pinTitles = useMemo(() => new Map(customPins.map((p) => [p.id, p.title])), [customPins]);
+
+  // The navbar search drives this globe, hiding pins that don't match.
+  const { query: navQuery, setQuery: setNavQuery } = useSearch();
+  const pinQuery = useDeferredValue(searchActive ? navQuery.trim() : "");
+  const visiblePhotos = useMemo(
+    () => (pinQuery ? photos.filter((p) => matchesQuery(pinQuery, p.locationName, p.countryName, p.continent)) : photos),
+    [photos, pinQuery]
+  );
+  const visibleCustomPins = useMemo(
+    () =>
+      pinQuery
+        ? storyPins.filter((p) =>
+            matchesQuery(
+              pinQuery,
+              p.title,
+              p.placeName,
+              p.note,
+              p.posts.map((b) => b.title),
+              p.trips.map((t) => [t.title, allCompanions(t)]),
+              p.photos.map((ph) => [ph.caption, ph.tags])
+            )
+          )
+        : storyPins,
+    [storyPins, pinQuery]
+  );
+  const visibleBlogs = useMemo(
+    () =>
+      pinQuery
+        ? mappableBlogs.filter((b) => matchesQuery(pinQuery, b.title, b.location.name, b.countryName, b.city))
+        : mappableBlogs,
+    [mappableBlogs, pinQuery]
   );
 
   // Blog -> globe deep link: fly to the blog's coordinate on arrival.
@@ -106,6 +188,17 @@ export default function GlobeExplorer({
     }
   }, [focusRequest, photoPins]);
 
+  // ...and open the quick card of the pin holding that post (once per request,
+  // not again every time the pins reload).
+  useEffect(() => {
+    if (!focusRequest?.blogId || handledFocusRef.current === focusRequest) return;
+    const hub = storyPins.find((p) => p.posts.some((b) => b.id === focusRequest.blogId));
+    if (hub) {
+      handledFocusRef.current = focusRequest;
+      setSelectedCustomPinId(hub.id);
+    }
+  }, [focusRequest, storyPins]);
+
   const { filteredPhotos, filterLabel, hasManualFilter } = useMemo(() => {
     if (selectedLocationId) {
       const pin = photoPins.find((p) => p.id === selectedLocationId);
@@ -113,7 +206,7 @@ export default function GlobeExplorer({
     }
     if (selectedCountry) {
       return {
-        filteredPhotos: photos.filter((p) => p.countryCode === selectedCountry.code),
+        filteredPhotos: visiblePhotos.filter((p) => p.countryCode === selectedCountry.code),
         filterLabel: selectedCountry.name,
         hasManualFilter: true,
       };
@@ -126,17 +219,19 @@ export default function GlobeExplorer({
     }
     if (hoveredCountry) {
       return {
-        filteredPhotos: photos.filter((p) => p.countryCode === hoveredCountry.code),
+        filteredPhotos: visiblePhotos.filter((p) => p.countryCode === hoveredCountry.code),
         filterLabel: `${hoveredCountry.name} (hover)`,
         hasManualFilter: false,
       };
     }
     return {
-      filteredPhotos: viewport ? photos.filter((p) => hasCoords(p) && isPointInView(viewport, p.lat, p.lng)) : photos,
-      filterLabel: "Current view",
+      filteredPhotos: viewport
+        ? visiblePhotos.filter((p) => hasCoords(p) && isPointInView(viewport, p.lat, p.lng))
+        : visiblePhotos,
+      filterLabel: pinQuery ? `Matching “${pinQuery}”` : "Current view",
       hasManualFilter: false,
     };
-  }, [photos, photoPins, selectedLocationId, selectedCountry, hoveredLocationId, hoveredCountry, viewport]);
+  }, [visiblePhotos, pinQuery, photoPins, selectedLocationId, selectedCountry, hoveredLocationId, hoveredCountry, viewport]);
 
   useEffect(() => {
     if (!onFilterChange) return;
@@ -168,11 +263,24 @@ export default function GlobeExplorer({
     setSelectedLocationId((prev) => (prev === pin?.id ? null : pin?.id ?? null));
   }, []);
 
-  const handleCustomPinClick = useCallback((pin) => {
-    setSelectedCountry(null);
-    setSelectedLocationId(null);
-    setSelectedCustomPinId((prev) => (prev === pin?.id ? null : pin?.id ?? null));
+  const flyToPin = useCallback((pin) => {
+    const isSheet = window.matchMedia("(max-width: 639px)").matches;
+    setFlyTarget({ lat: pin.lat - (isSheet ? SHEET_LAT_OFFSET_DEG : 0), lng: pin.lng });
   }, []);
+
+  // Selecting a pin opens its quick card and flies the camera to it.
+  const selectStoryPin = useCallback(
+    (pin) => {
+      setSelectedCountry(null);
+      setSelectedLocationId(null);
+      setSelectedCustomPinId(pin?.id ?? null);
+      if (pin) flyToPin(pin);
+    },
+    [flyToPin]
+  );
+
+  // PhotoGlobe already passes null when the selected pin is clicked again.
+  const handleCustomPinClick = selectStoryPin;
 
   const handleClearFilter = useCallback(() => {
     setSelectedCountry(null);
@@ -243,11 +351,67 @@ export default function GlobeExplorer({
       setSelectedCountry(null);
       setSelectedLocationId(null);
       setSelectedCustomPinId(result.id);
+    } else if (result.kind === "trip") {
+      // A trip opens its location's quick card.
+      const hub = storyPins.find((p) => p.id === result.pinId);
+      if (hub) selectStoryPin(hub);
+    } else if (result.kind === "blog") {
+      // A post opens the quick card of the pin it's filed under.
+      const hub = storyPins.find((p) => p.posts.some((b) => b.id === result.blogId));
+      if (hub) selectStoryPin(hub);
     }
-    // "blog" results just fly the camera; they aren't a globe filter tier.
-  }, [canEdit, handlePinDropAt]);
+  }, [canEdit, handlePinDropAt, storyPins, selectStoryPin]);
+
+  // Trips are searchable by title and companions, each carrying its location.
+  const searchableTrips = useMemo(
+    () => searchablePins.flatMap((pin) => pin.trips.map((trip) => ({ ...trip, pin }))),
+    [searchablePins]
+  );
+  const { localResults, placeResults, isPending } = useGlobeSearch(searchActive ? navQuery : "", {
+    pins: photoPins,
+    customPins: searchablePins,
+    blogs: mappableBlogs,
+    trips: searchableTrips,
+  });
+  const navResults = useMemo(
+    () => [...localResults, ...placeResults.map((r) => ({ ...r, group: "Drop a pin at…" }))],
+    [localResults, placeResults]
+  );
+  const handleNavSearchSelect = useCallback(
+    (result) => {
+      handleSearchSelect(result);
+      // Keep the globe narrowed to what was picked; a geocoder place isn't
+      // one of ours, so clear instead of hiding the pin about to be dropped.
+      setNavQuery(result.kind === "place" ? "" : result.label);
+    },
+    [handleSearchSelect, setNavQuery]
+  );
+  usePageSearch({
+    enabled: searchActive,
+    placeholder: "Search pins & locations…",
+    results: navResults,
+    pending: isPending,
+    onSelect: handleNavSearchSelect,
+  });
 
   const coordsAtClientPoint = useCallback((x, y) => globeRef.current?.coordsAtClientPoint(x, y) ?? null, []);
+
+  // The tour's "Name Your Pin" step opens the naming dialog on whatever the
+  // globe is facing (detail: true) and closes it again on leaving the step.
+  useEffect(() => {
+    if (!canEdit) return;
+    const onPreview = (e) => {
+      if (!e.detail) {
+        setPendingPin(null);
+        return;
+      }
+      const r = stageRef.current?.getBoundingClientRect();
+      const coords = r ? coordsAtClientPoint(r.left + r.width / 2, r.top + r.height / 2) : null;
+      setPendingPin({ ...(coords ?? { lat: 48.8566, lng: 2.3522 }), placeName: null });
+    };
+    window.addEventListener("tour:pin-preview", onPreview);
+    return () => window.removeEventListener("tour:pin-preview", onPreview);
+  }, [canEdit, coordsAtClientPoint]);
 
   // Draggable pin released at client (x, y): open the naming popover for that
   // coordinate, carrying the place name its HUD showed. Returns false (pin
@@ -274,29 +438,118 @@ export default function GlobeExplorer({
     [handlePinDropAt]
   );
 
+  // Step 1 of the cascade from the globe: the location, optionally with its
+  // first trip (PinNamePopover's "Start a trip here").
   const handleCreatePin = useCallback(
-    async ({ title, note, placeName }) => {
+    async ({ title, note, placeName, trip = null }) => {
       if (!pendingPin) return;
       try {
         const pin = await pinStore.createPin({ lat: pendingPin.lat, lng: pendingPin.lng, title, note, placeName });
         setCustomPins((prev) => [...prev, pin]);
+        if (trip) {
+          try {
+            const saved = await saveTrip({ ...trip, locationId: pin.id });
+            setTrips((prev) => [saved, ...prev]);
+          } catch (err) {
+            // The pin is saved; the trip can be added again from its card.
+            console.error(err);
+            window.alert(`Pin saved, but the trip couldn't be: ${err.message}`);
+          }
+        }
         setPendingPin(null);
+        // Straight into its quick card: write a story here or attach some.
+        selectStoryPin(pin);
       } catch (err) {
         console.error(err);
         window.alert(`Couldn't save pin: ${err.message}`);
       }
     },
-    [pendingPin]
+    [pendingPin, selectStoryPin]
   );
 
   const handleCancelPendingPin = useCallback(() => setPendingPin(null), []);
 
-  const handleBlogClick = useCallback((blog) => navigate(`/blogs/${blog.id}`), [navigate]);
+  // A pin dropped on (or near) an existing hub offers that hub instead of a duplicate.
+  const nearbyPin = useMemo(() => (pendingPin ? pinsNear(storyPins, pendingPin)[0] ?? null : null), [pendingPin, storyPins]);
+  const handleUseNearbyPin = useCallback(() => {
+    setPendingPin(null);
+    selectStoryPin(nearbyPin);
+  }, [nearbyPin, selectStoryPin]);
+
+  // Quick-card actions. Each write notifies liveSync, which reloads the pins.
+  const runCardAction = useCallback(async (label, action) => {
+    setCardBusy(label);
+    try {
+      await action();
+    } catch (err) {
+      console.error(err);
+      window.alert(`Couldn't update this pin: ${err.message}`);
+    } finally {
+      setCardBusy(null);
+    }
+  }, []);
+
+  const handleOpenPost = useCallback((post) => navigate(`/blogs/${post.id}`), [navigate]);
+  const handleCloseCard = useCallback(() => setSelectedCustomPinId(null), []);
+
+  // Step 3 of the cascade: content at this location, inside `trip` when given.
+  const handleNewStory = useCallback(
+    (trip = null) =>
+      runCardAction("Opening…", async () => {
+        const pin = await materializePin(selectedStoryPin, setBlogsPin);
+        navigate(`/blogs/new?${hierarchyQuery(pin, trip)}`);
+      }),
+    [runCardAction, selectedStoryPin, navigate]
+  );
+
+  const handleAddPhotos = useCallback(
+    (trip = null) =>
+      runCardAction("Opening…", async () => {
+        const pin = await materializePin(selectedStoryPin, setBlogsPin);
+        navigate(`/gallery?upload=1&${hierarchyQuery(pin, trip)}`);
+      }),
+    [runCardAction, selectedStoryPin, navigate]
+  );
+
+  // Trip dialog: throws back into the dialog so it can show the error.
+  const handleSaveTrip = useCallback(
+    async (draft) => {
+      const pin = await materializePin(selectedStoryPin, setBlogsPin);
+      const saved = await saveTrip({ ...(tripDialog?.trip ?? {}), ...draft, locationId: pin.id });
+      setTrips((prev) => [saved, ...prev.filter((t) => t.id !== saved.id)]);
+      setSelectedCustomPinId(pin.id);
+      setTripDialog(null);
+    },
+    [selectedStoryPin, tripDialog]
+  );
+
+  const handleDeleteTrip = useCallback(async () => {
+    const { trip } = tripDialog;
+    await deleteTrip(trip.id);
+    setTrips((prev) => prev.filter((t) => t.id !== trip.id));
+    setTripDialog(null);
+  }, [tripDialog]);
+
+  const handleAttach = useCallback(
+    (blogIds) => {
+      setIsAttachOpen(false);
+      runCardAction("Attaching…", async () => {
+        const pin = await materializePin(selectedStoryPin, setBlogsPin);
+        await setBlogsPin(blogIds, pin);
+        setSelectedCustomPinId(pin.id);
+      });
+    },
+    [runCardAction, selectedStoryPin]
+  );
+
+  const handleDetach = useCallback(
+    (post) => runCardAction("Removing…", () => setBlogsPin([post.id], null)),
+    [runCardAction]
+  );
 
   return (
     <div className={`globe-explorer globe-explorer--${variant}${showGallery ? "" : " globe-explorer--no-gallery"}`}>
-      <div className="globe-explorer-stage" data-tour="globe">
-        <GlobeSearchBar pins={photoPins} customPins={customPins} blogs={mappableBlogs} onSelect={handleSearchSelect} />
+      <div ref={stageRef} className="globe-explorer-stage" data-tour="globe">
         <div className="globe-pin-dock" data-tour="pin-dock">
           <PinDropButton
             isPlacingPin={isPlacingPin}
@@ -317,9 +570,9 @@ export default function GlobeExplorer({
         >
           <PhotoGlobe
             ref={globeRef}
-            photos={photos}
-            customPins={customPins}
-            blogs={mappableBlogs}
+            photos={visiblePhotos}
+            customPins={visibleCustomPins}
+            blogs={visibleBlogs}
             selectedCountryCode={selectedCountry?.code ?? null}
             selectedLocationId={selectedLocationId}
             selectedCustomPinId={selectedCustomPinId}
@@ -338,16 +591,35 @@ export default function GlobeExplorer({
             onPinHover={handlePinHover}
             onCustomPinClick={handleCustomPinClick}
             onPinDropAt={handlePinDropAt}
-            onBlogClick={handleBlogClick}
           />
         </ErrorBoundary>
+        <AnimatePresence>
+          {selectedStoryPin && !pendingPin && (
+            <PinQuickCard
+              key={selectedStoryPin.id}
+              pin={selectedStoryPin}
+              canEdit={canEdit}
+              busy={cardBusy}
+              onClose={handleCloseCard}
+              onOpenPost={handleOpenPost}
+              onNewStory={handleNewStory}
+              onAddPhotos={handleAddPhotos}
+              onNewTrip={() => setTripDialog({ trip: null })}
+              onEditTrip={(trip) => setTripDialog({ trip })}
+              onAttach={() => setIsAttachOpen(true)}
+              onDetach={handleDetach}
+            />
+          )}
+        </AnimatePresence>
         {pendingPin && (
           <PinNamePopover
             key={`${pendingPin.lat}:${pendingPin.lng}`}
             coords={pendingPin}
             placeName={pendingPin.placeName}
+            nearbyPin={nearbyPin}
             onConfirm={handleCreatePin}
             onCancel={handleCancelPendingPin}
+            onUseExisting={handleUseNearbyPin}
           />
         )}
       </div>
@@ -365,6 +637,30 @@ export default function GlobeExplorer({
           />
         </div>
       )}
+
+      <AnimatePresence>
+        {isAttachOpen && selectedStoryPin && (
+          <AttachStoriesDialog
+            pin={selectedStoryPin}
+            blogs={blogs}
+            pinTitles={pinTitles}
+            onConfirm={handleAttach}
+            onCancel={() => setIsAttachOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {tripDialog && selectedStoryPin && (
+          <TripDialog
+            trip={tripDialog.trip}
+            locationTitle={selectedStoryPin.title}
+            onSave={handleSaveTrip}
+            onDelete={tripDialog.trip ? handleDeleteTrip : null}
+            onCancel={() => setTripDialog(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {lightboxPhoto && (

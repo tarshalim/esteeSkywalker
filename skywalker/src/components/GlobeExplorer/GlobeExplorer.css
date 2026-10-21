@@ -7,8 +7,7 @@
      vh is the toolbar-hidden height, which pushes the bottom off-screen. */
   height: 100dvh;
   box-sizing: border-box;
-  /* The stage (and the search bar / pin dock pinned to its top) starts
-     below the fixed TopNav instead of underneath it. */
+  /* The stage starts below the fixed TopNav instead of underneath it. */
   padding-top: var(--nav-bottom);
   background: var(--bg);
 }
@@ -20,10 +19,9 @@
 }
 
 /* Red pin + click-mode / my-location controls: one compact icon pill in the
-   bottom-left corner, clear of the globe's center and of the search bar up
-   top (the homepage's fixed "Back to stories" button owns the bottom-right).
-   Labels float above it on hover/focus only; the tour explains each icon.
-   Above the search bar's layer so its results can't cover the pin. */
+   bottom-left corner, clear of the globe's center (the homepage's fixed
+   "Back to stories" button owns the bottom-right). Labels float above it on
+   hover/focus only; the tour explains each icon. */
 .globe-pin-dock {
   position: absolute;
   left: 12px;

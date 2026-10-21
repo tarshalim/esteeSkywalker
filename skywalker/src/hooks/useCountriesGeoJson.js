@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-// One shared request: PhotoGlobe, GlobeSearchBar and the pin-placement UI
+// One shared request: PhotoGlobe, globe search and the pin-placement UI
 // all read the same geojson, so fetch it once per page load.
 let countriesPromise = null;
 
@@ -19,7 +19,7 @@ function loadCountries() {
 
 /**
  * Loads the world countries geojson once and shares it between PhotoGlobe
- * (choropleth polygons), GlobeSearchBar (searching by country name even
+ * (choropleth polygons), useGlobeSearch (searching by country name even
  * before any photo/pin exists there) and live pin place names.
  * @returns {object[]} geojson feature array, empty until loaded.
  */

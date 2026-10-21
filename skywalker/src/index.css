@@ -70,7 +70,7 @@
   --z-overlay: 40; /* full-screen transitions */
   --z-modal: 50; /* dialogs, lightbox, bottom sheets */
   --z-drag: 60; /* pointer-following drag ghost */
-  --z-tour: 70; /* tour spotlight, can highlight the nav itself */
+  --z-tour: 80; /* tour spotlight, can highlight the nav itself; above the editor's z-70 dock */
 
   /* Distance from the viewport top to TopNav's bottom edge, the top safe
      area for every page. TopNav overwrites this with its measured value
@@ -125,7 +125,7 @@
 
 @media (max-width: 639.98px) {
   :root {
-    --nav-bottom: 3.75rem;
+    --nav-bottom: 4.125rem;
   }
 }
 
