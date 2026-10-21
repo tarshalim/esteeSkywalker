@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, FolderOpen, LayoutTemplate, Send } from "lucide-react";
-import { getBlogById, upsertBlog, getTemplates, getTemplateById, saveTemplate } from "../../lib/blogStore";
+import { ArrowLeft, FolderOpen, LayoutTemplate, LoaderCircle, Send, Trash2 } from "lucide-react";
+import { getBlogById, upsertBlog, deleteBlog, getTemplates, getTemplateById, saveTemplate } from "../../lib/blogStore";
 import { CanvasProvider } from "../../components/Editor/Canvas/CanvasProvider";
 import ScrapbookCanvas from "../../components/Editor/Canvas/ScrapbookCanvas";
 import { createEmptyCanvasDoc } from "../../lib/canvasElements";
@@ -16,6 +16,7 @@ import { PLACEHOLDER_COVER } from "../../lib/media";
 import { COUNTRY_TO_CONTINENT } from "../../utils/countries";
 import { VIBES } from "../../lib/blogTaxonomy";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
+import DeletePostDialog from "./DeletePostDialog";
 import BackgroundMusicField from "./BackgroundMusicField";
 import { deleteBlogAudio, getBlogMusic } from "../../lib/music";
 import "./BlogEditor.css";
@@ -61,6 +62,9 @@ export default function BlogEditor() {
   const toastTimer = useRef(null);
   const coverInputRef = useRef(null);
   const [exitPromptOpen, setExitPromptOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   // Unsaved-change tracking: the form fields are compared against a snapshot
   // taken at load/save; the canvas against the doc it first emitted after
   // being seeded (CanvasProvider reports its initial doc on mount).
@@ -322,6 +326,32 @@ export default function BlogEditor() {
 
   const closeExitPrompt = useCallback(() => setExitPromptOpen(false), []);
 
+  const closeDeleteDialog = useCallback(() => {
+    setDeleteOpen(false);
+    setDeleteError(null);
+  }, []);
+
+  // The error stays inside the dialog so a retry is one click away.
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteBlog(blogId);
+    } catch (err) {
+      console.error(err);
+      setDeleteError(`Couldn't delete this post: ${err.message}`);
+      setDeleting(false);
+      return;
+    }
+    // deleteBlog removed the saved track; an upload made since would be orphaned.
+    discardUnsavedUpload(music);
+    // Replace, so Back doesn't land on the editor of a post that no longer exists.
+    navigate(isPublished ? "/blogs" : "/blogs/drafts", {
+      replace: true,
+      state: { flash: `Deleted “${title.trim() || "Untitled Blog Post"}”` },
+    });
+  };
+
   const toggleVibe = (id) => setVibes((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
 
   const handlePublish = async () => {
@@ -425,7 +455,7 @@ export default function BlogEditor() {
             <LayoutTemplate size={16} className="sm:hidden" aria-hidden="true" />
             <span className="hidden sm:inline">Save as Template</span>
           </button>
-          <button className="editor-btn editor-btn-primary" onClick={handlePublish} disabled={saving}>
+          <button className="editor-btn editor-btn-primary" onClick={handlePublish} disabled={saving || deleting}>
             <Send size={15} className="sm:hidden" aria-hidden="true" />
             Publish
           </button>
@@ -527,13 +557,41 @@ export default function BlogEditor() {
           ))}
         </div>
 
-        <BackgroundMusicField value={music} onChange={handleMusicChange} onError={showToast} />
+        <div data-tour="editor-music">
+          <BackgroundMusicField value={music} onChange={handleMusicChange} onError={showToast} />
+        </div>
 
-        <div className="editor-scrapbook">
+        <div className="editor-scrapbook" data-tour="editor-scrapbook">
           <CanvasProvider key={canvasSeed.key} initialDoc={canvasSeed.doc} onDocChange={handleCanvasChange}>
             <ScrapbookCanvas onError={showToast} />
           </CanvasProvider>
         </div>
+
+        {/* Only a saved post has anything to delete. */}
+        {blogId && (
+          <section
+            aria-labelledby="editor-danger-title"
+            className="mt-10 flex flex-col gap-3 rounded-2xl border-2 border-red-500/40 bg-red-500/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+          >
+            <div className="min-w-0">
+              <h2 id="editor-danger-title" className="text-sm font-bold uppercase tracking-wide text-red-600">
+                Danger Zone
+              </h2>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+                Permanently delete this {isPublished ? "published post" : "draft"} along with the images and music only it uses.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              disabled={saving || deleting}
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border-2 border-red-600 px-5 text-sm font-bold text-red-600 transition-colors hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
+            >
+              {deleting ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <Trash2 size={16} aria-hidden="true" />}
+              {deleting ? "Deleting…" : "Delete Post"}
+            </button>
+          </section>
+        )}
       </div>
 
       <AnimatePresence>
@@ -573,6 +631,19 @@ export default function BlogEditor() {
             onSave={handleExitSave}
             onDiscard={handleExitDiscard}
             onCancel={closeExitPrompt}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {deleteOpen && (
+          <DeletePostDialog
+            title={title.trim() || "Untitled Blog Post"}
+            isPublished={isPublished}
+            deleting={deleting}
+            error={deleteError}
+            onConfirm={handleDelete}
+            onCancel={closeDeleteDialog}
           />
         )}
       </AnimatePresence>

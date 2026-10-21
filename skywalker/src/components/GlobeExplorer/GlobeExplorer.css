@@ -17,40 +17,35 @@
   flex: 0 0 60%;
   min-height: 0;
   position: relative;
-  /* Read by GlobeSearchBar to keep clear of the dock. */
-  --globe-pin-dock-width: 60px;
 }
 
-/* Red pin + click-mode / my-location controls, top-right. Above the search
-   bar's layer so nothing can cover the pin even while results are open. */
+/* Red pin + click-mode / my-location controls: one compact icon pill in the
+   bottom-left corner, clear of the globe's center and of the search bar up
+   top (the homepage's fixed "Back to stories" button owns the bottom-right).
+   Labels float above it on hover/focus only; the tour explains each icon.
+   Above the search bar's layer so its results can't cover the pin. */
 .globe-pin-dock {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  left: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: calc(var(--z-hud) + 1);
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  /* One size for every dock button (pin, click mode, my location); matches
-     the search bar's 44px height. */
-  --dock-button-size: 44px;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 12px var(--shadow-color);
+  /* One size for every dock button (pin, click mode, my location). */
+  --dock-button-size: 34px;
 }
 
-/* Phones: GlobeSearchBar spans the top edge, so the dock moves bottom-left
-   (the homepage's fixed "Back to stories" button owns the bottom-right),
-   with the pin at the bottom where the thumb rests. */
-@media (max-width: 640px) {
-  .globe-explorer-stage {
-    --globe-pin-dock-width: 0px;
-  }
+/* Fingers get a bigger target (40px + the pill's padding ≈ 48px). */
+@media (pointer: coarse) {
   .globe-pin-dock {
-    top: auto;
-    right: auto;
-    left: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
-    flex-direction: column-reverse;
-    align-items: flex-start;
+    --dock-button-size: 40px;
   }
 }
 

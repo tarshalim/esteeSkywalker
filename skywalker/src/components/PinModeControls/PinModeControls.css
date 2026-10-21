@@ -1,8 +1,7 @@
 .pin-mode-controls {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .pin-mode-button {
@@ -13,10 +12,9 @@
   width: var(--dock-button-size, 44px);
   height: var(--dock-button-size, 44px);
   border-radius: 999px;
-  border: 2px solid var(--border);
-  background: var(--bg-elevated);
+  border: 2px solid transparent;
+  background: transparent;
   color: var(--text);
-  box-shadow: 0 4px 12px var(--shadow-color);
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
@@ -38,30 +36,30 @@
   color: #ffffff;
 }
 
-/* Label pill to the left, on hover/focus (and permanently while active). */
+/* Tooltip above the dock on hover/focus (and while locating). */
 .pin-mode-button::after {
   content: attr(data-label);
   position: absolute;
-  right: calc(100% + 10px);
-  top: 50%;
-  padding: 5px 10px;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  padding: 3px 8px;
   border-radius: 999px;
   background: var(--bg-elevated);
-  border: 2px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
   color: var(--text);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transform: translate(6px, -50%);
+  transform: translate(-50%, 4px);
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .pin-mode-button:hover::after,
 .pin-mode-button:focus-visible::after,
 .pin-mode-button:disabled::after {
   opacity: 1;
-  transform: translate(0, -50%);
+  transform: translate(-50%, 0);
 }
 
 .pin-mode-spin {
@@ -76,39 +74,27 @@
 }
 .pin-mode-message {
   position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  bottom: calc(100% + 12px);
+  left: 0;
   width: max-content;
-  max-width: 220px;
-  padding: 6px 12px;
+  max-width: min(220px, calc(100vw - 32px));
+  padding: 4px 10px;
   border-radius: 12px;
   background: var(--bg-panel-strong);
   border: 2px solid var(--pin-red);
   color: var(--text);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
-@media (max-width: 640px) {
-  .pin-mode-button::after {
-    right: auto;
-    left: calc(100% + 10px);
-    transform: translate(-6px, -50%);
+/* Touch screens can't hover, so no sticky tooltips there — the guided tour
+   introduces each icon instead. */
+@media (hover: none) {
+  .pin-mode-button:hover:not(:disabled) {
+    transform: none;
   }
-  .pin-mode-message {
-    top: auto;
-    bottom: calc(100% + 8px);
-    right: auto;
-    left: 0;
-  }
-}
-
-/* Phones and touch screens can't hover to discover what an icon does, so
-   each label stays up as a persistent pill beside its button. */
-@media (max-width: 640px), (hover: none) {
-  .pin-mode-button::after {
-    opacity: 1;
-    transform: translate(0, -50%);
+  .pin-mode-button:not(:disabled)::after {
+    opacity: 0;
   }
 }
 

@@ -3,6 +3,7 @@ import { delay, readJSON, writeJSON, makeId } from "./storage";
 import { supabase, unwrap, fromRows } from "./supabase";
 import { createCollection } from "./collection";
 import { deleteBlogAudio, getBlogMusic } from "./music";
+import { collectMediaPaths, deleteMediaFiles } from "./files";
 
 // Blogs/templates API: Supabase `blogs`/`templates` tables when configured,
 // otherwise a localStorage mock. Every function returns a Promise so callers
@@ -140,11 +141,29 @@ export async function upsertBlog(blog) {
   return saveBlog(created, blogs);
 }
 
+// Templates copy a post's cover/canvas URLs, and gallery photos or pins can
+// point at the same upload, so only files nothing else references are removed.
+async function deleteOrphanedMedia(blog) {
+  const paths = collectMediaPaths(blog);
+  if (paths.size === 0) return;
+  try {
+    const results = await Promise.all(["blogs", "templates", "photos", "pins"].map((t) => supabase.from(t).select("data")));
+    const stillUsed = new Set();
+    for (const rows of results.map(unwrap)) for (const row of rows) collectMediaPaths(row.data, stillUsed);
+    await deleteMediaFiles([...paths].filter((p) => !stillUsed.has(p)));
+  } catch (err) {
+    console.warn("Couldn't clean up media for deleted post", blog.id, err);
+  }
+}
+
 export async function deleteBlog(id) {
   if (supabase) {
     const blog = await getBlogById(id);
-    unwrap(await supabase.from("blogs").delete().eq("id", id));
-    await deleteBlogAudio(getBlogMusic(blog)?.storagePath);
+    // RLS turns a forbidden delete into a silent no-op, so check a row actually went.
+    const deleted = unwrap(await supabase.from("blogs").delete().eq("id", id).select("id"));
+    if (deleted.length === 0) throw new Error("This post may already be gone, or you don't have permission to delete it.");
+    // The post is gone either way; leftover files are only logged.
+    await Promise.all([deleteBlogAudio(getBlogMusic(blog)?.storagePath), deleteOrphanedMedia(blog)]);
     return true;
   }
   const blogs = await loadBlogs();

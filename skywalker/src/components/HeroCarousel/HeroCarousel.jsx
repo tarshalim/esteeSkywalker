@@ -119,7 +119,7 @@ export default function HeroCarousel({ title, titleId }) {
           <ArrowButton side="right" label="Next picture" onClick={() => go(1)} />
         </div>
 
-        <div className="absolute inset-x-0 bottom-3 sm:bottom-4 flex items-center justify-center gap-2" role="group" aria-label="Choose picture">
+        <div className="absolute inset-x-0 bottom-3 sm:bottom-4 flex items-center justify-center sm:gap-2" role="group" aria-label="Choose picture">
           {FRAMES.map((frame, i) => (
             <button
               key={frame.src}
@@ -127,7 +127,7 @@ export default function HeroCarousel({ title, titleId }) {
               onClick={() => setIndex(i)}
               aria-label={`Show picture ${i + 1} of ${count}`}
               aria-current={i === index}
-              className="group grid h-6 w-6 place-items-center"
+              className="group grid h-8 w-8 place-items-center sm:h-6 sm:w-6"
             >
               <span
                 className={`block h-2 rounded-full transition-all duration-300 ${

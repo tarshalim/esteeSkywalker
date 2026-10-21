@@ -1,23 +1,21 @@
 /* Positioned by its parent dock (GlobeExplorer's .globe-pin-dock). */
 .pin-drop {
+  position: relative;
   display: flex;
-  align-items: center;
-  flex-direction: row-reverse;
-  gap: 10px;
 }
 
 .pin-drop-button {
   position: relative;
   display: grid;
   place-items: center;
-  /* Same size, border and shadow as PinModeControls' buttons. */
+  /* Same size as PinModeControls' buttons; the filled face marks it as the
+     dock's primary action. */
   width: var(--dock-button-size, 44px);
   height: var(--dock-button-size, 44px);
   border-radius: 999px;
   border: 2px solid var(--border);
   background: var(--bg-elevated);
   color: var(--pin-red);
-  box-shadow: 0 4px 12px var(--shadow-color);
   cursor: grab;
   /* No scroll/zoom gestures while the finger is dragging the pin. */
   touch-action: none;
@@ -107,18 +105,23 @@
   75% { transform: translateX(-2px); }
 }
 
+/* Floats above the dock so it never widens it. Shown on hover/focus, on the
+   first visit, and while click mode waits for a tap (a status, not a label). */
 .pin-drop-hint {
-  padding: 5px 10px;
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 0;
+  padding: 3px 8px;
   border-radius: 999px;
   background: var(--bg-elevated);
-  border: 2px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
   color: var(--text);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transform: translateX(6px);
+  transform: translateY(4px);
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .pin-drop-button:hover + .pin-drop-hint,
@@ -126,7 +129,7 @@
 .pin-drop.show-hint .pin-drop-hint,
 .pin-drop.is-placing .pin-drop-hint {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateY(0);
 }
 .pin-drop.is-dragging .pin-drop-hint {
   opacity: 0;
@@ -239,9 +242,6 @@
 }
 
 @media (max-width: 640px) {
-  .pin-drop {
-    flex-direction: row;
-  }
   /* A finger covers the pin's right side; float the HUD higher instead. */
   .pin-drop-hud {
     bottom: 48px;
@@ -254,16 +254,12 @@
   }
 }
 
-/* Phones and touch screens can't hover to discover what an icon does, so
-   the label stays up as a persistent pill (hidden only mid-drag). */
-@media (max-width: 640px), (hover: none) {
-  .pin-drop-hint {
-    opacity: 1;
-    transform: none;
-  }
-}
-
+/* Touch screens can't hover, so no sticky label there — the guided tour
+   (plus the first-visit hint) introduces the pin instead. */
 @media (hover: none) {
+  .pin-drop:not(.show-hint):not(.is-placing) .pin-drop-hint {
+    opacity: 0;
+  }
   .pin-drop-button:hover {
     transform: none;
   }

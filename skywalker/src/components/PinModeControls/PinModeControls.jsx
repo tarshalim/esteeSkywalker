@@ -13,7 +13,7 @@ const GEOLOCATION_ERRORS = {
 /**
  * Precision-friendly alternatives to dragging the pin: a "Click mode" toggle
  * (the next tap on the globe anchors the pin) and "Use my location" (browser
- * Geolocation API). Sits under PinDropButton in GlobeExplorer's dock.
+ * Geolocation API). Sits beside PinDropButton in GlobeExplorer's dock.
  *
  * @param {function(): boolean} canPlace - false when the viewer can't drop
  *   pins (the parent redirects to sign-in before returning).
@@ -57,6 +57,7 @@ export default function PinModeControls({ isClickMode, onToggleClickMode, canPla
         className={`pin-mode-button${isClickMode ? " is-active" : ""}`}
         onClick={onToggleClickMode}
         aria-pressed={isClickMode}
+        data-tour="pin-click-mode"
         data-label={isClickMode ? "Click mode on" : "Click mode"}
         aria-label="Click mode: tap anywhere on the globe to drop the pin"
       >
@@ -67,6 +68,7 @@ export default function PinModeControls({ isClickMode, onToggleClickMode, canPla
         className="pin-mode-button"
         onClick={handleLocate}
         disabled={isLocating}
+        data-tour="pin-locate"
         data-label={isLocating ? "Locating…" : "Use my location"}
         aria-label="Drop the pin at my current location"
       >

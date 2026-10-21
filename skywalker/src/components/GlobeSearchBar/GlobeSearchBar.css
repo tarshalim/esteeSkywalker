@@ -3,9 +3,7 @@
   top: 16px;
   left: 16px;
   z-index: var(--z-hud);
-  /* Leaves the top-right column free for the pin dock (44px buttons + gaps),
-     so the bar can never cover the pin on mid-width screens. */
-  width: min(360px, calc(100% - 32px - var(--globe-pin-dock-width, 60px)));
+  width: min(360px, calc(100% - 32px));
 }
 
 .globe-search-form {

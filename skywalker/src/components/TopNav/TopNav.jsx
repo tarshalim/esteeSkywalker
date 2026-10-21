@@ -10,12 +10,14 @@ import { useTour } from "../../lib/tour";
 import Avatar from "../Avatar/Avatar";
 
 // Icon-only until lg, where the text label fits too (`keepIcon` shows both).
+// Same 36px height, 1px border and hover lift as the `.theme-toggle` buttons;
+// only the fill tells primary / active / idle apart.
 function NavPill({ to, icon: Icon, label, active, primary, tour, keepIcon }) {
   const style = primary
-    ? { background: "linear-gradient(135deg, var(--yellow-bright), var(--yellow))", color: "var(--blue-deep)" }
+    ? { background: "linear-gradient(135deg, var(--yellow-bright), var(--yellow))", color: "var(--blue-deep)", borderColor: "var(--border)" }
     : active
-      ? { background: "var(--blue)", color: "#ffffff" }
-      : { background: "var(--bg-panel)", color: "var(--text)" };
+      ? { background: "var(--blue)", color: "#ffffff", borderColor: "var(--blue)" }
+      : { background: "var(--bg-panel)", color: "var(--text)", borderColor: "var(--border)" };
   return (
     <Link
       to={to}
@@ -28,8 +30,8 @@ function NavPill({ to, icon: Icon, label, active, primary, tour, keepIcon }) {
       <motion.span
         whileHover={{ y: -1 }}
         whileTap={{ scale: 0.97 }}
-        className={`inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-full text-sm lg:px-4 ${
-          primary ? "font-semibold shadow-[0_3px_0_var(--blue-deep)] transition-shadow" : "font-medium transition-colors"
+        className={`inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-full border text-sm transition-colors lg:px-4 ${
+          primary ? "font-semibold" : "font-medium"
         }`}
         style={style}
       >
@@ -108,7 +110,7 @@ export default function TopNav() {
       className="fixed top-2 left-1/2 z-(--z-nav) w-[min(1100px,calc(100vw-1rem))] -translate-x-1/2 sm:top-4 sm:w-[min(1100px,94vw)]"
     >
       <div
-        className="glass-panel relative flex items-center gap-1 rounded-2xl border-2 px-2 py-1.5 sm:gap-2 md:gap-3 md:px-4 md:py-2"
+        className="glass-panel relative flex items-center gap-1 rounded-2xl px-2 py-1.5 sm:gap-2 md:gap-3 md:px-4 md:py-2"
         style={{ borderColor: "var(--border-strong)" }}
       >
         <Link
@@ -125,7 +127,9 @@ export default function TopNav() {
           className="mr-auto min-w-0 truncate px-1 text-xs font-semibold tracking-[0.12em] uppercase sm:mr-0 sm:text-sm md:px-0 md:tracking-[0.2em]"
           style={{ color: "var(--blue)" }}
         >
-          Skywalker
+          {/* Under 360px the full wordmark can't fit beside the buttons. */}
+          <span className="max-[359px]:hidden">Skywalker</span>
+          <span className="text-base font-bold tracking-normal min-[360px]:hidden" aria-hidden="true">S</span>
         </Link>
 
         <form
@@ -206,10 +210,11 @@ export default function TopNav() {
             <CircleHelp size={17} strokeWidth={2.25} />
           </button>
 
+          {/* Phones: the wordmark needs the room; Account has the same switch. */}
           <button
             type="button"
             onClick={toggleTheme}
-            className="theme-toggle"
+            className="theme-toggle max-sm:hidden"
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >

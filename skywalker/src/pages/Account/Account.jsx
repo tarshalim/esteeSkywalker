@@ -286,7 +286,7 @@ function GlobeSettings() {
             role="switch"
             aria-checked={prefs[key]}
             aria-labelledby={`globe-pref-${key}`}
-            className="account-switch"
+            className="account-switch touch-hit"
             onClick={() => setPref(key, !prefs[key])}
           >
             <span className="account-switch-thumb" />

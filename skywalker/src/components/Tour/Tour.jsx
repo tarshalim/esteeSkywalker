@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useTour } from "../../lib/tour";
+import { useAuth } from "../../lib/auth";
 import "./Tour.css";
 
 /**
@@ -12,33 +13,70 @@ import "./Tour.css";
  * `onEnter` sets the UI up. No matching target — say the create signpost for
  * a read-only account — falls back to a centered card.
  */
-const STEPS = [
+const ALL_STEPS = [
   {
     route: "/blogs",
     targets: ['[data-tour="journey-header"]'],
     onEnter: () => window.scrollTo({ top: 0, behavior: "smooth" }),
-    title: "Welcome to your Blog Journey",
-    body: "Every published story is a signpost on this road. The title up here follows your filters — narrow the trail by country, city or category. The glowing first signpost at the trailhead is where you plant your very first story.",
+    title: "Welcome to Your Journey",
+    body: "Every published story marks a stop on your travel map. Use the filters to explore by country, city, or category.",
   },
   {
     route: "/blogs",
     targets: ['[data-tour="create-story"]', '[data-tour="create-blog"]'],
     onEnter: () => window.scrollTo({ top: 0, behavior: "smooth" }),
-    title: "Scrapbook canvas & background music",
-    body: "Writing a story opens a free-form scrapbook: click anywhere on the page to add text, photos, video or scrapbook pieces, and pick a paper background. Give the post a background track (MP3, YouTube or Spotify) and readers get a spinning CD in the corner, with music notes floating up — tap it to pause.",
+    title: "Start a Story",
+    body: "Ready to begin? Click the glowing signpost to create your first story. Each story you publish adds a new stop along the road.",
+  },
+  {
+    // The editor is behind RequireAuth; read-only accounts skip this step
+    // rather than bouncing between it and /account.
+    route: "/blogs/new",
+    requiresEdit: true,
+    targets: ['[data-tour="editor-scrapbook"]'],
+    scrollTo: '[data-tour="editor-music"]',
+    title: "Create Your Scrapbook",
+    body: "Click anywhere on the page to add text, photos, videos, or scrapbook elements. Choose a paper background and add music from MP3, YouTube, or Spotify. Readers can tap the spinning CD to pause the music.",
   },
   {
     route: "/blogs",
     targets: ['[data-tour="journey-controls"]'],
-    title: "Ride the journey",
-    body: "Scroll to pedal down the road, drag this slider to scrub through it, or use the ‹ › arrows to hop between stops. Your avatar at the top right opens your account, where you choose a profile picture and set your display preferences.",
+    title: "Explore Your Journey",
+    body: "Scroll, drag the slider, or use the ‹ › arrows to explore your stories. Click your avatar in the top-right corner to update your profile picture and display settings.",
+  },
+  {
+    route: "/blogs",
+    targets: ['[data-tour="gallery"]'],
+    title: "Browse Your Gallery",
+    body: "Find every photo and video in one place, including those from your stories. Filter by continent, country, or year, and upload new photos anytime.",
   },
   {
     route: "/",
     targets: ['[data-tour="globe"]'],
     scrollTo: '[data-tour="globe"]',
-    title: "Pin stories on the 3D globe",
-    body: "Open the globe from the navbar's globe icon, or keep scrolling past the story feed to glide down here. Search to fly anywhere, then drag the floating pin onto the globe — or tap it, then tap a spot — to drop a note there. You can retake this tour any time from the ? button up top.",
+    title: "Pin Stories on the Globe",
+    body: "Open the 3D globe from the navbar or scroll down to find it. Search for a place to fly there, then use the toolbar in the bottom-left corner to leave a note.",
+  },
+  {
+    route: "/",
+    targets: ['[data-tour="annotate"]', '[data-tour="pin-dock"]'],
+    scrollTo: '[data-tour="globe"]',
+    title: "Drag the Pin",
+    body: "Drag the floating pin onto the globe. The place beneath it updates as you move—release to leave a note there.",
+  },
+  {
+    route: "/",
+    targets: ['[data-tour="pin-click-mode"]', '[data-tour="pin-dock"]'],
+    scrollTo: '[data-tour="globe"]',
+    title: "Choose a Spot",
+    body: "Prefer precision? Turn on click mode—or tap the pin—then choose any spot on the globe to place it exactly there.",
+  },
+  {
+    route: "/",
+    targets: ['[data-tour="pin-locate"]', '[data-tour="pin-dock"]'],
+    scrollTo: '[data-tour="globe"]',
+    title: "Use My Location",
+    body: "Drop the pin right where you are, using your browser's location. Want to revisit the tour? Click the ? button anytime.",
   },
 ];
 
@@ -82,6 +120,8 @@ function visibleRect(el) {
 }
 
 function TourOverlay({ onFinish, onSkip }) {
+  const { canEdit } = useAuth();
+  const STEPS = useMemo(() => ALL_STEPS.filter((s) => !s.requiresEdit || canEdit), [canEdit]);
   const [index, setIndex] = useState(0);
   const [layout, setLayout] = useState({ rect: null, pending: true, popH: 0, vw: 0, vh: 0 });
   const popRef = useRef(null);

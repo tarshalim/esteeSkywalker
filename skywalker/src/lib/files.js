@@ -21,3 +21,23 @@ export async function fileToUrl(file) {
   if (error) throw error;
   return supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
 }
+
+// Public media URLs look like <project>/storage/v1/object/public/media/<path>.
+const MEDIA_URL_PATTERN = new RegExp(`/storage/v1/object/public/${MEDIA_BUCKET}/([^?#"'\\s)]+)`, "g");
+
+/** Adds the storage path of every media-bucket file referenced anywhere in `value` (nested objects/arrays included). */
+export function collectMediaPaths(value, paths = new Set()) {
+  if (typeof value === "string") {
+    for (const m of value.matchAll(MEDIA_URL_PATTERN)) paths.add(decodeURIComponent(m[1]));
+  } else if (value && typeof value === "object") {
+    for (const v of Object.values(value)) collectMediaPaths(v, paths);
+  }
+  return paths;
+}
+
+/** Deletes media-bucket files. Failures are logged, not thrown — a stray file isn't worth blocking the UI. */
+export async function deleteMediaFiles(paths) {
+  if (!supabase || paths.length === 0) return;
+  const { error } = await supabase.storage.from(MEDIA_BUCKET).remove(paths);
+  if (error) console.warn("Couldn't delete media files", paths, error);
+}

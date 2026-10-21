@@ -193,6 +193,10 @@ select,
   }
 }
 
+/* Shared component classes live in the `components` layer so Tailwind
+   utilities on the same element (`sm:hidden`, `p-0`, …) can override them;
+   unlayered they silently beat every utility. */
+@layer components {
 /* Reusable glass utilities shared across the app */
 .glass-panel {
   background: var(--bg-panel);
@@ -242,6 +246,7 @@ select,
 }
 .theme-toggle:active {
   transform: translateY(0) rotate(0deg);
+}
 }
 
 /* Solid red teardrop with a white "eye" — reads at a glance on any terrain.

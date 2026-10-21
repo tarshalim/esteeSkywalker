@@ -14,6 +14,7 @@ import { AuthProvider, RequireAuth } from "./lib/auth";
 import { GlobePrefsProvider } from "./lib/globePrefs";
 import { TourProvider } from "./lib/tour";
 import Tour from "./components/Tour/Tour";
+import FlashToast from "./components/FlashToast/FlashToast";
 import { GLOBE_PATH } from "./utils/routes";
 
 // The editor gets its own dedicated header (title/cover/save actions), so the
@@ -63,6 +64,7 @@ function AppShell() {
         </AnimatePresence>
       </main>
       <Tour />
+      <FlashToast />
     </>
   );
 }

@@ -297,7 +297,7 @@ export default function GlobeExplorer({
     <div className={`globe-explorer globe-explorer--${variant}${showGallery ? "" : " globe-explorer--no-gallery"}`}>
       <div className="globe-explorer-stage" data-tour="globe">
         <GlobeSearchBar pins={photoPins} customPins={customPins} blogs={mappableBlogs} onSelect={handleSearchSelect} />
-        <div className="globe-pin-dock">
+        <div className="globe-pin-dock" data-tour="pin-dock">
           <PinDropButton
             isPlacingPin={isPlacingPin}
             onTogglePlacingPin={handleToggleClickMode}
