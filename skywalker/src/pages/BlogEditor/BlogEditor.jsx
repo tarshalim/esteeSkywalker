@@ -24,7 +24,7 @@ import BackgroundMusicField from "./BackgroundMusicField";
 import WeatherField from "./WeatherField";
 import VibesField from "./VibesField";
 import LocationField from "./LocationField";
-import { searchPlaces } from "../../lib/geocode";
+import { cityFromPlaceName, reverseGeocode, searchPlaces } from "../../lib/geocode";
 import { autoPinFor, createPin, getPinById, getPins } from "../../lib/pinStore";
 import { getTripById, getTrips, saveTrip } from "../../lib/tripStore";
 import { NEW_TRIP, companionsForPost, emptyTripDraft, isWithinTrip, validateTrip } from "../../lib/hierarchy";
@@ -368,8 +368,18 @@ export default function BlogEditor() {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   };
 
-  const handleCoverPick = async (e) => {
-    const file = e.target.files?.[0];
+  const handleCoverPick = (e) => {
+    loadCover(e.target.files?.[0]);
+    e.target.value = ""; // so re-picking the same file fires onChange again
+  };
+
+  const handleCoverDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file?.type.startsWith("image/")) loadCover(file);
+  };
+
+  const loadCover = async (file) => {
     if (!file) return;
     let dataUrl, metadata;
     try {
@@ -386,11 +396,18 @@ export default function BlogEditor() {
     // from loading an existing post).
     const detected = [];
     if (metadata.dateTaken && !startDateTouched) {
-      setStartDate(metadata.dateTaken.slice(0, 10));
-      detected.push(metadata.dateTaken.slice(0, 10));
+      setStartDate(metadata.dateTaken);
+      detected.push(metadata.dateTaken);
     }
     if (metadata.lat != null && metadata.lng != null && !coords) {
       setCoords({ lat: metadata.lat, lng: metadata.lng });
+    }
+    if (metadata.lat != null && metadata.lng != null && !city.trim()) {
+      // Best-effort City from the GPS; never overwrite one typed meanwhile.
+      reverseGeocode(metadata.lat, metadata.lng).then((name) => {
+        const found = cityFromPlaceName(name);
+        if (found) setCity((prev) => prev || found);
+      });
     }
     if (metadata.lat != null && metadata.lng != null && !country && countries.length > 0) {
       const match = findCountryForPoint(metadata.lat, metadata.lng, countries);
@@ -728,8 +745,13 @@ export default function BlogEditor() {
       </div>
 
       <div className="editor-canvas">
-        <div className="editor-cover" onClick={() => coverInputRef.current?.click()}>
-          {coverImage ? <img src={coverImage} alt="Cover" /> : <div className="editor-cover-empty">Click to add a cover image</div>}
+        <div
+          className="editor-cover"
+          onClick={() => coverInputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleCoverDrop}
+        >
+          {coverImage ? <img src={coverImage} alt="Cover" /> : <div className="editor-cover-empty">Click or drop to add a cover image</div>}
           <div className="editor-cover-overlay">Change cover image</div>
           <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={handleCoverPick} />
         </div>

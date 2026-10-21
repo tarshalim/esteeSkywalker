@@ -45,6 +45,78 @@
   height: 100%;
   object-fit: cover;
 }
+.upload-modal-picker {
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+}
+.upload-modal-picker.is-dragging {
+  border: 2px dashed var(--blue);
+  background: color-mix(in srgb, var(--blue) 16%, var(--bg-elevated));
+}
+
+/* EXIF source badges over the preview. */
+.upload-modal-badges {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  pointer-events: none;
+}
+.upload-modal-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+}
+.upload-modal-badge.is-auto {
+  background: rgba(21, 128, 61, 0.85);
+}
+.upload-modal-badge.is-needed {
+  background: rgba(180, 83, 9, 0.9);
+}
+
+/* "Create a trip?" quick-create prompt. */
+.upload-modal-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--border));
+  background: color-mix(in srgb, var(--blue) 8%, var(--bg-elevated));
+  font-size: 0.82rem;
+  color: var(--text);
+}
+.upload-modal-suggest p {
+  margin: 0;
+  flex: 1 1 16rem;
+}
+.upload-modal-suggest div {
+  display: flex;
+  gap: 0.4rem;
+}
+.upload-modal-suggest button {
+  font-size: 0.78rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+}
+.upload-modal-suggest button.upload-modal-primary {
+  background: var(--yellow);
+  color: var(--text-on-accent);
+}
 
 .upload-modal-status {
   font-size: 0.78rem;

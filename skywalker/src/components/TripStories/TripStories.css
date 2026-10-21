@@ -1,0 +1,298 @@
+.trip-stories {
+  width: min(1100px, 94vw);
+  margin: 0 auto 3rem;
+}
+
+.trip-stories-header {
+  margin-bottom: 1rem;
+}
+.trip-stories-header h2 {
+  margin: 0;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+.trip-stories-header p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.trip-stories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  /* Generous rows: fanned slips rise out over the row above. */
+  gap: 3rem 1.5rem;
+  padding-top: 0.5rem;
+}
+
+/* ---- Envelope ---------------------------------------------------------- */
+
+.trip-env {
+  --slip-paper: color-mix(in srgb, var(--yellow) 10%, var(--bg-elevated));
+  position: relative;
+  /* Room for the slip tabs that peek over the top edge. */
+  padding-top: 18px;
+}
+/* An open envelope's slips overlap its neighbours; keep them on top. */
+.trip-env.is-open {
+  z-index: 2;
+}
+
+.trip-env-slips {
+  position: absolute;
+  inset: 18px 0 auto;
+  height: 140px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trip-env-slip {
+  position: absolute;
+  top: 0;
+  left: 14%;
+  width: 72%;
+  height: 120px;
+  border-radius: 0.6rem;
+  background: var(--slip-paper);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px var(--shadow-color);
+  transform-origin: 50% 100%;
+}
+
+.trip-env-slip-tab {
+  position: absolute;
+  top: -14px;
+  width: 18%;
+  height: 16px;
+  border-radius: 6px 6px 0 0;
+  background: var(--slip-tab);
+}
+.trip-env-slip--0 {
+  --slip-tab: var(--pin-red);
+}
+.trip-env-slip--1 {
+  --slip-tab: var(--yellow);
+}
+.trip-env-slip--2 {
+  --slip-tab: var(--blue);
+}
+
+.trip-env-slip-link {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  height: 100%;
+  padding: 0.6rem 0.7rem;
+  border-radius: inherit;
+  /* Ruled letter paper. */
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 19px,
+    color-mix(in srgb, var(--blue) 12%, transparent) 19px 20px
+  );
+  color: var(--text);
+}
+.trip-env-slip-link:hover .trip-env-slip-title {
+  text-decoration: underline;
+}
+.trip-env-slip-link:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.trip-env-slip-link img {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 0.35rem;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 6px var(--shadow-color);
+  transform: rotate(-3deg);
+}
+.trip-env-slip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.trip-env-slip-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.trip-env-slip-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* ---- Front of the envelope --------------------------------------------- */
+
+.trip-env-front {
+  position: relative;
+  z-index: 5;
+  border-radius: 1.1rem;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px var(--shadow-color);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.trip-env.is-open .trip-env-front {
+  transform: translateY(4px);
+  border-color: var(--border-strong);
+  box-shadow: 0 18px 40px var(--shadow-color);
+}
+
+.trip-env-media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep, var(--blue)));
+  overflow: hidden;
+  perspective: 600px;
+}
+.trip-env-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+.trip-env.is-open .trip-env-media img {
+  transform: scale(1.05);
+}
+
+/* The envelope flap: folds up and away as the slips come out. */
+.trip-env-flap {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 38%;
+  background: var(--slip-paper);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  filter: drop-shadow(0 2px 2px var(--shadow-color));
+  transform-origin: 50% 0;
+  backface-visibility: hidden;
+  transition: transform 0.35s ease;
+}
+.trip-env.is-open .trip-env-flap {
+  transform: rotateX(180deg);
+}
+
+.trip-env-count {
+  position: absolute;
+  bottom: 0.7rem;
+  left: 0.75rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--yellow);
+  color: var(--text-on-accent);
+}
+
+.trip-env-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.95rem 1.15rem 1.1rem;
+}
+
+.trip-env-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--text);
+}
+.trip-env-link {
+  color: inherit;
+}
+.trip-env-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.trip-env-link:focus-visible {
+  outline: none;
+}
+.trip-env-front:has(.trip-env-link:focus-visible) {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.trip-env-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.trip-env-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Inline management — sits above the stretched link. */
+.trip-env-actions {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 2;
+  display: flex;
+  gap: 0.35rem;
+}
+.trip-env-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel-strong, var(--bg-elevated));
+  color: var(--text);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.trip-env-actions button:hover {
+  background: var(--bg-elevated);
+  color: var(--text-strong);
+}
+.trip-env-actions button.is-danger:hover {
+  color: var(--pin-red);
+}
+.trip-env-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .trip-stories {
+    width: calc(100% - 1.5rem);
+  }
+  .trip-stories-grid {
+    grid-template-columns: 1fr;
+  }
+  .trip-env-actions button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trip-env-front,
+  .trip-env-media img,
+  .trip-env-flap {
+    transition: none;
+  }
+}

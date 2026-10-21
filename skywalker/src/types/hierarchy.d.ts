@@ -105,6 +105,12 @@ export interface GalleryItem {
   locationName: string;
   timestamp: ISODateTime;
   year: number;
+  /** "HH:MM" wall-clock time taken (from EXIF or typed); older items don't have one. */
+  timeTaken?: string | null;
+  /** "FUJIFILM X100V", from EXIF Make/Model. */
+  camera?: string | null;
+  /** Whether lat/lng came from the photo's EXIF GPS or were entered by hand. */
+  locationSource?: "exif" | "manual";
 }
 
 /** How a gallery item hangs off the hierarchy (Gallery's photo-type filter). */

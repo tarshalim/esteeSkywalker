@@ -174,7 +174,7 @@ export default function Drafts() {
 
         {!loading && drafts.length === 0 && !error && (
           <p className="rounded-2xl border-2 border-dashed px-4 py-10 text-center text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-            No drafts yet. Leave the editor with unsaved changes and choose “Save as Draft” to keep one here.
+            No drafts yet.
           </p>
         )}
 

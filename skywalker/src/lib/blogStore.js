@@ -1,4 +1,3 @@
-import { mockBlogs } from "../data/blogs";
 import { delay, readJSON, writeJSON, makeId } from "./storage";
 import { supabase, unwrap, fromRows } from "./supabase";
 import { createCollection } from "./collection";
@@ -14,12 +13,6 @@ import { findBuiltInTemplate, normalizeTemplate } from "./templates";
 
 const BLOGS_KEY = "skywalker.blogs.v1";
 const templates = createCollection({ table: "templates", storageKey: "skywalker.templates.v1" });
-
-function ensureSeeded() {
-  if (localStorage.getItem(BLOGS_KEY) == null) {
-    writeJSON(BLOGS_KEY, mockBlogs);
-  }
-}
 
 function toBlogRow(blog) {
   return {
@@ -62,7 +55,6 @@ async function loadBlogs() {
   if (supabase) {
     return fromRows(unwrap(await supabase.from("blogs").select("data").order("track_x")));
   }
-  ensureSeeded();
   return readJSON(BLOGS_KEY, []);
 }
 

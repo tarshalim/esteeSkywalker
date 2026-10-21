@@ -65,6 +65,11 @@ export function canvasToBlocks(doc) {
     const imageSrc = el.kind === ELEMENT_KIND.IMAGE ? el.src : el.kind === ELEMENT_KIND.FRAME_STICKER ? el.imageSrc : el.mediaType === "image" ? el.mediaSrc : "";
     const videoUrl = el.kind === ELEMENT_KIND.VIDEO || el.kind === ELEMENT_KIND.VIEWFINDER ? el.url : el.mediaType === "video" ? el.mediaSrc : "";
     if (imageSrc) blocks.push({ id: `${el.id}_img`, kind: BLOCK_KIND.IMAGE, src: imageSrc, caption: "", width: 100 });
+    if (el.kind === ELEMENT_KIND.COLLAGE) {
+      for (const item of el.collage?.items ?? []) {
+        if (item.src) blocks.push({ id: `${el.id}_${item.id}`, kind: BLOCK_KIND.IMAGE, src: item.src, caption: item.caption ?? "", width: 100 });
+      }
+    }
     if (videoUrl) blocks.push({ id: `${el.id}_vid`, kind: BLOCK_KIND.VIDEO, url: videoUrl, width: 100 });
   }
   return blocks;

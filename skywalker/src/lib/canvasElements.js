@@ -2,6 +2,8 @@
 // lib/blocks.js (shared shape, single source of truth for defaults) but for
 // absolutely-positioned canvas elements instead of document-flow blocks.
 
+import { createCollage, naturalHeight } from "./collage";
+
 let counter = 0;
 export function makeElementId() {
   counter += 1;
@@ -19,6 +21,7 @@ export const ELEMENT_KIND = {
   POLAROID: "polaroid",
   VIEWFINDER: "viewfinder", // retro camcorder frame / play-button card around a video
   DECOR: "decor", // washi tape, stamps, seals, clips, pins, location badges
+  COLLAGE: "collage", // multi-photo grid/masonry; layout + items live in `collage` (lib/collage.js)
 };
 
 export const DEFAULT_CANVAS_SIZE = { width: 794, height: 1123 }; // A4 @ 96dpi
@@ -31,10 +34,21 @@ export const DEFAULT_SIZES = {
   [ELEMENT_KIND.FRAME_STICKER]: { width: 220, height: 260 },
   [ELEMENT_KIND.AUDIO]: { width: 340, height: 120 },
   [ELEMENT_KIND.POLAROID]: { width: 230, height: 280 },
+  [ELEMENT_KIND.COLLAGE]: { width: 520, height: 322 },
 };
 
 export const PASTELS = ["#fef08a", "#fbcfe8", "#bfdbfe", "#bbf7d0", "#fed7aa", "#ddd6fe", "#fecaca", "#ffffff"];
 export const INK_COLORS = ["#1e293b", "#475569", "#1d4ed8", "#b91c1c", "#15803d", "#7c3aed", "#92400e", "#ffffff"];
+// Label pills behind text boxes (text.highlight); null means no pill.
+export const HIGHLIGHT_COLORS = ["#ffffff", "#fbf5e6", "#fef08a", "#fbcfe8", "#bfdbfe", "#bbf7d0", "#1e293b", "#b91c1c"];
+export const FONT_WEIGHTS = [
+  { value: 300, label: "Light" },
+  { value: 400, label: "Regular" },
+  { value: 500, label: "Medium" },
+  { value: 600, label: "Semibold" },
+  { value: 700, label: "Bold" },
+  { value: 800, label: "Black" },
+];
 export const ACCENT_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899", "#b45309", "#334155"];
 
 export const DEFAULT_THEME = {
@@ -76,6 +90,26 @@ export function createTextElement(pos = {}) {
   });
 }
 
+/** A caption overlay for a collage: a bold label pill centred on it and attached to it. */
+export function createCollageTextElement(collage) {
+  const width = Math.min(320, Math.max(160, collage.width - 40));
+  const height = 72;
+  return createTextElement({
+    width,
+    height,
+    x: Math.round(collage.x + collage.width / 2 - width / 2),
+    y: Math.round(collage.y + collage.height / 2 - height / 2),
+    rotation: collage.rotation,
+    fontFamily: "hand",
+    fontSize: 34,
+    fontWeight: 700,
+    align: "center",
+    color: "#1e293b",
+    highlight: "#ffffff",
+    attachedTo: collage.id,
+  });
+}
+
 export function createImageElement(pos = {}) {
   return base(ELEMENT_KIND.IMAGE, {
     ...DEFAULT_SIZES[ELEMENT_KIND.IMAGE],
@@ -103,6 +137,23 @@ export function createStickerElement(stickerId, category, extra = {}, pos = {}) 
     ...extra,
     ...pos,
   });
+}
+
+/**
+ * An illustrated scrapbook piece (data/scrapbookArt.js), sized from its art:
+ * tape strips come in wide, backdrops large, everything else sticker-sized.
+ * `tone` and `hue` drive its CSS-filter recolor.
+ */
+export function createArtStickerElement(art, pos = {}) {
+  const aspect = art.width / art.height;
+  const longSide = art.width >= 1000 || art.height >= 1000 ? 520 : aspect > 2.5 ? 220 : 170;
+  const scale = longSide / Math.max(art.width, art.height);
+  return createStickerElement(
+    art.id,
+    "art",
+    { tone: "original", hue: 0 },
+    { width: Math.round(art.width * scale), height: Math.round(art.height * scale), ...pos }
+  );
 }
 
 export function createFrameStickerElement(frameId, pos = {}) {
@@ -204,6 +255,18 @@ export function createViewfinderElement(variant = "viewfinder", pos = {}) {
   });
 }
 
+/** A collage laid out as `template`, its slots open for photos and its height fitted to them. */
+export function createCollageElement(pos = {}, { template } = {}) {
+  const collage = createCollage(template);
+  const { width } = DEFAULT_SIZES[ELEMENT_KIND.COLLAGE];
+  return base(ELEMENT_KIND.COLLAGE, {
+    width,
+    height: naturalHeight(collage, width),
+    collage,
+    ...pos,
+  });
+}
+
 // --- Decorative accents --------------------------------------------------
 
 export const DECOR_VARIANTS = {
@@ -248,6 +311,11 @@ export function mediaPatch(url, file) {
 export function hasText(element) {
   if (element.kind === ELEMENT_KIND.DECOR) return Boolean(DECOR_VARIANTS[element.decorId]?.text);
   return [ELEMENT_KIND.TEXT, ELEMENT_KIND.NOTE, ELEMENT_KIND.POLAROID, ELEMENT_KIND.VIEWFINDER].includes(element.kind);
+}
+
+/** Elements with an edit mode (double-tap / Enter): text gets typed into, collages get rearranged. */
+export function hasEditMode(element) {
+  return hasText(element) || element.kind === ELEMENT_KIND.COLLAGE;
 }
 
 export function nextZIndex(elements) {

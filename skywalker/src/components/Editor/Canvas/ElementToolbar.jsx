@@ -9,21 +9,42 @@ import {
   ChevronDown,
   Copy,
   Droplet,
+  GripVertical,
+  Highlighter,
   ImagePlus,
   Italic,
+  LayoutGrid,
   Maximize2,
   Minus,
   Music2,
+  PaintBucket,
+  Palette,
   Plus,
   RefreshCw,
   Scissors,
+  Sparkles,
   Sun,
   Trash2,
+  Type,
   X,
 } from "lucide-react";
 import FloatingPanel from "./FloatingPanel";
-import { ACCENT_COLORS, ELEMENT_KIND, INK_COLORS, PASTELS, hasText, mediaPatch } from "../../../lib/canvasElements";
+import CollageLayoutPanel from "./CollageLayoutPanel";
+import CollageBackgroundPanel from "./CollageBackgroundPanel";
+import {
+  ACCENT_COLORS,
+  ELEMENT_KIND,
+  FONT_WEIGHTS,
+  HIGHLIGHT_COLORS,
+  INK_COLORS,
+  PASTELS,
+  createCollageTextElement,
+  hasText,
+  mediaPatch,
+} from "../../../lib/canvasElements";
+import { DEFAULT_BACKGROUND, backgroundCss, photosUploadedPatch } from "../../../lib/collage";
 import { CANVAS_FONTS, findFont } from "../../../lib/canvasFonts";
+import { ART_TONES, artFilter, findArt } from "../../../data/scrapbookArt";
 
 const ALIGN_ICONS = { left: AlignLeft, center: AlignCenter, right: AlignRight };
 const NEXT_ALIGN = { left: "center", center: "right", right: "left" };
@@ -68,6 +89,51 @@ function Swatches({ colors, value, onPick }) {
   );
 }
 
+/** Tone presets (each previewed on the art itself) plus a hue slider for art stickers. */
+function ArtRecolorPanel({ element, update }) {
+  const art = findArt(element.stickerId);
+  if (!art) return null;
+  const hue = element.hue ?? 0;
+  return (
+    <div className="flex w-[264px] flex-col gap-2">
+      <div className="grid grid-cols-6 gap-1">
+        {ART_TONES.map((t) => {
+          const active = (element.tone ?? "original") === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              title={t.label}
+              aria-label={`${t.label} tone`}
+              aria-pressed={active}
+              className={`flex flex-col items-center gap-0.5 rounded-lg p-0.5 text-[9px] ${active ? "bg-blue-500/30 text-white" : "text-slate-400 hover:bg-slate-800"}`}
+              onClick={() => update({ tone: t.id })}
+            >
+              <img src={art.src} alt="" className="h-8 w-8 object-contain" style={{ filter: artFilter({ tone: t.id, hue }) }} />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+      <label className="flex items-center gap-2 text-[11px] text-slate-300">
+        Hue
+        <input
+          type="range"
+          min={0}
+          max={359}
+          value={hue}
+          onChange={(e) => update({ hue: Number(e.target.value) }, "hue")}
+          className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-[linear-gradient(90deg,red,yellow,lime,cyan,blue,magenta,red)]"
+          aria-label="Hue shift"
+        />
+        <button type="button" className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => update({ hue: 0, tone: "original" })}>
+          Reset
+        </button>
+      </label>
+    </div>
+  );
+}
+
 /** execCommand on the current text selection, if it lies inside this element. */
 function applyToSelection(elementId, command) {
   const node = document.querySelector(`[data-element-id="${elementId}"] .sb-editable`);
@@ -81,7 +147,7 @@ function applyToSelection(elementId, command) {
  * Compact toolbar floating above the selected element. Text controls appear
  * for anything with writeable text; the middle group adapts to the kind.
  */
-export default function ElementToolbar({ element, editing, actions, onPickMedia, onRequestSource }) {
+export default function ElementToolbar({ element, editing, actions, onPickMedia, onRequestSource, onOpenElements, elementsOpen }) {
   const [panel, setPanel] = useState(null);
   const update = (patch, coalesce) => actions.updateElement(element.id, patch, { coalesce });
   const toggle = (name) => setPanel((p) => (p === name ? null : name));
@@ -160,6 +226,47 @@ export default function ElementToolbar({ element, editing, actions, onPickMedia,
       </Btn>
     );
   }
+  if (kind === ELEMENT_KIND.COLLAGE) {
+    kindControls.push(
+      <button
+        key="photos"
+        type="button"
+        title="Add photos (fills open slots first, then adds rows)"
+        className="sb-tool flex !w-auto shrink-0 items-center gap-1 rounded-lg bg-blue-500/25 px-2 text-[13px] font-medium text-white hover:bg-blue-500/45"
+        onClick={() => onPickMedia(element.id, "image/*", photosUploadedPatch, { multiple: true })}
+      >
+        <Plus size={15} /> Add photos
+      </button>,
+      <Btn key="layout" label="Layout & templates" active={panel === "layout"} onClick={() => toggle("layout")}>
+        <LayoutGrid size={16} />
+      </Btn>,
+      <Btn key="arrange" label={editing ? "Done arranging" : "Arrange photos (drag to reorder, add captions)"} active={editing} onClick={() => actions.edit(editing ? null : element.id)}>
+        <GripVertical size={16} />
+      </Btn>,
+      <Divider key="d-overlay" />,
+      <Btn key="text" label="Add text" onClick={() => actions.addElement(createCollageTextElement(element), { edit: true })}>
+        <Type size={16} />
+      </Btn>,
+      <Btn key="background" label="Background color" active={panel === "background"} onClick={() => toggle("background")}>
+        <PaintBucket size={16} />
+        <span
+          className="-ml-1 mt-3 h-2 w-2 shrink-0 rounded-full border border-white/50"
+          style={{ background: backgroundCss(element.collage?.background ?? DEFAULT_BACKGROUND) }}
+          aria-hidden="true"
+        />
+      </Btn>,
+      <Btn key="elements" label="Scrapbook elements (drag onto the collage)" active={elementsOpen} onClick={() => onOpenElements?.(element.id)}>
+        <Sparkles size={16} />
+      </Btn>
+    );
+  }
+  if (kind === ELEMENT_KIND.STICKER && element.category === "art") {
+    kindControls.push(
+      <Btn key="recolor" label="Recolor" active={panel === "recolor"} onClick={() => toggle("recolor")}>
+        <Palette size={16} />
+      </Btn>
+    );
+  }
   if (kind === ELEMENT_KIND.STICKER) {
     kindControls.push(
       <Btn key="shadow" label="Drop shadow" active={element.dropShadow} onClick={() => update({ dropShadow: !element.dropShadow })}>
@@ -203,6 +310,11 @@ export default function ElementToolbar({ element, editing, actions, onPickMedia,
             <Btn label="Text color" active={panel === "ink"} onClick={() => toggle("ink")}>
               <span className="h-4 w-4 rounded-full border border-white/40" style={{ background: element.color }} />
             </Btn>
+            {kind === ELEMENT_KIND.TEXT && (
+              <Btn label="Highlight pill" active={panel === "highlight" || Boolean(element.highlight)} onClick={() => toggle("highlight")}>
+                <Highlighter size={16} />
+              </Btn>
+            )}
           </>
         )}
         {kindControls.length > 0 && (
@@ -229,6 +341,23 @@ export default function ElementToolbar({ element, editing, actions, onPickMedia,
       {panel && (
         <div className="mt-1 border-t border-slate-700 px-1.5 pb-1 pt-2">
           {panel === "font" && (
+            <div className="mb-2 flex flex-wrap gap-1" role="radiogroup" aria-label="Font weight">
+              {FONT_WEIGHTS.map((w) => (
+                <button
+                  key={w.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={(element.fontWeight ?? 400) === w.value}
+                  className={`rounded-md px-2 py-1 text-[12px] ${(element.fontWeight ?? 400) === w.value ? "bg-blue-500/40 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}
+                  style={{ fontFamily: findFont(element.fontFamily).family, fontWeight: w.value }}
+                  onClick={() => update({ fontWeight: w.value })}
+                >
+                  {w.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {panel === "font" && (
             <div className="grid max-h-[40vh] grid-cols-1 gap-0.5 overflow-y-auto sm:grid-cols-2">
               {CANVAS_FONTS.map((f) => (
                 <button
@@ -248,6 +377,21 @@ export default function ElementToolbar({ element, editing, actions, onPickMedia,
           {panel === "ink" && <Swatches colors={INK_COLORS} value={element.color} onPick={(c) => update({ color: c }, "ink")} />}
           {panel === "paper" && <Swatches colors={PASTELS} value={element.paperColor} onPick={(c) => update({ paperColor: c }, "paper")} />}
           {panel === "tint" && <Swatches colors={[...ACCENT_COLORS, ...PASTELS.slice(0, 4)]} value={element.tint} onPick={(c) => update({ tint: c }, "tint")} />}
+          {panel === "highlight" && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className={`h-7 shrink-0 rounded-full border-2 px-2 text-[11px] ${element.highlight ? "border-slate-600 text-slate-300 hover:bg-slate-800" : "border-white text-white"}`}
+                onClick={() => update({ highlight: null })}
+              >
+                None
+              </button>
+              <Swatches colors={HIGHLIGHT_COLORS} value={element.highlight} onPick={(c) => update({ highlight: c }, "highlight")} />
+            </div>
+          )}
+          {panel === "layout" && <CollageLayoutPanel element={element} actions={actions} />}
+          {panel === "background" && <CollageBackgroundPanel element={element} actions={actions} />}
+          {panel === "recolor" && <ArtRecolorPanel element={element} update={update} />}
         </div>
       )}
     </FloatingPanel>

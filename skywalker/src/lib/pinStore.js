@@ -1,4 +1,3 @@
-import { mockCustomPins } from "../data/mockData";
 import { makeId } from "./storage";
 import { createCollection } from "./collection";
 import { notifyDataChanged } from "./liveSync";
@@ -26,7 +25,6 @@ import { angularDistanceDeg, hasCoords } from "../utils/geo";
 const pins = createCollection({
   table: "locations",
   storageKey: "skywalker.pins.v1",
-  seed: mockCustomPins,
   toRow: (pin) => ({
     name: pin.placeName || pin.title,
     lat: pin.lat,

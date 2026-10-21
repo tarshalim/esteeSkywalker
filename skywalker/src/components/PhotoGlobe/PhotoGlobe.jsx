@@ -140,6 +140,9 @@ export default function PhotoGlobe({
   pendingPin = null,
   flyToTarget,
   onViewportChange,
+  // Un-debounced {lat, lng, altitude} on every camera move (drag, zoom,
+  // auto-rotate, fly-to) — cheap, so callers should only stash it.
+  onCameraChange = null,
   onCountryClick,
   onCountryHover,
   onPinClick,
@@ -177,6 +180,11 @@ export default function PhotoGlobe({
   // The settings preview mounts/unmounts with its page; free the GPU program.
   useEffect(() => () => globeMaterial.dispose(), [globeMaterial]);
   const initialViewRef = useRef(initialView);
+  const onCameraChangeRef = useRef(onCameraChange);
+  onCameraChangeRef.current = onCameraChange;
+  const reportCamera = useCallback(() => {
+    if (globeEl.current) onCameraChangeRef.current?.(globeEl.current.pointOfView());
+  }, []);
 
   // Never render a black globe: grade the photo into the idyllic palette,
   // falling back to the lifted photo, then to the stylized vector texture.
@@ -281,6 +289,7 @@ export default function PhotoGlobe({
     const arcDeg = angularDistanceDeg(from.lat, from.lng, target.lat, target.lng);
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       globe.pointOfView({ lat: target.lat, lng: target.lng, altitude: toAltitude }, 0);
+      reportCamera();
       return;
     }
     const duration = Math.min(Math.max(700 + arcDeg * 9, 900), 2200);
@@ -291,10 +300,11 @@ export default function PhotoGlobe({
       const e = easeInOutCubic(t);
       const altitude = from.altitude + (toAltitude - from.altitude) * e + lift * Math.sin(Math.PI * e);
       globe.pointOfView({ ...slerpLatLng(from, target, e), altitude }, 0);
+      reportCamera();
       if (t < 1) flightRef.current = requestAnimationFrame(step);
     };
     flightRef.current = requestAnimationFrame(step);
-  }, []);
+  }, [reportCamera]);
 
   useEffect(() => {
     if (flyToTarget && isReady) flyTo(flyToTarget);
@@ -317,6 +327,7 @@ export default function PhotoGlobe({
       0
     );
     onViewportChange(globeEl.current.pointOfView());
+    reportCamera();
     setIsReady(true);
 
     // Smooth continuous rotation with damped drag-to-rotate — no
@@ -327,7 +338,9 @@ export default function PhotoGlobe({
     controls.autoRotateSpeed = 0.8;
     // Grabbing the globe mid-flight hands the camera back to the user.
     controls.addEventListener("start", () => cancelAnimationFrame(flightRef.current));
-  }, [onViewportChange]);
+    // Fires for drags, zoom and auto-rotate alike.
+    controls.addEventListener("change", reportCamera);
+  }, [onViewportChange, reportCamera]);
 
   useEffect(() => {
     if (isReady && globeEl.current) globeEl.current.controls().autoRotate = autoRotate;

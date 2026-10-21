@@ -1,4 +1,3 @@
-import { mockPhotos } from "../data/mockData";
 import { makeId } from "./storage";
 import { createCollection } from "./collection";
 import { notifyDataChanged } from "./liveSync";
@@ -16,7 +15,6 @@ import { notifyDataChanged } from "./liveSync";
 const photos = createCollection({
   table: "gallery_items",
   storageKey: "skywalker.photos.v1",
-  seed: mockPhotos,
   toRow: (item) => ({ trip_id: item.tripId ?? null, blog_id: item.blogId ?? null }),
 });
 
@@ -39,6 +37,9 @@ export async function createPhoto({
   continent = "",
   locationName = "",
   timestamp,
+  timeTaken = null,
+  camera = null,
+  locationSource = "manual",
   tripId = null,
   blogId = null,
   pinId = null,
@@ -58,6 +59,9 @@ export async function createPhoto({
     locationName,
     timestamp,
     year: new Date(timestamp).getFullYear(),
+    timeTaken,
+    camera,
+    locationSource,
     tripId,
     blogId,
     pinId,

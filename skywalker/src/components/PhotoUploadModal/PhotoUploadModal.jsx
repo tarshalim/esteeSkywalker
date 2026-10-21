@@ -4,13 +4,14 @@ import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
 import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata } from "../../lib/exif";
+import { cityFromPlaceName, reverseGeocode } from "../../lib/geocode";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { findCountryForPoint, continentForCountryCode, centroidForCountryCode } from "../../utils/geo";
 import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../utils/countries";
 import { createPin, distanceKm, pinsNear } from "../../lib/pinStore";
 import { saveTrip } from "../../lib/tripStore";
-import { NEW_TRIP, emptyTripDraft, isWithinTrip, parseTags, validateTrip } from "../../lib/hierarchy";
-import { formatDateRange } from "../../utils/dateFilters";
+import { NEW_TRIP, emptyTripDraft, isWithinTrip, parseTags, tripCovering, validateTrip } from "../../lib/hierarchy";
+import { formatDate, formatDateRange } from "../../utils/dateFilters";
 import CountrySelect from "../CountrySelect/CountrySelect";
 import MediaView from "../MediaView/MediaView";
 import TripSelect from "../TripPicker/TripSelect";
@@ -25,14 +26,17 @@ function todayISO() {
 const NEW_LOCATION = "new";
 
 /**
- * "+ Add Media" flow for the Gallery: picks a file, extracts EXIF date+GPS
- * client-side (src/lib/exif.js), reverse-geocodes GPS to a country via
- * point-in-polygon against countries.geojson (src/utils/geo.js), and falls
+ * "+ Add Media" flow for the Gallery: picks (or drops) a file, extracts EXIF
+ * date/time, GPS and camera client-side (src/lib/exif.js), resolves GPS to a
+ * country via point-in-polygon against countries.geojson (src/utils/geo.js)
+ * and to a "City, Country" name via Photon (src/lib/geocode.js), and falls
  * back to manual Country/Date input when EXIF/GPS is missing or absent.
  *
  * Then files it in the hierarchy: Location -> Trip -> standalone in the trip's
- * gallery, or attached to one of the trip's posts. A photo can also stay
- * unfiled. New locations/trips are created on submit.
+ * gallery, or attached to one of the trip's posts. GPS + capture date pick the
+ * nearest location and the trip covering that day; with no such trip, a
+ * quick-create prompt offers one. A photo can also stay unfiled. New
+ * locations/trips are created on submit.
  *
  * @param {{
  *   pins: import("../../types/hierarchy").Location[],
@@ -54,8 +58,16 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
   const [coords, setCoords] = useState(null); // { lat, lng } | null
   const [country, setCountry] = useState(null); // { code, name } | null
   const [locationName, setLocationName] = useState("");
-  const [locationTouched, setLocationTouched] = useState(false);
+  // Refs, not state: read inside the async EXIF/geocode callbacks after the user may have typed.
+  const locationTouchedRef = useRef(false);
+  const pickTokenRef = useRef(0); // ignores results from a file that was since replaced
   const [date, setDate] = useState(() => trips.find((t) => t.id === initialTripId)?.startDate ?? todayISO());
+  const [time, setTime] = useState(""); // "HH:MM" | "" (unknown)
+  const [camera, setCamera] = useState(null);
+  const [placeName, setPlaceName] = useState(null); // reverse-geocoded "Kyoto, Japan"
+  const [exifFound, setExifFound] = useState(null); // { date, location } once a file is read
+  const [suggestDismissed, setSuggestDismissed] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [detectedNote, setDetectedNote] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -105,9 +117,13 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
     if (value === NEW_TRIP && !tripDraft.title) setTripDraft(emptyTripDraft(date));
   };
 
-  const handleFilePick = async (e) => {
-    const file = e.target.files?.[0];
+  const loadFile = async (file) => {
     if (!file) return;
+    if (!/^(image|video)\//.test(file.type)) {
+      setError("That file isn't an image or video.");
+      return;
+    }
+    const token = ++pickTokenRef.current;
     setExtracting(true);
     setDetectedNote(null);
     setError(null);
@@ -115,37 +131,92 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
     try {
       [dataUrl, metadata] = await Promise.all([fileToUrl(file), extractPhotoMetadata(file)]);
     } catch (err) {
+      if (token !== pickTokenRef.current) return;
       // Upload rejected (RLS, size, network) — previously left "Reading…" up forever.
       setError(`Upload failed: ${err.message}`);
       setExtracting(false);
       return;
     }
+    if (token !== pickTokenRef.current) return;
     setPreviewUrl(dataUrl);
     setMediaType(file.type.startsWith("video/") ? "video" : "image");
+    setCamera(metadata.camera);
+    setPlaceName(null);
+    setSuggestDismissed(false);
 
     const notes = [];
     if (metadata.dateTaken) {
-      setDate(metadata.dateTaken.slice(0, 10));
-      notes.push(`date ${metadata.dateTaken.slice(0, 10)}`);
+      setDate(metadata.dateTaken);
+      setTime(metadata.timeTaken ?? "");
+      notes.push(formatDate(metadata.dateTaken) + (metadata.timeTaken ? ` ${metadata.timeTaken}` : ""));
     }
-    if (metadata.lat != null && metadata.lng != null) {
-      const point = { lat: metadata.lat, lng: metadata.lng };
-      setCoords(point);
-      // Suggest the location the photo was taken at, unless one was already chosen.
-      if (!pinTouched) {
-        const near = pinsNear(pins, point)[0];
-        setPinChoice(near ? near.id : NEW_LOCATION);
-        if (near) notes.push(`near ${near.title}`);
+
+    const point = metadata.lat != null && metadata.lng != null ? { lat: metadata.lat, lng: metadata.lng } : null;
+    setCoords(point);
+    // Suggest the location the photo was taken at, unless one was already chosen.
+    let targetPin = pinChoice;
+    if (point && !pinTouched) {
+      const near = pinsNear(pins, point)[0];
+      targetPin = near ? near.id : NEW_LOCATION;
+      if (near) notes.push(`near ${near.title}`);
+    } else if (!point && pinChoice === NEW_LOCATION) {
+      targetPin = ""; // "new location at this photo's spot" needs GPS
+    }
+    if (targetPin !== pinChoice) {
+      setPinChoice(targetPin);
+      setTripChoice("");
+      setBlogChoice("");
+    }
+    // ...and the trip covering the day it was taken, unless one is already chosen there.
+    if (metadata.dateTaken && !(tripChoice && targetPin === pinChoice)) {
+      const trip = tripCovering(trips, targetPin, metadata.dateTaken);
+      if (trip) {
+        setTripChoice(trip.id);
+        notes.push(`trip “${trip.title}”`);
       }
-      const match = countries.length > 0 ? findCountryForPoint(metadata.lat, metadata.lng, countries) : null;
+    }
+
+    if (point) {
+      const match = countries.length > 0 ? findCountryForPoint(point.lat, point.lng, countries) : null;
       if (match) {
         setCountry({ code: match.code, name: match.name });
-        if (!locationTouched) setLocationName(match.name);
+        if (!locationTouchedRef.current) setLocationName(match.name);
         notes.push(match.name);
       }
+      // Refine the country to "City, Country" once Photon answers; best-effort.
+      reverseGeocode(point.lat, point.lng).then((name) => {
+        if (token !== pickTokenRef.current || !name) return;
+        setPlaceName(name);
+        if (!locationTouchedRef.current) setLocationName(name);
+      });
     }
+    if (metadata.camera) notes.push(`📷 ${metadata.camera}`);
+
+    setExifFound({ date: Boolean(metadata.dateTaken), location: Boolean(point) });
     setDetectedNote(notes.length > 0 ? `Detected from photo: ${notes.join(", ")}` : "No EXIF metadata found — fill in the details below.");
     setExtracting(false);
+  };
+
+  const handleFilePick = (e) => {
+    loadFile(e.target.files?.[0]);
+    e.target.value = ""; // so re-picking the same file fires onChange again
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    loadFile(e.dataTransfer.files?.[0]);
+  };
+
+  // "We found photos from Kyoto taken on May 12, 2026. Create a trip?"
+  const suggestedCity = cityFromPlaceName(placeName) ?? placeName ?? country?.name ?? null;
+  const showTripSuggestion =
+    Boolean(exifFound?.location && exifFound?.date && suggestedCity && pinChoice) && tripChoice === "" && !suggestDismissed;
+
+  const createSuggestedTrip = () => {
+    setTripChoice(NEW_TRIP);
+    setBlogChoice("");
+    setTripDraft({ ...emptyTripDraft(date), title: `${suggestedCity} trip` });
   };
 
   const tripBounds = selectedTrip ?? (tripChoice === NEW_TRIP ? tripDraft : null);
@@ -168,8 +239,10 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
           lat: point.lat,
           lng: point.lng,
           title: locationName.trim() || country.name,
+          placeName,
           countryCode: country.code,
           countryName: country.name,
+          city: cityFromPlaceName(placeName) ?? "",
         });
         pinId = pin.id;
         setPinChoice(pin.id); // a retry reuses it
@@ -191,6 +264,9 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
         continent,
         locationName: locationName.trim() || country.name,
         timestamp: new Date(date).toISOString(),
+        timeTaken: time || null,
+        camera,
+        locationSource: exifFound?.location ? "exif" : "manual",
         pinId,
         tripId,
         blogId: tripId && blogChoice ? blogChoice : null,
@@ -225,11 +301,34 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
       >
         <h3>Add a photo or video</h3>
 
-        <div className="upload-modal-picker" onClick={() => fileInputRef.current?.click()}>
+        <div
+          className={`upload-modal-picker ${dragging ? "is-dragging" : ""}`}
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+        >
           {previewUrl ? (
             <MediaView item={{ type: mediaType, url: previewUrl }} alt="Selected upload preview" />
           ) : (
-            <span>Click to choose an image or video</span>
+            <span>{dragging ? "Drop it here" : "Click or drop an image or video"}</span>
+          )}
+          {previewUrl && exifFound && !extracting && (
+            <div className="upload-modal-badges">
+              <span className={`upload-modal-badge ${exifFound.location ? "is-auto" : country ? "" : "is-needed"}`}>
+                {exifFound.location
+                  ? "📍 Location auto-detected from EXIF"
+                  : country
+                  ? "✎ Location set manually"
+                  : "Manual location required"}
+              </span>
+              <span className={`upload-modal-badge ${exifFound.date ? "is-auto" : ""}`}>
+                {exifFound.date ? "🕒 Date & time from EXIF" : "✎ Set the date manually"}
+              </span>
+            </div>
           )}
           <input ref={fileInputRef} type="file" accept="image/*,video/*" hidden onChange={handleFilePick} />
         </div>
@@ -237,6 +336,23 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
         {extracting && <p className="upload-modal-status">Reading photo metadata…</p>}
         {!extracting && detectedNote && <p className="upload-modal-status">{detectedNote}</p>}
         {error && <p className="upload-modal-status" role="alert">{error}</p>}
+
+        {showTripSuggestion && (
+          <div className="upload-modal-suggest" role="status">
+            <p>
+              We found a photo from <strong>{suggestedCity}</strong> taken on <strong>{formatDate(date, "long")}</strong>.
+              Create a trip?
+            </p>
+            <div>
+              <button type="button" className="upload-modal-primary" onClick={createSuggestedTrip}>
+                Create trip
+              </button>
+              <button type="button" onClick={() => setSuggestDismissed(true)}>
+                Not now
+              </button>
+            </div>
+          </div>
+        )}
 
         <section className="upload-modal-cascade" aria-label="Where this belongs">
           <label className="upload-modal-field">
@@ -290,7 +406,7 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
             value={country}
             onChange={(next) => {
               setCountry(next);
-              if (next && !locationTouched) setLocationName(next.name);
+              if (next && !locationTouchedRef.current) setLocationName(next.name);
             }}
           />
         </label>
@@ -314,13 +430,20 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
         </label>
 
         <label className="upload-modal-field">
+          <span>
+            Time taken <em>(optional)</em>
+          </span>
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="upload-modal-date" />
+        </label>
+
+        <label className="upload-modal-field">
           <span>Place name</span>
           <input
             type="text"
             value={locationName}
             placeholder="e.g. Shibuya, Tokyo"
             onChange={(e) => {
-              setLocationTouched(true);
+              locationTouchedRef.current = true;
               setLocationName(e.target.value);
             }}
           />

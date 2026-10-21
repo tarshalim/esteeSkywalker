@@ -34,7 +34,17 @@ export default function PhotoLightbox({ photo, onClose }) {
               {photo.countryCode && `${countryCodeToFlagEmoji(photo.countryCode)} `}
               {photo.locationName}
             </strong>
-            <span>{formatDate(photo.timestamp, "long")}</span>
+            <span>
+              {formatDate(photo.timestamp, "long")}
+              {photo.timeTaken && ` · ${photo.timeTaken}`}
+            </span>
+            {(photo.camera || photo.locationSource === "exif") && (
+              <span>
+                {photo.camera && `📷 ${photo.camera}`}
+                {photo.camera && photo.locationSource === "exif" && " · "}
+                {photo.locationSource === "exif" && "📍 GPS from photo"}
+              </span>
+            )}
           </div>
           {blogId && (
             <Link to={`/blogs/${blogId}`} className="photo-lightbox-blog-badge">

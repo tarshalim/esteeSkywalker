@@ -39,6 +39,21 @@ export function isWithinTrip(trip, start, end = start) {
 }
 
 /**
+ * The trip at `locationId` that a photo taken on `day` (yyyy-mm-dd) most
+ * likely belongs to: the shortest one covering that day, or null.
+ * @param {Trip[]} trips
+ */
+export function tripCovering(trips, locationId, day) {
+  if (!locationId || !day) return null;
+  const span = (t) => Date.parse(t.endDate) - Date.parse(t.startDate);
+  return (
+    trips
+      .filter((t) => t.locationId === locationId && isWithinTrip(t, day))
+      .sort((a, b) => span(a) - span(b))[0] ?? null
+  );
+}
+
+/**
  * Why a trip (or draft) can't be saved, or null. Companion intervals must sit
  * inside the trip and name at least one person.
  * @param {TripDraft | Trip} trip

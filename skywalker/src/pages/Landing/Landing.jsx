@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
 import GlobeExplorer from "../../components/GlobeExplorer/GlobeExplorer";
 import BlogFeed from "../../components/BlogFeed/BlogFeed";
+import TripStories from "../../components/TripStories/TripStories";
 import TourBanner from "../../components/Tour/TourBanner";
 import HeroCarousel from "../../components/HeroCarousel/HeroCarousel";
 import { getBlogs } from "../../lib/blogStore";
@@ -103,6 +104,8 @@ export default function Landing() {
         style={{ paddingTop: "calc(var(--nav-bottom) + 20px)" }}
       >
         <HeroCarousel title="The next horizon is calling" titleId="landing-feed-title" />
+
+        <TripStories blogs={blogs} />
 
         <BlogFeed
           blogs={blogs}

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import { Move, RotateCw } from "lucide-react";
-import { ELEMENT_KIND, hasText } from "../../../lib/canvasElements";
+import { Copy, Move, RotateCw, X } from "lucide-react";
+import { ELEMENT_KIND, hasEditMode } from "../../../lib/canvasElements";
 
 const MIN_SIZE = 24;
 const DRAG_THRESHOLD = 4; // screen px a press must travel before it becomes a drag
@@ -23,15 +23,34 @@ function rounded(patch) {
  * snapshot is committed on release. A press that never passes the drag
  * threshold is a tap: it selects, and a second tap on a text-bearing element
  * starts editing it.
+ *
+ * `layer` is the paint position (collage overlays sit right above their
+ * collage), `follow` is where a collage overlay is while its collage is being
+ * dragged, and `onLive` reports this element's own in-progress transform.
  */
-export default function CanvasElement({ element, selected, editing, zoom, pageWidth, toCanvasPoint, actions, onInteract, children }) {
+export default function CanvasElement({
+  element,
+  selected,
+  editing,
+  zoom,
+  pageWidth,
+  toCanvasPoint,
+  actions,
+  onInteract,
+  layer = element.zIndex,
+  follow,
+  onLive,
+  dropTarget,
+  children,
+}) {
   const liveRef = useRef(null);
   const [live, setLiveState] = useState(null);
   const setLive = (next) => {
     liveRef.current = next;
     setLiveState(next);
+    onLive?.(next);
   };
-  const view = { ...element, ...live };
+  const view = { ...element, ...follow, ...live };
 
   const commitLive = () => {
     const cur = liveRef.current;
@@ -83,7 +102,7 @@ export default function CanvasElement({ element, selected, editing, zoom, pageWi
       },
       onEnd: ({ dragged, cancelled }) => {
         if (dragged && !cancelled) commitLive();
-        else if (!dragged && allowEdit && wasSelected && !editing && hasText(element)) actions.edit(element.id);
+        else if (!dragged && allowEdit && wasSelected && !editing && hasEditMode(element)) actions.edit(element.id);
       },
     });
   };
@@ -92,13 +111,16 @@ export default function CanvasElement({ element, selected, editing, zoom, pageWi
     e.stopPropagation();
     e.preventDefault();
     const corner = edges.length === 2;
+    // +1 grows toward right/bottom, -1 toward left/top, 0 leaves that axis alone.
+    const dirX = edges.includes("right") ? 1 : edges.includes("left") ? -1 : 0;
+    const dirY = edges.includes("bottom") ? 1 : edges.includes("top") ? -1 : 0;
     startSession(e, {
       onMove: ({ dx, dy, event }) => {
         // Work in the element's own (unrotated) frame, then shift the centre
         // so the opposite corner stays visually pinned.
         const local = rotateVec(dx, dy, -element.rotation);
-        let w = edges.includes("right") ? element.width + local.x : element.width;
-        let h = edges.includes("bottom") ? element.height + local.y : element.height;
+        let w = element.width + dirX * local.x;
+        let h = element.height + dirY * local.y;
         if (corner && (KEEP_ASPECT.has(element.kind) || event.shiftKey)) {
           const s = Math.max(w / element.width, h / element.height);
           w = element.width * s;
@@ -106,7 +128,7 @@ export default function CanvasElement({ element, selected, editing, zoom, pageWi
         }
         w = Math.max(MIN_SIZE, w);
         h = Math.max(MIN_SIZE, h);
-        const shift = rotateVec((w - element.width) / 2, (h - element.height) / 2, element.rotation);
+        const shift = rotateVec((dirX * (w - element.width)) / 2, (dirY * (h - element.height)) / 2, element.rotation);
         const cx = element.x + element.width / 2 + shift.x;
         const cy = element.y + element.height / 2 + shift.y;
         setLive({ x: cx - w / 2, y: cy - h / 2, width: w, height: h });
@@ -135,6 +157,23 @@ export default function CanvasElement({ element, selected, editing, zoom, pageWi
   // constant on-screen size (and finger-sized on touch screens).
   const hs = (COARSE_POINTER ? 22 : 13) / zoom;
   const handle = "absolute rounded-full bg-white border-2 border-blue-500 shadow-md";
+  const chip = "absolute flex items-center justify-center rounded-full bg-white shadow-md";
+  const rotateTop = -18 / zoom - hs * 1.3;
+  // Corner handles: [vertical edge, horizontal edge, CSS position, cursor].
+  const corners = [
+    ["top", "left", { top: -hs / 2, left: -hs / 2 }, "nwse-resize"],
+    ["top", "right", { top: -hs / 2, right: -hs / 2 }, "nesw-resize"],
+    ["bottom", "left", { bottom: -hs / 2, left: -hs / 2 }, "nesw-resize"],
+    ["bottom", "right", { bottom: -hs / 2, right: -hs / 2 }, "nwse-resize"],
+  ];
+  // A tap on a chip must not start a move of the element underneath.
+  const chipPress = (fn) => ({
+    onPointerDown: (e) => e.stopPropagation(),
+    onClick: (e) => {
+      e.stopPropagation();
+      fn();
+    },
+  });
 
   return (
     <div
@@ -146,14 +185,18 @@ export default function CanvasElement({ element, selected, editing, zoom, pageWi
         width: view.width,
         height: view.height,
         transform: `rotate(${view.rotation}deg)`,
-        zIndex: element.zIndex,
+        zIndex: layer,
         cursor: editing ? "auto" : "grab",
         touchAction: selected ? "none" : "pan-y",
-        outline: selected ? `${2 / zoom}px ${editing ? "dashed" : "solid"} #3b82f6` : undefined,
+        outline: selected
+          ? `${2 / zoom}px ${editing ? "dashed" : "solid"} #3b82f6`
+          : dropTarget
+          ? `${3 / zoom}px dashed #f59e0b`
+          : undefined,
         outlineOffset: 3 / zoom,
       }}
       onPointerDown={(e) => startMove(e, { allowEdit: true })}
-      onDoubleClick={() => hasText(element) && actions.edit(element.id)}
+      onDoubleClick={() => hasEditMode(element) && actions.edit(element.id)}
     >
       {children}
 
@@ -171,24 +214,60 @@ export default function CanvasElement({ element, selected, editing, zoom, pageWi
             onPointerDown={startResize(["bottom"])}
             title="Resize height"
           />
-          <div
-            className={`${handle} cursor-nwse-resize bg-blue-500`}
-            style={{ width: hs, height: hs, right: -hs / 2, bottom: -hs / 2, touchAction: "none" }}
-            onPointerDown={startResize(["right", "bottom"])}
-            title="Resize (Shift keeps proportions)"
-          />
+          {!editing &&
+            corners.map(([v, h, pos, cursor]) => (
+              <div
+                key={`${v}-${h}`}
+                className={`${handle} ${v === "bottom" && h === "right" ? "bg-blue-500" : ""}`}
+                style={{ width: hs, height: hs, ...pos, cursor, touchAction: "none" }}
+                onPointerDown={startResize([h, v])}
+                title="Resize (Shift keeps proportions)"
+              />
+            ))}
+          {editing && (
+            <div
+              className={`${handle} cursor-nwse-resize bg-blue-500`}
+              style={{ width: hs, height: hs, right: -hs / 2, bottom: -hs / 2, touchAction: "none" }}
+              onPointerDown={startResize(["right", "bottom"])}
+              title="Resize (Shift keeps proportions)"
+            />
+          )}
           <div
             className="absolute bg-blue-500 pointer-events-none"
             style={{ width: 2 / zoom, height: 18 / zoom, top: -18 / zoom, left: `calc(50% - ${1 / zoom}px)` }}
           />
           <div
             className={`${handle} cursor-alias flex items-center justify-center text-blue-600`}
-            style={{ width: hs * 1.3, height: hs * 1.3, top: -18 / zoom - hs * 1.3, left: `calc(50% - ${(hs * 1.3) / 2}px)`, touchAction: "none" }}
+            style={{ width: hs * 1.3, height: hs * 1.3, top: rotateTop, left: `calc(50% - ${(hs * 1.3) / 2}px)`, touchAction: "none" }}
             onPointerDown={startRotate}
             title="Rotate (snaps to 15°)"
           >
             <RotateCw size={hs * 0.75} strokeWidth={2.5} />
           </div>
+          {!editing && (
+            <>
+              <button
+                type="button"
+                className={`${chip} text-slate-600 hover:text-blue-600`}
+                style={{ width: hs * 1.3, height: hs * 1.3, top: rotateTop, left: `calc(50% - ${hs * 1.3 * 2.1}px)` }}
+                title="Duplicate"
+                aria-label="Duplicate"
+                {...chipPress(() => actions.duplicateElement(element.id))}
+              >
+                <Copy size={hs * 0.7} strokeWidth={2.5} />
+              </button>
+              <button
+                type="button"
+                className={`${chip} text-rose-500 hover:bg-rose-50`}
+                style={{ width: hs * 1.3, height: hs * 1.3, top: rotateTop, left: `calc(50% + ${hs * 1.3 * 1.1}px)` }}
+                title="Delete"
+                aria-label="Delete"
+                {...chipPress(() => actions.deleteElement(element.id))}
+              >
+                <X size={hs * 0.8} strokeWidth={3} />
+              </button>
+            </>
+          )}
           {editing && (
             <div
               className="absolute flex items-center justify-center rounded-full bg-blue-500 text-white shadow-md cursor-move"

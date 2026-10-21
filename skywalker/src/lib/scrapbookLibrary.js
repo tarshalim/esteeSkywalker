@@ -5,6 +5,7 @@ import {
   DECOR_VARIANTS,
   NOTE_VARIANTS,
   VIEWFINDER_VARIANTS,
+  createArtStickerElement,
   createAudioElement,
   createDecorElement,
   createFrameStickerElement,
@@ -14,8 +15,25 @@ import {
   createViewfinderElement,
 } from "./canvasElements";
 import { EMOJI_STICKERS, FRAME_STICKERS, NATURE_STICKERS } from "../data/stickers";
+import { ART_SECTIONS } from "../data/scrapbookArt";
+
+// Illustrated art sections, marked so the menu can offer them as their own filter.
+const ART_LIBRARY = ART_SECTIONS.map((section) => ({
+  id: `art-${section.id}`,
+  label: section.label,
+  art: true,
+  items: section.items.map((art) => ({
+    id: `art-${art.id}`,
+    label: art.label,
+    create: () => createArtStickerElement(art),
+  })),
+}));
+
+/** dataTransfer type carrying a library item id while it's dragged onto the page. */
+export const LIBRARY_DRAG_TYPE = "application/x-scrapbook-item";
 
 export const SCRAPBOOK_LIBRARY = [
+  ...ART_LIBRARY,
   {
     id: "notes",
     label: "Notes & memos",
@@ -77,3 +95,14 @@ export const SCRAPBOOK_LIBRARY = [
     ],
   },
 ];
+
+const ITEMS = new Map(SCRAPBOOK_LIBRARY.flatMap((section) => section.items.map((item) => [item.id, item])));
+
+export const findLibraryItem = (id) => ITEMS.get(id) ?? null;
+
+// Pieces offered in the collage's elements drawer: the illustrated sheets
+// (minus page-sized backdrops), tape/stamps/pins and small stickers.
+const DRAWER_SECTIONS = new Set(["accents", "stickers"]);
+export const DECORATION_LIBRARY = SCRAPBOOK_LIBRARY.filter(
+  (section) => (section.art && section.id !== "art-backdrops") || DRAWER_SECTIONS.has(section.id)
+);

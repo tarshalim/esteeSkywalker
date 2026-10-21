@@ -12,6 +12,7 @@ import Account from "./pages/Account/Account";
 import Drafts from "./pages/Drafts/Drafts";
 import { AuthProvider, RequireAuth } from "./lib/auth";
 import { GlobePrefsProvider } from "./lib/globePrefs";
+import { GlobeSessionProvider } from "./lib/globeSession";
 import { TourProvider } from "./lib/tour";
 import { SearchProvider } from "./lib/search";
 import Tour from "./components/Tour/Tour";
@@ -75,13 +76,15 @@ const App = () => {
     <ThemeProvider>
       <AuthProvider>
         <GlobePrefsProvider>
-          <Router>
-            <TourProvider>
-              <SearchProvider>
-                <AppShell />
-              </SearchProvider>
-            </TourProvider>
-          </Router>
+          <GlobeSessionProvider>
+            <Router>
+              <TourProvider>
+                <SearchProvider>
+                  <AppShell />
+                </SearchProvider>
+              </TourProvider>
+            </Router>
+          </GlobeSessionProvider>
         </GlobePrefsProvider>
       </AuthProvider>
     </ThemeProvider>

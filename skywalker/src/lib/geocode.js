@@ -33,6 +33,12 @@ function reverseLabel(p) {
   return uniq([locality, p.country]).join(", ") || null;
 }
 
+/** "Kyoto" from reverseGeocode's "Kyoto, Japan"; null for a bare country label. */
+export function cityFromPlaceName(name) {
+  const parts = (name ?? "").split(", ");
+  return parts.length > 1 ? parts[0] : null;
+}
+
 /** Synchronous cache peek, so a re-opened coordinate shows its name instantly. */
 export function cachedPlaceName(lat, lng) {
   return reverseCache.get(cacheKeyFor(lat, lng)) ?? null;
