@@ -8,6 +8,7 @@ export default function VideoElementContent({ element, editable, actions, onPick
         <VideoSourceInput
           onUrl={(url) => actions.updateElement(element.id, { url })}
           onUpload={() => onPickMedia?.(element.id, "video/*", (url) => ({ url }))}
+          onDismiss={() => actions.deleteElement(element.id)}
         />
       </div>
     );

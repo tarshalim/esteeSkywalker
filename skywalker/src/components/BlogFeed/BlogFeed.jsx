@@ -7,13 +7,15 @@ import {
   ArrowRight,
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
-  ChevronDown,
   Earth,
   LayoutGrid,
   X,
 } from "lucide-react";
 import { formatBlogDate } from "../../utils/dateFilters";
 import JourneyPortal from "../JourneyPortal/JourneyPortal";
+import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
+import Select from "../Select/Select";
+import { realCover } from "../../lib/media";
 import "./BlogFeed.css";
 
 const PAGE_SIZE = 6;
@@ -117,18 +119,22 @@ export default function BlogFeed({
         <span className="blog-feed-divider" aria-hidden="true" />
 
         {years.length > 1 && (
-          <label className={`blog-feed-select${activeYear !== ALL_YEARS ? " is-active" : ""}`}>
-            <CalendarDays size={12} aria-hidden="true" />
-            <select value={activeYear} onChange={(e) => setActiveYear(e.target.value)} aria-label="Filter stories by year">
-              <option value={ALL_YEARS}>All years</option>
-              {years.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={12} aria-hidden="true" />
-          </label>
+          <Select
+            variant="pill"
+            icon={CalendarDays}
+            active={activeYear !== ALL_YEARS}
+            className="blog-feed-select"
+            value={activeYear}
+            onChange={(e) => setActiveYear(e.target.value)}
+            aria-label="Filter stories by year"
+          >
+            <option value={ALL_YEARS}>All years</option>
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </Select>
         )}
 
         <button
@@ -166,7 +172,11 @@ export default function BlogFeed({
             >
               <Link to={`/blogs/${blog.id}`} className="blog-card-link">
                 <div className="blog-card-media">
-                  {blog.coverImage && <img src={blog.coverImage} alt="" loading="lazy" />}
+                  {realCover(blog.coverImage) ? (
+                    <img src={blog.coverImage} alt="" loading="lazy" />
+                  ) : (
+                    <CoverPlaceholder variant="blog" seed={blog.id} />
+                  )}
                   {blog.continent && <span className="blog-card-badge">{blog.continent}</span>}
                 </div>
                 <div className="blog-card-body">

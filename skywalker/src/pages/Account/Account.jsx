@@ -9,6 +9,7 @@ import AvatarPicker from "../../components/Avatar/AvatarPicker";
 import GlobePreview from "../../components/GlobePreview/GlobePreview";
 import { useGlobePrefs } from "../../lib/globePrefs";
 import { useTheme } from "../../lib/theme";
+import Select from "../../components/Select/Select";
 import "./Account.css";
 
 const GLOBE_TOGGLES = [
@@ -397,13 +398,18 @@ function AccountsPanel({ currentUserId }) {
                 {a.id === currentUserId ? (
                   <span className="account-admin-you">{ROLE_LABELS[a.role]} (you)</span>
                 ) : (
-                  <select value={a.role} disabled={savingId === a.id} onChange={(e) => changeRole(a.id, e.target.value)}>
+                  <Select
+                    aria-label={`Role for ${a.username}`}
+                    value={a.role}
+                    disabled={savingId === a.id}
+                    onChange={(e) => changeRole(a.id, e.target.value)}
+                  >
                     {Object.entries(ROLE_LABELS).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
               </li>
             ))}

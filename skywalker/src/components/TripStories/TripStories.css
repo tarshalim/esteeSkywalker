@@ -21,7 +21,8 @@
 
 .trip-stories-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  /* Wider than story cards: a trip is the container, so passes get fewer, broader columns. */
+  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
   /* Generous rows: fanned slips rise out over the row above. */
   gap: 3rem 1.5rem;
   padding-top: 0.5rem;
@@ -102,7 +103,8 @@
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
-.trip-env-slip-link img {
+.trip-env-slip-link img,
+.trip-env-slip-link .trip-env-slip-thumb {
   flex-shrink: 0;
   width: 48px;
   height: 48px;
@@ -132,84 +134,213 @@
   color: var(--text-muted);
 }
 
-/* ---- Front of the envelope --------------------------------------------- */
+/* ---- Front: a vintage boarding pass ------------------------------------ */
 
 .trip-env-front {
+  /* Width of the tear-away stub; the perforation and notches sit on its edge. */
+  --stub: 6.5rem;
+  --notch: 9px;
   position: relative;
   z-index: 5;
-  border-radius: 1.1rem;
-  overflow: hidden;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  box-shadow: 0 10px 30px var(--shadow-color);
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  border-radius: 0.9rem;
+  /* drop-shadow (not box-shadow) so the shadow follows the notched outline. */
+  filter: drop-shadow(0 8px 18px var(--shadow-color));
+  transition: transform 0.25s ease, filter 0.25s ease;
 }
 .trip-env.is-open .trip-env-front {
   transform: translateY(4px);
-  border-color: var(--border-strong);
-  box-shadow: 0 18px 40px var(--shadow-color);
+  filter: drop-shadow(0 16px 28px var(--shadow-color));
 }
 
-.trip-env-media {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, var(--blue), var(--blue-deep, var(--blue)));
+.trip-pass {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--stub);
+  border-radius: inherit;
   overflow: hidden;
-  perspective: 600px;
+  background: color-mix(in srgb, var(--yellow) 9%, var(--bg-elevated));
+  border: 1px solid var(--border);
+  transition: border-color 0.25s ease;
+  /* Two half-height layers, each punching one semi-circle where the perforation meets the edge. */
+  --notch-at: calc(100% - var(--stub));
+  mask:
+    radial-gradient(circle var(--notch) at var(--notch-at) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+    radial-gradient(circle var(--notch) at var(--notch-at) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
 }
-.trip-env-media img {
-  width: 100%;
-  height: 100%;
+.trip-env.is-open .trip-pass {
+  border-color: var(--border-strong);
+}
+
+.trip-pass-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.trip-pass-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: var(--blue-deep);
+  color: #ffffff;
+}
+.trip-pass-header svg {
+  transform: rotate(45deg);
+}
+
+.trip-pass-body {
+  display: flex;
+  gap: 0.8rem;
+  padding: 0.75rem 1rem 0.5rem;
+}
+
+.trip-pass-thumb,
+.trip-pass-body .trip-pass-thumb {
+  flex-shrink: 0;
+  width: 58px;
+  height: 58px;
   object-fit: cover;
-  transition: transform 0.5s ease;
+  border-radius: 0.4rem;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 6px var(--shadow-color);
+  transform: rotate(-3deg);
+  transition: transform 0.3s ease;
 }
-.trip-env.is-open .trip-env-media img {
-  transform: scale(1.05);
-}
-
-/* The envelope flap: folds up and away as the slips come out. */
-.trip-env-flap {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 38%;
-  background: var(--slip-paper);
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-  filter: drop-shadow(0 2px 2px var(--shadow-color));
-  transform-origin: 50% 0;
-  backface-visibility: hidden;
-  transition: transform 0.35s ease;
-}
-.trip-env.is-open .trip-env-flap {
-  transform: rotateX(180deg);
+.trip-env.is-open .trip-pass-thumb {
+  transform: rotate(0deg) scale(1.05);
 }
 
-.trip-env-count {
+.trip-pass-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.trip-pass-label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.trip-pass-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.trip-pass-value {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trip-pass-route,
+.trip-pass-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+.trip-pass-row .trip-pass-field {
+  flex: 1;
+}
+.trip-pass-route .trip-pass-field:last-child {
+  flex: 1;
+}
+
+/* Dotted flight path between FROM and TO. */
+.trip-pass-flight {
+  display: flex;
+  align-items: center;
+  flex: 0 1 4rem;
+  min-width: 2rem;
+  height: 1.1rem;
+  color: var(--text-strong);
+  background: radial-gradient(circle, var(--text-muted) 1px, transparent 1.5px) left center / 6px 6px repeat-x;
+}
+.trip-pass-flight svg {
+  margin-left: auto;
+  transform: rotate(45deg);
+  background: color-mix(in srgb, var(--yellow) 9%, var(--bg-elevated));
+}
+
+.trip-pass-barcode {
+  display: flex;
+  align-items: stretch;
+  height: 22px;
+  margin: auto 1rem 0.7rem;
+  padding-top: 0.35rem;
+  overflow: hidden;
+  opacity: 0.8;
+}
+.trip-pass-barcode span {
+  flex-shrink: 0;
+  background: var(--text);
+}
+
+/* Tear-away stub, behind a perforated line. */
+.trip-pass-stub {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 0.5rem 0.7rem;
+  border-left: 2px dashed color-mix(in srgb, var(--text-muted) 45%, transparent);
+  text-align: center;
+}
+.trip-pass-stub .trip-pass-field {
+  align-items: center;
+}
+
+.trip-pass-scissors {
   position: absolute;
-  bottom: 0.7rem;
-  left: 0.75rem;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
+  top: 1.1rem;
+  left: -7px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--yellow) 9%, var(--bg-elevated));
+  transform: rotate(-90deg);
+}
+
+.trip-pass-code {
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   background: var(--yellow);
   color: var(--text-on-accent);
 }
 
-.trip-env-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.95rem 1.15rem 1.1rem;
+.trip-pass-count {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-strong);
 }
 
 .trip-env-title {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 650;
-  line-height: 1.3;
+  margin: -0.3rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+  line-height: 1.25;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .trip-env-link {
   color: inherit;
@@ -228,27 +359,13 @@
   outline-offset: 3px;
 }
 
-.trip-env-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 0.9rem;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-.trip-env-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-/* Inline management — sits above the stretched link. */
+/* Inline management on the stub — sits above the stretched link. */
 .trip-env-actions {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
+  position: relative;
   z-index: 2;
   display: flex;
   gap: 0.35rem;
+  margin-top: auto;
 }
 .trip-env-actions button {
   display: inline-flex;
@@ -291,8 +408,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .trip-env-front,
-  .trip-env-media img,
-  .trip-env-flap {
+  .trip-pass,
+  .trip-pass-thumb {
     transition: none;
   }
 }

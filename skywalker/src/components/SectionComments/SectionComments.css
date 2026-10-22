@@ -1,0 +1,323 @@
+/* Section-anchored comments: a trigger in the right margin of each block
+   (or on the corner of each canvas element) that opens a popover. */
+
+.section-anchor {
+  position: relative;
+}
+
+/* Block posts: the trigger sits in the card's right padding. */
+.section-anchor > .sc-wrap {
+  position: absolute;
+  top: 0.25rem;
+  left: calc(100% + 0.4rem);
+}
+
+/* Canvas posts: anchors are laid over the scaled page by CanvasReadOnlyView,
+   at each element's top-right corner. Offset with margins, not a transform:
+   a transform would trap the phone bottom sheet's position: fixed. */
+.canvas-anchor {
+  position: absolute;
+  margin: -10px 0 0 -24px;
+}
+
+.sc-wrap {
+  position: relative;
+  z-index: 5;
+}
+.sc-wrap.is-open {
+  z-index: 40;
+}
+
+.sc-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 30px;
+  padding: 0.3rem 0.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel-strong);
+  color: var(--text);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.35;
+  box-shadow: 0 4px 12px var(--shadow-color);
+  transition: opacity 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.section-anchor:hover .sc-trigger,
+.canvas-anchor:hover .sc-trigger,
+.sc-wrap.has-activity .sc-trigger,
+.sc-wrap.is-open .sc-trigger,
+.sc-trigger:focus-visible {
+  opacity: 1;
+}
+.sc-trigger:hover {
+  transform: scale(1.06);
+  border-color: var(--border-strong);
+}
+@media (hover: none) {
+  .sc-trigger {
+    opacity: 0.8;
+  }
+}
+
+.sc-trigger-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+.sc-trigger-count {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.sc-popover {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 0.5rem);
+  width: min(340px, calc(100vw - 2rem));
+  max-height: min(520px, 75vh);
+  overflow-y: auto;
+  padding: 0.9rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 24px 60px var(--shadow-color);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.sc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+  font-size: 0.85rem;
+}
+.sc-close {
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0 0.3rem;
+  color: var(--text-muted);
+}
+.sc-close:hover {
+  color: var(--text);
+}
+
+.sc-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+.sc-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 0.95rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.sc-reaction:hover {
+  border-color: var(--border-strong);
+}
+.sc-reaction.is-mine {
+  background: color-mix(in srgb, var(--blue) 16%, transparent);
+  border-color: var(--blue);
+}
+.sc-reaction-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sc-empty {
+  margin: 0.8rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.sc-list {
+  list-style: none;
+  margin: 0.4rem 0;
+  padding: 0;
+}
+.sc-comment {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.6rem 0;
+}
+.sc-comment + .sc-comment {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.sc-comment-main {
+  min-width: 0;
+  flex: 1;
+}
+.sc-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.sc-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.sc-guest-badge {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sc-delete {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.sc-delete:hover {
+  color: #ef4444;
+}
+.sc-body {
+  margin: 0.2rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sc-avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.sc-avatar--sm {
+  width: 22px;
+  height: 22px;
+}
+.sc-avatar--guest {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+}
+
+.sc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+}
+.sc-as {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.sc-guest-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+.sc-form input,
+.sc-form textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.sc-form textarea {
+  resize: vertical;
+}
+.sc-form input:focus,
+.sc-form textarea:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+}
+.sc-form-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sc-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.sc-submit {
+  margin-left: auto;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--blue);
+  background: var(--blue);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.sc-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.sc-error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #ef4444;
+}
+
+/* Phones: the trigger tucks into the block's corner and the popover becomes
+   a bottom sheet. */
+@media (max-width: 640px) {
+  .section-anchor > .sc-wrap {
+    left: auto;
+    right: -0.9rem;
+    top: -0.4rem;
+  }
+  .sc-trigger {
+    flex-direction: row;
+    gap: 0.4rem;
+    padding: 0.35rem 0.55rem;
+    min-height: 32px;
+  }
+  .sc-trigger-item {
+    flex-direction: row;
+  }
+  .sc-popover {
+    position: fixed;
+    inset: auto 0 0 0;
+    width: 100%;
+    max-height: 80vh;
+    border-radius: 1.1rem 1.1rem 0 0;
+    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  }
+  .sc-guest-fields {
+    grid-template-columns: 1fr;
+  }
+  .sc-form input,
+  .sc-form textarea {
+    font-size: 16px; /* stops iOS zooming into the field */
+  }
+}

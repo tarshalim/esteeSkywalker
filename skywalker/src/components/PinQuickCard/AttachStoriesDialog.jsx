@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { Check, Search, X } from "lucide-react";
 import { matchesQuery } from "../../utils/search";
 import { formatBlogDate } from "../../utils/dateFilters";
-import { PLACEHOLDER_COVER } from "../../lib/media";
+import { realCover } from "../../lib/media";
+import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 
 /**
  * Pick existing posts (drafts included) to file under a pin. Posts already
@@ -102,7 +103,11 @@ export default function AttachStoriesDialog({ pin, blogs, pinTitles, onConfirm, 
                   onClick={() => toggle(blog.id)}
                   className={`flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors ${isPicked ? "bg-red-500/10" : "hover:bg-black/5"}`}
                 >
-                  <img src={blog.coverImage || PLACEHOLDER_COVER} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+                  {realCover(blog.coverImage) ? (
+                    <img src={blog.coverImage} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+                  ) : (
+                    <CoverPlaceholder variant="blog" seed={blog.id} compact className="h-11! w-11! shrink-0 rounded-lg" />
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-semibold">{blog.title}</span>

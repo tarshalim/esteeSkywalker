@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Camera, ChevronLeft, Clapperboard, ImagePlus, LayoutGrid, Sparkles, Type } from "lucide-react";
+import { ChevronLeft, Clapperboard, ImagePlus, LayoutGrid, Sparkles, Type } from "lucide-react";
 import FloatingPanel from "./FloatingPanel";
 import LibraryGrid from "./LibraryGrid";
 import { SCRAPBOOK_LIBRARY } from "../../../lib/scrapbookLibrary";
 
 const QUICK_ACTIONS = [
   { id: "text", label: "Text box", icon: Type },
+  // The OS picker behind "Image" already offers Take Photo / Photo Library / Browse.
   { id: "image", label: "Image", icon: ImagePlus },
-  { id: "camera", label: "Take photo live", icon: Camera },
   { id: "video", label: "Video", icon: Clapperboard },
   { id: "collage", label: "Photo collage", icon: LayoutGrid },
   { id: "scrapbook", label: "Scrapbook element", icon: Sparkles },

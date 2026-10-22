@@ -1,10 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { CalendarDays, LoaderCircle, MapPin, Pencil, Trash2 } from "lucide-react";
+import { LoaderCircle, Pencil, Plane, Scissors, Trash2 } from "lucide-react";
 import TripDialog from "../TripPicker/TripDialog";
+import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
+import { realCover } from "../../lib/media";
 import { deleteTrip, getTrips, saveTrip } from "../../lib/tripStore";
 import { getPins } from "../../lib/pinStore";
+import { getPhotos } from "../../lib/photoStore";
+import { allCompanions } from "../../lib/hierarchy";
 import { useDataChanges } from "../../lib/liveSync";
 import { useAuth } from "../../lib/auth";
 import { useAsync } from "../../hooks/useAsync";
@@ -48,6 +52,7 @@ export default function TripStories({ blogs }) {
   const { canEdit } = useAuth();
   const { data: trips, setData: setTrips, loading } = useAsync(getTrips, [], []);
   const { data: pins, setData: setPins } = useAsync(getPins, [], []);
+  const { data: photos, setData: setPhotos } = useAsync(getPhotos, [], []);
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -55,8 +60,17 @@ export default function TripStories({ blogs }) {
     getTrips().then(setTrips, console.error);
     getPins().then(setPins, console.error);
   });
+  useDataChanges(["gallery_items"], () => {
+    getPhotos().then(setPhotos, console.error);
+  });
 
   const pinTitles = useMemo(() => new Map(pins.map((p) => [p.id, p.title])), [pins]);
+
+  const photoCounts = useMemo(() => {
+    const map = new Map();
+    for (const p of photos) if (p.tripId) map.set(p.tripId, (map.get(p.tripId) ?? 0) + 1);
+    return map;
+  }, [photos]);
 
   const postsByTrip = useMemo(() => {
     const map = new Map();
@@ -111,7 +125,7 @@ export default function TripStories({ blogs }) {
       <header className="trip-stories-header">
         <h2 id="trip-stories-title">My Stories</h2>
         <p>
-          {trips.length} {trips.length === 1 ? "trip" : "trips"} — hover an envelope to peek at its stories
+          {trips.length} {trips.length === 1 ? "trip" : "trips"} — hover a boarding pass to peek at its stories
         </p>
       </header>
 
@@ -121,6 +135,7 @@ export default function TripStories({ blogs }) {
             key={trip.id}
             trip={trip}
             posts={postsByTrip.get(trip.id) ?? []}
+            photoCount={photoCounts.get(trip.id) ?? 0}
             destination={destinationOf(trip)}
             canEdit={canEdit}
             deleting={deletingId === trip.id}
@@ -144,11 +159,47 @@ export default function TripStories({ blogs }) {
   );
 }
 
-function TripEnvelope({ trip, posts, destination, canEdit, deleting, onEdit, onDelete }) {
+/** Small stable hash of a string (FNV-1a), for the ticket code and barcode. */
+function hashString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Airline-style code for a trip, e.g. "XIA-4F2": destination letters + a hash of its id. */
+function ticketCode(trip, destination) {
+  const letters = (destination || trip.title || "").replace(/[^a-z]/gi, "").slice(0, 3).toUpperCase().padEnd(3, "X");
+  const suffix = hashString(trip.id).toString(36).slice(-3).toUpperCase().padStart(3, "0");
+  return `${letters}-${suffix}`;
+}
+
+/** Decorative barcode whose bars come from the trip id, so each pass looks different. */
+function Barcode({ seed }) {
+  const bars = useMemo(() => {
+    let h = hashString(seed);
+    return Array.from({ length: 34 }, () => {
+      h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
+      return { width: 1 + (h % 3), gap: 1 + ((h >>> 4) % 2) };
+    });
+  }, [seed]);
+  return (
+    <div className="trip-pass-barcode" aria-hidden="true">
+      {bars.map((bar, i) => (
+        <span key={i} style={{ width: bar.width, marginRight: bar.gap }} />
+      ))}
+    </div>
+  );
+}
+
+function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting, onEdit, onDelete }) {
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const slips = posts.slice(0, MAX_SLIPS);
-  const cover = posts.find((p) => p.coverImage)?.coverImage;
+  const cover = posts.map((p) => realCover(p.coverImage)).find(Boolean);
+  const companions = allCompanions(trip);
   const tripHref = `/gallery?trip=${encodeURIComponent(trip.id)}`;
 
   // Keyboard users get the same reveal as hover while focus is anywhere inside.
@@ -179,7 +230,11 @@ function TripEnvelope({ trip, posts, destination, canEdit, deleting, onEdit, onD
             >
               <span className="trip-env-slip-tab" style={{ left: TAB_LEFT[i] }} aria-hidden="true" />
               <Link to={`/blogs/${post.id}`} className="trip-env-slip-link">
-                {post.coverImage && <img src={post.coverImage} alt="" loading="lazy" />}
+                {realCover(post.coverImage) ? (
+                  <img src={post.coverImage} alt="" loading="lazy" />
+                ) : (
+                  <CoverPlaceholder variant="blog" seed={post.id} compact className="trip-env-slip-thumb" />
+                )}
                 <span className="trip-env-slip-text">
                   <span className="trip-env-slip-title">{post.title || "Untitled story"}</span>
                   <span className="trip-env-slip-date">{formatBlogDate(post)}</span>
@@ -190,54 +245,97 @@ function TripEnvelope({ trip, posts, destination, canEdit, deleting, onEdit, onD
         </ul>
       )}
 
+      {/* The front is a boarding pass: main stub + tear-away stub. */}
       <div className="trip-env-front">
-        <div className="trip-env-media">
-          {cover && <img src={cover} alt="" loading="lazy" />}
-          <span className="trip-env-flap" aria-hidden="true" />
-          <span className="trip-env-count">
-            {posts.length} {posts.length === 1 ? "story" : "stories"}
-          </span>
-        </div>
-        <div className="trip-env-body">
-          <h3 className="trip-env-title">
-            {/* Stretched over the whole front so the card is one big target. */}
-            <Link to={tripHref} className="trip-env-link">
-              {trip.title}
-            </Link>
-          </h3>
-          <div className="trip-env-meta">
-            {destination && (
-              <span>
-                <MapPin size={13} aria-hidden="true" /> {destination}
-              </span>
-            )}
-            <span>
-              <CalendarDays size={13} aria-hidden="true" /> {formatDateRange(trip.startDate, trip.endDate)}
-            </span>
-          </div>
-        </div>
+        <div className="trip-pass">
+          <div className="trip-pass-main">
+            <header className="trip-pass-header">
+              <Plane size={13} aria-hidden="true" />
+              <span>Boarding pass</span>
+            </header>
 
-        {canEdit && (
-          <div className="trip-env-actions">
-            <button type="button" onClick={onEdit} aria-label={`Edit ${trip.title}`} title="Edit trip">
-              <Pencil size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={deleting}
-              className="is-danger"
-              aria-label={`Delete ${trip.title}`}
-              title="Delete trip"
-            >
-              {deleting ? (
-                <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+            <div className="trip-pass-body">
+              {cover ? (
+                <img className="trip-pass-thumb" src={cover} alt="" loading="lazy" />
               ) : (
-                <Trash2 size={14} aria-hidden="true" />
+                <CoverPlaceholder variant="trip" seed={trip.id} compact className="trip-pass-thumb" />
               )}
-            </button>
+              <div className="trip-pass-fields">
+                <span className="trip-pass-label">Route</span>
+                <h3 className="trip-env-title">
+                  {/* Stretched over the whole front so the card is one big target. */}
+                  <Link to={tripHref} className="trip-env-link">
+                    {trip.title}
+                  </Link>
+                </h3>
+
+                <div className="trip-pass-route">
+                  <span className="trip-pass-field">
+                    <span className="trip-pass-label">From</span>
+                    <span className="trip-pass-value">Home</span>
+                  </span>
+                  <span className="trip-pass-flight" aria-hidden="true">
+                    <Plane size={12} />
+                  </span>
+                  <span className="trip-pass-field">
+                    <span className="trip-pass-label">To</span>
+                    <span className="trip-pass-value">{destination || "Somewhere"}</span>
+                  </span>
+                </div>
+
+                <div className="trip-pass-row">
+                  <span className="trip-pass-field">
+                    <span className="trip-pass-label">Date</span>
+                    <span className="trip-pass-value">{formatDateRange(trip.startDate, trip.endDate)}</span>
+                  </span>
+                  <span className="trip-pass-field">
+                    <span className="trip-pass-label">Passengers</span>
+                    <span className="trip-pass-value">{companions.length > 0 ? companions.join(", ") : "Solo"}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <Barcode seed={trip.id} />
           </div>
-        )}
+
+          <div className="trip-pass-stub">
+            <Scissors size={12} className="trip-pass-scissors" aria-hidden="true" />
+            <span className="trip-pass-code" title="Trip code">
+              {ticketCode(trip, destination)}
+            </span>
+            <span className="trip-pass-field">
+              <span className="trip-pass-label">Stories</span>
+              <span className="trip-pass-count">{posts.length}</span>
+            </span>
+            <span className="trip-pass-field">
+              <span className="trip-pass-label">Photos</span>
+              <span className="trip-pass-count">{photoCount}</span>
+            </span>
+
+            {canEdit && (
+              <div className="trip-env-actions">
+                <button type="button" onClick={onEdit} aria-label={`Edit ${trip.title}`} title="Edit trip">
+                  <Pencil size={14} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={deleting}
+                  className="is-danger"
+                  aria-label={`Delete ${trip.title}`}
+                  title="Delete trip"
+                >
+                  {deleting ? (
+                    <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Trash2 size={14} aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </motion.article>
   );

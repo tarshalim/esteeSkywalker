@@ -4,6 +4,7 @@ import { Globe2, LoaderCircle, LocateFixed, MapPin, Search, X } from "lucide-rea
 import { reverseGeocode, searchPlaces } from "../../lib/geocode";
 import { autoPinFor, distanceKm, pinsNear } from "../../lib/pinStore";
 import { formatCoords } from "../../utils/geo";
+import Select from "../../components/Select/Select";
 import GlobePickerModal from "./GlobePickerModal";
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -144,7 +145,7 @@ export default function LocationField({ name, onNameChange, coords, onPick, pins
             </span>
             <label className="editor-location-pin">
               <span>Globe pin</span>
-              <select value={selectValue} onChange={(e) => onPinChoiceChange(e.target.value)}>
+              <Select variant="pill" value={selectValue} onChange={(e) => onPinChoiceChange(e.target.value)}>
                 {pinOptions.map((pin) => (
                   <option key={pin.id} value={pin.id}>
                     Add to “{pin.title}” · {pin.distanceKm < 1 ? "here" : `${Math.round(pin.distanceKm)} km`}
@@ -152,7 +153,7 @@ export default function LocationField({ name, onNameChange, coords, onPick, pins
                 ))}
                 <option value="new">New pin at this spot</option>
                 <option value="none">Don&rsquo;t pin on the globe</option>
-              </select>
+              </Select>
             </label>
           </>
         )}

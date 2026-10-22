@@ -77,6 +77,15 @@
      (and 0px on editor routes, where it's hidden); this is first paint only. */
   --nav-bottom: 4.5rem;
 
+  /* Control sizing shared by inputs, selects and buttons so they line up
+     in a row (Tailwind: `h-(--control-h)`, `rounded-(--radius-field)`). */
+  --control-h-sm: 2.25rem; /* filter pills, toolbar chips */
+  --control-h: 2.5rem; /* form fields */
+  --control-px: 0.75rem;
+  --radius-field: 0.75rem;
+  --radius-card: 1rem;
+  --radius-pill: 999px;
+
   color-scheme: light;
   font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

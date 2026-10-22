@@ -1,4 +1,4 @@
-import { PLACEHOLDER_COVER } from "./media";
+import { realCover } from "./media";
 import { formatDate, formatDateRange } from "../utils/dateFilters";
 import { companionsForPost } from "./hierarchy";
 
@@ -160,7 +160,7 @@ export function draftChecklist(blog) {
   const hasStory = (blog.canvas?.elements?.length ?? 0) > 0 || (blog.blocks?.length ?? 0) > 0;
   return [
     { label: "Title", done: Boolean(blog.title?.trim()) && blog.title !== "Untitled Blog Post" },
-    { label: "Cover image", done: Boolean(blog.coverImage) && blog.coverImage !== PLACEHOLDER_COVER },
+    { label: "Cover image", done: Boolean(realCover(blog.coverImage)) },
     { label: "Country", done: Boolean(blog.countryCode) },
     { label: "Story content", done: hasStory },
   ];

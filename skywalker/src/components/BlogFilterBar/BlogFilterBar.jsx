@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { CalendarDays, Heart, X } from "lucide-react";
 import { EMPTY_FILTERS, dateFilterLabel, hasActiveFilters } from "../../lib/blogTaxonomy";
+import Select from "../Select/Select";
+import { FIELD_INPUT, fieldInputStyle } from "../TripPicker/fieldStyles";
 
 const PILL =
-  "inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-2 px-3 text-xs font-semibold shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-yellow-300 sm:text-sm";
+  "inline-flex h-(--control-h-sm) shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-2 px-3 text-xs font-semibold shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-yellow-300 sm:text-sm";
 const pillStyle = (active) =>
   active
     ? { background: "var(--blue)", color: "#ffffff", borderColor: "var(--blue)" }
@@ -11,27 +13,15 @@ const pillStyle = (active) =>
 
 /** Pill-shaped native select; `label` doubles as the "any" option. Shared with the Gallery's trip filters. */
 export function FilterSelect({ label, value, onChange, options }) {
-  const active = Boolean(value);
   return (
-    <label className="relative shrink-0">
-      <span className="sr-only">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 max-w-[11rem] cursor-pointer appearance-none truncate rounded-full border-2 py-0 pr-7 pl-3 text-xs font-semibold shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-yellow-300 sm:text-sm"
-        style={pillStyle(active)}
-      >
-        <option value="">{label}</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <span aria-hidden="true" className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[10px]" style={{ color: active ? "#fff" : "var(--text-muted)" }}>
-        ▼
-      </span>
-    </label>
+    <Select variant="pill" active={Boolean(value)} aria-label={label} className="max-w-[11rem] shrink-0" value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{label}</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </Select>
   );
 }
 
@@ -40,10 +30,6 @@ const DATE_MODES = [
   { id: "month", label: "Month" },
   { id: "range", label: "Range" },
 ];
-
-const INPUT =
-  "h-10 w-full rounded-xl border-2 px-3 text-sm outline-none focus:border-[var(--blue)]";
-const inputStyle = { background: "var(--bg-elevated)", color: "var(--text)", borderColor: "var(--border)" };
 
 /**
  * Date pill + popover: a single day, a whole month, or a start/end range
@@ -126,13 +112,13 @@ function DateFilter({ value, onChange }) {
           {mode === "day" && (
             <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
               On
-              <input type="date" className={INPUT} style={inputStyle} value={current.start} onChange={(e) => update({ start: e.target.value })} />
+              <input type="date" className={FIELD_INPUT} style={fieldInputStyle} value={current.start} onChange={(e) => update({ start: e.target.value })} />
             </label>
           )}
           {mode === "month" && (
             <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
               During
-              <input type="month" className={INPUT} style={inputStyle} value={current.start} onChange={(e) => update({ start: e.target.value })} />
+              <input type="month" className={FIELD_INPUT} style={fieldInputStyle} value={current.start} onChange={(e) => update({ start: e.target.value })} />
             </label>
           )}
           {mode === "range" && (
@@ -141,8 +127,8 @@ function DateFilter({ value, onChange }) {
                 From
                 <input
                   type="date"
-                  className={INPUT}
-                  style={inputStyle}
+                  className={FIELD_INPUT}
+                  style={fieldInputStyle}
                   max={current.end || undefined}
                   value={current.start}
                   onChange={(e) => update({ start: e.target.value })}
@@ -152,8 +138,8 @@ function DateFilter({ value, onChange }) {
                 To
                 <input
                   type="date"
-                  className={INPUT}
-                  style={inputStyle}
+                  className={FIELD_INPUT}
+                  style={fieldInputStyle}
                   min={current.start || undefined}
                   value={current.end}
                   onChange={(e) => update({ end: e.target.value })}

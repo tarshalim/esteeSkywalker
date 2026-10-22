@@ -1,0 +1,98 @@
+/* The wrapper owns the border, radius, background and focus ring; the native
+   <select> inside is stripped bare and fills it. That keeps the browser from
+   drawing its own square box/outline or arrow inside a rounded control.
+   Layered so call-site CSS and Tailwind utilities can override. */
+@layer components {
+.ui-select {
+  --ui-select-h: var(--control-h);
+  --ui-select-px: var(--control-px);
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--ui-select-h);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-field);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.875rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.ui-select:focus-within {
+  border-color: var(--blue);
+}
+.ui-select:has(.ui-select-native:disabled) {
+  opacity: 0.6;
+}
+
+.ui-select-native {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  margin: 0;
+  /* Text stops clear of the chevron (16px) with an 8px gap. */
+  padding: 0 calc(var(--ui-select-px) + 1.5rem) 0 var(--ui-select-px);
+  border: 0;
+  border-radius: inherit;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ui-select-native:disabled {
+  cursor: not-allowed;
+}
+.ui-select.has-icon .ui-select-native {
+  padding-left: calc(var(--ui-select-px) + 1.25rem);
+}
+/* Options render in the OS popup; don't let an active pill's white text leak in. */
+.ui-select-native option {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.ui-select-icon,
+.ui-select-chevron {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  pointer-events: none;
+}
+.ui-select-icon {
+  left: var(--ui-select-px);
+}
+.ui-select-chevron {
+  right: var(--ui-select-px);
+  opacity: 0.7;
+}
+
+/* Pill: filter bars and toolbars. */
+.ui-select--pill {
+  --ui-select-h: var(--control-h-sm);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel-strong, var(--bg-elevated));
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.ui-select--pill:focus-within {
+  border-color: var(--border);
+  box-shadow: 0 0 0 2px var(--yellow-bright);
+}
+.ui-select--pill.is-active {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #ffffff;
+}
+@media (min-width: 640px) {
+  .ui-select--pill {
+    font-size: 0.875rem;
+  }
+}
+}

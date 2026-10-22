@@ -5,8 +5,12 @@ import { DEFAULT_THEME, canvasHeight } from "../../../lib/canvasElements";
 import { paperBackground } from "../../../lib/paperStyles";
 import { paintOrder } from "../../../lib/canvasGroups";
 
-/** Published rendering of a canvas doc: same renderers as the editor, no chrome, scaled to fit. */
-export default function CanvasReadOnlyView({ doc }) {
+/**
+ * Published rendering of a canvas doc: same renderers as the editor, no chrome, scaled to fit.
+ * `renderAnchor(element)` may return a widget pinned to that element's top-right
+ * corner, laid over the page unscaled (and outside its clipping).
+ */
+export default function CanvasReadOnlyView({ doc, renderAnchor = null }) {
   const frameRef = useRef(null);
   const zoom = useFitZoom(frameRef, doc.size.width);
   const height = canvasHeight(doc);
@@ -33,6 +37,16 @@ export default function CanvasReadOnlyView({ doc }) {
             );
           })}
         </div>
+        {renderAnchor &&
+          doc.elements.map((el) => {
+            const anchor = renderAnchor(el);
+            if (!anchor) return null;
+            return (
+              <div key={el.id} className="canvas-anchor" style={{ left: (el.x + el.width) * zoom, top: el.y * zoom }}>
+                {anchor}
+              </div>
+            );
+          })}
       </div>
     </div>
   );

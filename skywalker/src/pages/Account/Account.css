@@ -219,13 +219,10 @@
   cursor: default;
 }
 
-.account-admin-list select {
+.account-admin-list .ui-select {
+  --ui-select-h: var(--control-h-sm);
   flex-shrink: 0;
-  padding: 0.35rem 0.5rem;
-  border-radius: 0.5rem;
-  border: 2px solid var(--border);
   background: var(--bg-panel);
-  color: var(--text);
   font-size: 0.8rem;
 }
 
@@ -365,7 +362,7 @@
   .account-form input,
   .account-primary,
   .account-link,
-  .account-admin-list select,
+  .account-admin-list .ui-select,
   .account-approve,
   .account-reject {
     min-height: 44px;

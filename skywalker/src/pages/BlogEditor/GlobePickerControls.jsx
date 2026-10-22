@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { ChevronDown, Crosshair, Hand, LoaderCircle, Search, X } from "lucide-react";
+import { Crosshair, Hand, LoaderCircle, Search, X } from "lucide-react";
+import Select from "../../components/Select/Select";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { searchPlaces } from "../../lib/geocode";
 import { countryCodeToFlagEmoji, SMALL_COUNTRY_CENTERS } from "../../utils/countries";
@@ -83,27 +84,26 @@ export function GlobeModeToggle({ mode, onChange }) {
 export function CountryDropdown({ value, onSelect }) {
   const countries = useCountryOptions();
   return (
-    <label className="globe-country-select glass-panel">
-      <span className="sr-only">Jump to a country</span>
-      <select
-        value={value ?? ""}
-        disabled={countries.length === 0}
-        onChange={(e) => {
-          const country = countries.find((c) => c.code === e.target.value);
-          if (country) onSelect(country);
-        }}
-      >
-        <option value="" disabled>
-          {countries.length ? "Jump to a country…" : "Loading countries…"}
+    <Select
+      variant="pill"
+      className="globe-country-select glass-panel"
+      aria-label="Jump to a country"
+      value={value ?? ""}
+      disabled={countries.length === 0}
+      onChange={(e) => {
+        const country = countries.find((c) => c.code === e.target.value);
+        if (country) onSelect(country);
+      }}
+    >
+      <option value="" disabled>
+        {countries.length ? "Jump to a country…" : "Loading countries…"}
+      </option>
+      {countries.map((c) => (
+        <option key={c.code} value={c.code}>
+          {countryCodeToFlagEmoji(c.code)} {c.name}
         </option>
-        {countries.map((c) => (
-          <option key={c.code} value={c.code}>
-            {countryCodeToFlagEmoji(c.code)} {c.name}
-          </option>
-        ))}
-      </select>
-      <ChevronDown size={16} aria-hidden="true" />
-    </label>
+      ))}
+    </Select>
   );
 }
 

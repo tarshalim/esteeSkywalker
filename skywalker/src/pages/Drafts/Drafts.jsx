@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Circle, ImageOff, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
 import { deleteBlog, getBlogs } from "../../lib/blogStore";
 import { draftChecklist } from "../../lib/blogTaxonomy";
-import { PLACEHOLDER_COVER } from "../../lib/media";
+import { realCover } from "../../lib/media";
 import { useAsync } from "../../hooks/useAsync";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -33,7 +33,7 @@ function DraftCard({ draft, onDelete, deleting }) {
   const doneCount = checklist.filter((c) => c.done).length;
   const pct = Math.round((doneCount / checklist.length) * 100);
   const place = [draft.city, draft.countryName].filter(Boolean).join(", ") || draft.location?.name;
-  const hasCover = Boolean(draft.coverImage) && draft.coverImage !== PLACEHOLDER_COVER;
+  const hasCover = Boolean(realCover(draft.coverImage));
 
   return (
     <motion.li

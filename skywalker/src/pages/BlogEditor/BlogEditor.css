@@ -331,26 +331,24 @@
   font-size: 0.85rem;
   color: var(--text-muted);
 }
-.editor-location-pin select {
-  min-width: 0;
+.editor-location-pin .ui-select {
+  --ui-select-h: 32px;
+  --ui-select-px: 10px;
   max-width: 100%;
-  min-height: 32px;
-  padding: 2px 8px;
-  border: 2px solid color-mix(in srgb, var(--pin-red) 45%, transparent);
-  border-radius: 999px;
+  border-color: color-mix(in srgb, var(--pin-red) 45%, transparent);
   background: var(--bg-elevated);
-  color: var(--text);
   font-size: 0.85rem;
+  font-weight: 400;
 }
 @media (max-width: 640px) {
-  .editor-location-chip,
-  .editor-location-pin select {
+  .editor-location-chip {
     min-height: 40px;
   }
   .editor-location-pin {
     flex: 1 1 100%;
   }
-  .editor-location-pin select {
+  .editor-location-pin .ui-select {
+    --ui-select-h: 40px;
     flex: 1;
   }
 }

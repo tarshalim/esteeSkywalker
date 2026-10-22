@@ -16,7 +16,7 @@ import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata } from "../../lib/exif";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { findCountryForPoint, continentForCountryCode, centroidForCountryCode, formatCoords, hasCoords } from "../../utils/geo";
-import { PLACEHOLDER_COVER } from "../../lib/media";
+import { realCover } from "../../lib/media";
 import { COUNTRY_TO_CONTINENT } from "../../utils/countries";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
 import DeletePostDialog from "./DeletePostDialog";
@@ -186,7 +186,7 @@ export default function BlogEditor() {
           setBlogId(blog.id);
           setTitle(blog.title ?? "");
           setExcerpt(blog.excerpt ?? "");
-          setCoverImage(blog.coverImage && blog.coverImage !== PLACEHOLDER_COVER ? blog.coverImage : "");
+          setCoverImage(realCover(blog.coverImage));
           setLocationName(blog.location?.name || "");
           setCoords(hasCoords(blog.location) ? { lat: blog.location.lat, lng: blog.location.lng } : null);
           setPinChoice(blog.pinId ?? "auto");
@@ -405,9 +405,10 @@ export default function BlogEditor() {
   // A photo taken live is stamped with the current GPS fix + time, so it
   // files the post under the right Location (auto pin from coords) and Trip
   // dates exactly like an EXIF'd cover photo does.
-  const handlePhotoCaptured = async (file) => {
+  // Fills the post's date/place from a photo placed on the canvas; quiet when there's nothing to fill.
+  const handlePhotoAdded = async (file) => {
     const detected = applyPhotoMetadata(await extractPhotoMetadata(file));
-    showToast(detected.length > 0 ? `📸 Live photo added · detected ${detected.join(", ")}` : "📸 Live photo added to your story");
+    if (detected.length > 0) showToast(`📸 Detected from photo: ${detected.join(", ")}`);
   };
 
   /**
@@ -490,8 +491,8 @@ export default function BlogEditor() {
     id: blogId ?? undefined,
     title: title.trim() || "Untitled Blog Post",
     excerpt: excerpt.trim(),
-    // Drafts keep an empty cover; only published posts fall back to the placeholder.
-    coverImage: coverImage || (nextStatus === "draft" ? "" : PLACEHOLDER_COVER),
+    // No stock fallback: an empty cover renders as a themed placeholder.
+    coverImage,
     location: { name: locationName.trim() || country?.name || "Unnamed waypoint", ...resolveCoords() },
     countryCode: country?.code ?? "",
     countryName: country?.name ?? "",
@@ -931,7 +932,7 @@ export default function BlogEditor() {
 
         <div className="editor-scrapbook" data-tour="editor-scrapbook">
           <CanvasProvider key={canvasSeed.key} initialDoc={canvasSeed.doc} onDocChange={handleCanvasChange}>
-            <ScrapbookCanvas onError={showToast} onPhotoCaptured={handlePhotoCaptured} />
+            <ScrapbookCanvas onError={showToast} onPhotoAdded={handlePhotoAdded} />
           </CanvasProvider>
         </div>
 

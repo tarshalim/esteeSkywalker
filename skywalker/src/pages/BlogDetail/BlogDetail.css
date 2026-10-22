@@ -23,6 +23,10 @@
   display: flex;
   align-items: flex-end;
 }
+.blog-detail-hero > .cover-ph {
+  position: absolute;
+  inset: 0;
+}
 
 .blog-detail-hero-scrim {
   position: absolute;

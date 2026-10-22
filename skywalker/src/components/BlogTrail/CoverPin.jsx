@@ -1,4 +1,6 @@
 import { motion } from "framer-motion";
+import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
+import { realCover } from "../../lib/media";
 
 /**
  * Teardrop map pin that frames a post's cover image and bobs gently in place.
@@ -39,13 +41,22 @@ export default function CoverPin({ ref, blog, index, isActive, glow = false, onC
           // Square with one sharp corner, rotated so the point aims at the signpost.
           className="relative size-[clamp(78px,11vh,112px)] -rotate-45 rounded-[50%_50%_50%_0] border-[5px] border-white bg-yellow-400 shadow-[0_10px_24px_rgba(15,23,42,0.35)]"
         >
-          <img
-            src={blog.coverImage}
-            alt=""
-            draggable={false}
-            decoding="async"
-            className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rotate-45 select-none rounded-full object-cover"
-          />
+          {realCover(blog.coverImage) ? (
+            <img
+              src={blog.coverImage}
+              alt=""
+              draggable={false}
+              decoding="async"
+              className="absolute inset-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rotate-45 select-none rounded-full object-cover"
+            />
+          ) : (
+            <CoverPlaceholder
+              variant="blog"
+              seed={blog.id}
+              compact
+              className="absolute! inset-[3px] h-[calc(100%-6px)]! w-[calc(100%-6px)]! rotate-45 rounded-full"
+            />
+          )}
         </motion.div>
         {blog.status === "draft" && (
           <span className="absolute -right-3 -top-2 rounded-full bg-slate-900/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-300">

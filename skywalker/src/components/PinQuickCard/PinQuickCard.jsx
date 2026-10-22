@@ -4,7 +4,8 @@ import { ChevronRight, FilePlus2, ImagePlus, Link2, LoaderCircle, Luggage, MapPi
 import { formatBlogDate, formatDateRange } from "../../utils/dateFilters";
 import { formatWeather } from "../../lib/weather";
 import { formatCoords } from "../../utils/geo";
-import { PLACEHOLDER_COVER } from "../../lib/media";
+import { realCover } from "../../lib/media";
+import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 import { allCompanions } from "../../lib/hierarchy";
 
 const MAX_COVERS = 6;
@@ -21,7 +22,11 @@ function PostRow({ post, canDetach, busy, onOpenPost, onDetach }) {
         className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-black/5 focus-visible:bg-black/5"
         aria-label={`Read “${post.title}”`}
       >
-        <img src={post.coverImage || PLACEHOLDER_COVER} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+        {realCover(post.coverImage) ? (
+          <img src={post.coverImage} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+        ) : (
+          <CoverPlaceholder variant="blog" seed={post.id} compact className="h-12! w-12! shrink-0 rounded-lg" />
+        )}
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-sm font-semibold">{post.title}</span>
@@ -159,7 +164,7 @@ export default function PinQuickCard({
   const tripIds = new Set(trips.map((t) => t.id));
   const loosePosts = posts.filter((p) => !tripIds.has(p.tripId));
   const covers = [
-    ...posts.map((p) => p.coverImage).filter((src) => src && src !== PLACEHOLDER_COVER),
+    ...posts.map((p) => realCover(p.coverImage)).filter(Boolean),
     ...photos.filter((p) => p.type !== "video").map((p) => p.thumbUrl || p.url),
   ]
     .filter(Boolean)

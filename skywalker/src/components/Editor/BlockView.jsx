@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import { BLOCK_KIND, toEmbedUrl } from "../../lib/blocks";
+import { BLOCK_KIND, isEmbedUrl, toEmbedUrl } from "../../lib/blocks";
 import { fileToUrl } from "../../lib/files";
+import { withFirstFramePoster } from "../../lib/media";
 import "./BlockView.css";
 
 const TEXT_TAGS = { h1: "h1", h2: "h2", quote: "blockquote", paragraph: "p" };
@@ -166,7 +167,10 @@ export default function BlockView({ block, editable, onChange, onDelete, onFocus
         }
       >
         <div className="block-video" ref={containerRef} style={{ width: `${block.width ?? 100}%` }}>
-          {embed ? (
+          {embed && !isEmbedUrl(embed) ? (
+            // Uploaded/direct files play natively — an <iframe> would download them or show a bare browser player.
+            <video src={withFirstFramePoster(embed)} controls playsInline preload="metadata" />
+          ) : embed ? (
             <iframe
               src={embed}
               title="Embedded video"

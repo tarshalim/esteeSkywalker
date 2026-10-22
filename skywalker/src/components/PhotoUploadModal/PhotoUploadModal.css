@@ -128,7 +128,7 @@
   display: block;
   margin-bottom: 0.85rem;
 }
-.upload-modal-field > span {
+.upload-modal-field > span:not(.ui-select) {
   display: block;
   font-size: 0.72rem;
   letter-spacing: 0.06em;
@@ -235,7 +235,7 @@
 /* "Upload from gallery" / "Take photo live" under the picker. */
 .upload-modal-sources {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.5rem;
   margin-bottom: 0.9rem;
 }
@@ -257,14 +257,6 @@
 }
 .upload-modal-sources button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--blue) 18%, transparent);
-}
-.upload-modal-sources button.is-camera {
-  border-color: transparent;
-  background: var(--blue-deep);
-  color: #fff;
-}
-.upload-modal-sources button.is-camera:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--blue-deep) 85%, #fff);
 }
 .upload-modal-sources button:disabled {
   opacity: 0.5;

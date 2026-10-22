@@ -2,15 +2,28 @@ import { BLOCK_KIND, isEmbedUrl, toEmbedUrl } from "./blocks";
 import { parseYouTubeId } from "./music";
 import { hasTrim, readTrim } from "./mediaTrim";
 
-// Default cover the editor assigns when none is picked — not a real asset, so
-// the Gallery skips it.
+// Stock cover older posts were published with when none was picked. New posts
+// keep an empty cover instead; this is only kept to recognise the legacy value.
 export const PLACEHOLDER_COVER = "https://picsum.photos/seed/new-post/1600/900";
+
+/** A post's own cover image URL, or "" when it has none (legacy stock placeholder included). */
+export function realCover(url) {
+  return url && url !== PLACEHOLDER_COVER ? url : "";
+}
 
 const DIRECT_VIDEO = /^data:video\/|\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i;
 const YOUTUBE_EMBED = /youtube\.com\/embed\/([\w-]+)/;
 
 export function isDirectVideo(url) {
   return DIRECT_VIDEO.test(url ?? "");
+}
+
+/**
+ * iOS Safari won't paint a frame for `preload="metadata"` until playback
+ * starts; a media fragment makes it decode the first frame as a poster.
+ */
+export function withFirstFramePoster(src) {
+  return src && !src.startsWith("data:") && !src.includes("#") ? `${src}#t=0.001` : src;
 }
 
 /** True when a canvas video can be held to a start/end time: uploads, direct files and YouTube (not Vimeo/Loom). */
@@ -91,7 +104,7 @@ export function collectMedia(photos, blogs) {
   for (const blog of blogs) {
     if (blog.status !== "published") continue;
     const base = blogMediaBase(blog);
-    if (blog.coverImage && blog.coverImage !== PLACEHOLDER_COVER) {
+    if (realCover(blog.coverImage)) {
       items.push({ ...base, id: `${blog.id}:cover`, type: "image", url: blog.coverImage, thumbUrl: blog.coverImage });
     }
     for (const block of blog.blocks ?? []) {

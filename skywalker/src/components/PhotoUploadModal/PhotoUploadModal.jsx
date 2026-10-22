@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Camera, ImagePlus, MapPin } from "lucide-react";
+import { ImagePlus, MapPin } from "lucide-react";
 import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata, formatFileSize } from "../../lib/exif";
 import { cityFromPlaceName, reverseGeocode } from "../../lib/geocode";
@@ -12,11 +12,10 @@ import { createPin, distanceKm, pinsNear } from "../../lib/pinStore";
 import { saveTrip } from "../../lib/tripStore";
 import { NEW_TRIP, emptyTripDraft, isWithinTrip, parseTags, tripCovering, validateTrip } from "../../lib/hierarchy";
 import { formatDate, formatDateRange } from "../../utils/dateFilters";
-import { useCameraCapture } from "../CameraCapture/useCameraCapture";
 import CountrySelect from "../CountrySelect/CountrySelect";
 import MediaView from "../MediaView/MediaView";
 import TripSelect from "../TripPicker/TripSelect";
-import { FIELD_INPUT, fieldInputStyle } from "../TripPicker/fieldStyles";
+import Select from "../Select/Select";
 import "./PhotoUploadModal.css";
 
 function todayISO() {
@@ -264,10 +263,6 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
     if (!next && pinChoice === NEW_LOCATION) choosePin("");
   };
 
-  // A live capture arrives as a JPEG already stamped with time + GPS, so it
-  // takes the exact same EXIF -> geocode -> Location/Trip path as a picked file.
-  const liveCamera = useCameraCapture({ onCapture: loadFile, onError: setError });
-
   const handleFilePick = (e) => {
     loadFile(e.target.files?.[0]);
     e.target.value = ""; // so re-picking the same file fires onChange again
@@ -411,15 +406,12 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
           <input ref={fileInputRef} type="file" accept="image/*,video/*" hidden onChange={handleFilePick} />
         </div>
 
+        {/* One native picker: on phones it already offers Take Photo / Photo Library / Browse. */}
         <div className="upload-modal-sources">
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={extracting || liveCamera.busy}>
-            <ImagePlus size={16} aria-hidden="true" /> Upload from gallery
-          </button>
-          <button type="button" className="is-camera" onClick={liveCamera.open} disabled={extracting || liveCamera.busy}>
-            <Camera size={16} aria-hidden="true" /> {liveCamera.busy ? "Processing…" : "Take photo live"}
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={extracting}>
+            <ImagePlus size={16} aria-hidden="true" /> Choose photo or video
           </button>
         </div>
-        {liveCamera.element}
 
         {extracting && <p className="upload-modal-status">Reading photo metadata…</p>}
         {!extracting && detectedNote && <p className="upload-modal-status">{detectedNote}</p>}
@@ -466,7 +458,7 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
               <MapPin size={14} aria-hidden="true" />
               Location
             </span>
-            <select className={FIELD_INPUT} style={fieldInputStyle} value={pinChoice} onChange={(e) => choosePin(e.target.value)}>
+            <Select value={pinChoice} onChange={(e) => choosePin(e.target.value)}>
               <option value="">Unfiled (no location)</option>
               {pinOptions.map((pin) => (
                 <option key={pin.id} value={pin.id}>
@@ -475,7 +467,7 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
                 </option>
               ))}
               {coords && <option value={NEW_LOCATION}>+ New location at this photo&rsquo;s spot</option>}
-            </select>
+            </Select>
           </label>
 
           {pinChoice && (
@@ -493,7 +485,7 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
           {selectedTrip && (
             <label className="upload-modal-field">
               <span>Attach to</span>
-              <select className={FIELD_INPUT} style={fieldInputStyle} value={blogChoice} onChange={(e) => setBlogChoice(e.target.value)}>
+              <Select value={blogChoice} onChange={(e) => setBlogChoice(e.target.value)}>
                 <option value="">Standalone in the trip gallery</option>
                 {tripPosts.map((post) => (
                   <option key={post.id} value={post.id}>
@@ -501,7 +493,7 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
                     {post.status === "draft" ? " (draft)" : ""}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
         </section>

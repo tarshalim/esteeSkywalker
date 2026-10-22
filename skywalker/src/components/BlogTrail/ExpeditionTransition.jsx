@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
+import { realCover } from "../../lib/media";
 
 const TOTAL_MS = 2300;
 const IRIS_EASE = [0.65, 0, 0.35, 1];
@@ -40,14 +41,17 @@ export default function ExpeditionTransition({ trip, onComplete }) {
         animate={{ clipPath: `circle(150vmax at ${x}px ${y}px)` }}
         transition={{ delay: 0.45, duration: 0.8, ease: IRIS_EASE }}
       >
-        <motion.img
-          src={blog.coverImage}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover sepia-[0.35]"
-          initial={{ scale: 1.5 }}
-          animate={{ scale: 1.05 }}
-          transition={{ delay: 0.45, duration: 1.8, ease: "easeOut" }}
-        />
+        {/* No cover: the parchment backdrop and map grid carry the reveal on their own. */}
+        {realCover(blog.coverImage) && (
+          <motion.img
+            src={blog.coverImage}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover sepia-[0.35]"
+            initial={{ scale: 1.5 }}
+            animate={{ scale: 1.05 }}
+            transition={{ delay: 0.45, duration: 1.8, ease: "easeOut" }}
+          />
+        )}
         <div className="absolute inset-0 bg-[#f3e2b8]/35 mix-blend-multiply" style={{ backgroundImage: MAP_GRID }} />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(60,35,10,0.6)_100%)]" />
 

@@ -4,11 +4,30 @@ import { getBlogMusic, musicKey } from "../../lib/music";
 import BlockView from "../Editor/BlockView";
 import CanvasReadOnlyView from "../Editor/Canvas/CanvasReadOnlyView";
 import BackgroundAudioPlayer from "../BackgroundAudioPlayer/BackgroundAudioPlayer";
+import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
+import { realCover } from "../../lib/media";
 import { countryCodeToFlagEmoji } from "../../utils/countries";
 import { formatBlogDate } from "../../utils/dateFilters";
 import { hasCoords } from "../../utils/geo";
 import { GLOBE_HASH } from "../../utils/routes";
+import { useAuth } from "../../lib/auth";
+import SectionThread from "../SectionComments/SectionThread";
+import { useSectionThreads } from "../SectionComments/useSectionThreads";
 import "../../pages/BlogDetail/BlogDetail.css";
+
+// What a reader would call each kind of section; stickers and decor aren't
+// worth a discussion, so they get no trigger.
+const SECTION_LABELS = {
+  text: "this passage",
+  textbox: "this passage",
+  note: "this note",
+  image: "this photo",
+  polaroid: "this photo",
+  collage: "these photos",
+  video: "this video",
+  viewfinder: "this video",
+  audio: "this audio",
+};
 
 /**
  * The public reading view of a post: hero, trip badge, scrapbook page and
@@ -20,10 +39,19 @@ export default function BlogReader({ blog, trip = null, toolbar = null, preview 
   const navigate = useNavigate();
   const music = getBlogMusic(blog);
   const linkLocation = hasCoords(blog.location) && !preview;
+  const cover = realCover(blog.coverImage);
+  const { user } = useAuth();
+  // Comments are for published posts; the editor preview may not even be saved.
+  const threads = useSectionThreads(blog.id, { enabled: !preview && blog.status === "published", viewerKey: user?.id });
+  const anchorFor = (section) => {
+    const label = SECTION_LABELS[section.kind];
+    return threads.enabled && label ? <SectionThread sectionId={section.id} threads={threads} label={label} /> : null;
+  };
 
   return (
     <div className="blog-detail-page">
-      <div className="blog-detail-hero" style={{ backgroundImage: `url(${blog.coverImage})` }}>
+      <div className="blog-detail-hero" style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
+        {!cover && <CoverPlaceholder variant="blog" seed={blog.id} />}
         <div className="blog-detail-hero-scrim" />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -78,9 +106,14 @@ export default function BlogReader({ blog, trip = null, toolbar = null, preview 
       >
         {/* Canvas-authored posts render as their scrapbook page; older posts keep the block list. */}
         {blog.canvas ? (
-          <CanvasReadOnlyView doc={blog.canvas} />
+          <CanvasReadOnlyView doc={blog.canvas} renderAnchor={threads.enabled ? anchorFor : null} />
         ) : (
-          (blog.blocks ?? []).map((block) => <BlockView key={block.id} block={block} editable={false} />)
+          (blog.blocks ?? []).map((block) => (
+            <div key={block.id} className="section-anchor">
+              <BlockView block={block} editable={false} />
+              {anchorFor(block)}
+            </div>
+          ))
         )}
       </motion.div>
 

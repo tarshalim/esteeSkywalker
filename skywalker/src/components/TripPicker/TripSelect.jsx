@@ -2,7 +2,7 @@ import { CalendarRange, Luggage, Plus, Users } from "lucide-react";
 import { NEW_TRIP, allCompanions, tripLabel } from "../../lib/hierarchy";
 import { formatDateRange } from "../../utils/dateFilters";
 import TripFields from "./TripFields";
-import { FIELD_INPUT, fieldInputStyle } from "./fieldStyles";
+import Select from "../Select/Select";
 
 const CARD = "flex min-w-0 flex-col gap-2 rounded-2xl border-2 p-3 text-left transition-[border-color,box-shadow]";
 const cardStyle = (active) => ({
@@ -62,9 +62,7 @@ export default function TripSelect({
             <Luggage size={16} aria-hidden="true" />
             Select existing trip
           </span>
-          <select
-            className={FIELD_INPUT}
-            style={fieldInputStyle}
+          <Select
             aria-label="Existing trip"
             value={disabled || creating ? "" : value}
             disabled={disabled}
@@ -76,7 +74,7 @@ export default function TripSelect({
                 {tripLabel(trip)}
               </option>
             ))}
-          </select>
+          </Select>
           {selected ? (
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={mutedStyle}>
               <span className="inline-flex items-center gap-1">
