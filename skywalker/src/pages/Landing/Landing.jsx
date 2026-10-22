@@ -96,7 +96,7 @@ export default function Landing() {
   const handleClearGlobeFilter = useCallback(() => setClearSignal((n) => n + 1), []);
 
   return (
-    <div className="landing-page" ref={setScrollRoot} style={{ scrollPaddingTop: "calc(var(--nav-bottom) + 8px)" }}>
+    <div className="landing-page" ref={setScrollRoot}>
       <section
         className="landing-feed"
         aria-labelledby="landing-feed-title"

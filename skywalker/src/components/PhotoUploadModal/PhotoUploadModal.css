@@ -144,6 +144,62 @@
   text-transform: none;
   letter-spacing: normal;
 }
+/* "✨ from photo · Clear" / "↺ Restore" next to a pre-filled field's label. */
+.upload-modal-field > span .upload-modal-auto {
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.upload-modal-field > span .upload-modal-auto em {
+  color: rgb(21, 128, 61);
+}
+.upload-modal-auto button,
+.upload-modal-meta button {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.upload-modal-auto button:hover,
+.upload-modal-meta button:hover {
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+}
+
+/* Measured file details: dimensions, size, GPS (with an ignore toggle). */
+.upload-modal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  margin: -0.4rem 0 0.9rem;
+  padding: 0;
+}
+.upload-modal-meta li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--blue) 8%, var(--bg-elevated));
+  border: 1px solid var(--border);
+}
+.upload-modal-meta li.is-off {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.upload-modal-meta li.is-off button {
+  text-decoration: none;
+}
+
 .upload-modal-field input[type="text"],
 .upload-modal-field input.upload-modal-date {
   width: 100%;
@@ -176,6 +232,45 @@
   border: none;
   cursor: pointer;
 }
+/* "Upload from gallery" / "Take photo live" under the picker. */
+.upload-modal-sources {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+.upload-modal-sources button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.upload-modal-sources button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--blue) 18%, transparent);
+}
+.upload-modal-sources button.is-camera {
+  border-color: transparent;
+  background: var(--blue-deep);
+  color: #fff;
+}
+.upload-modal-sources button.is-camera:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--blue-deep) 85%, #fff);
+}
+.upload-modal-sources button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .upload-modal-actions button:first-child {
   color: var(--text);
   background: color-mix(in srgb, var(--blue) 10%, transparent);

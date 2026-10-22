@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Play, Pause, Volume2, VolumeX, Music2, Disc3, Radio } from "lucide-react";
-import { audioEmbedSrc } from "../../../../lib/media";
+import { audioEmbedSrc, trimmedAudioEmbed } from "../../../../lib/media";
+import { attachTrim, readTrim } from "../../../../lib/mediaTrim";
+import TrimmedEmbed from "../../TrimmedEmbed";
 
 const SKIN_ICON = { cassette: Disc3, vinyl: Disc3, pill: Radio };
 
@@ -26,16 +28,22 @@ export default function AudioPlayerElementContent({ element, editable, actions, 
     if (!audio) return undefined;
     const onTime = () => setProgress(audio.currentTime);
     const onLoaded = () => setDuration(audio.duration || 0);
-    const onEnd = () => setPlaying(false);
+    // play/pause also fire when the trim loops or stops the track at its end time.
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("ended", onEnd);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    const detachTrim = attachTrim(audio, readTrim({ startSec: element.startSec, endSec: element.endSec, loop: element.loop }));
     return () => {
+      detachTrim();
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("loadedmetadata", onLoaded);
-      audio.removeEventListener("ended", onEnd);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
     };
-  }, [element.src]);
+  }, [element.src, element.sourceType, element.startSec, element.endSec, element.loop]);
 
   // Auto-play-on-scroll-into-view: only meaningful in the published/read-only render.
   useEffect(() => {
@@ -70,9 +78,12 @@ export default function AudioPlayerElementContent({ element, editable, actions, 
 
   if (isEmbed(element.sourceType)) {
     const src = audioEmbedSrc(element);
+    const trimmed = trimmedAudioEmbed(element);
     return (
       <div ref={containerRef} className="w-full h-full rounded-2xl overflow-hidden bg-slate-900">
-        {src ? (
+        {trimmed ? (
+          <TrimmedEmbed music={trimmed} className={`w-full h-full ${editable ? "pointer-events-none" : ""}`} />
+        ) : src ? (
           <iframe
             className={`w-full h-full ${editable ? "pointer-events-none" : ""}`}
             src={src}
@@ -88,13 +99,16 @@ export default function AudioPlayerElementContent({ element, editable, actions, 
   }
 
   const Icon = SKIN_ICON[element.widgetStyle] || Radio;
-  const pct = duration ? (progress / duration) * 100 : 0;
+  // The scrubber covers just the trimmed segment.
+  const trim = readTrim({ startSec: element.startSec, endSec: element.endSec });
+  const segmentEnd = trim.end != null ? Math.min(trim.end, duration || trim.end) : duration;
+  const segmentLength = Math.max(0, segmentEnd - trim.start);
+  const pct = segmentLength ? (Math.min(Math.max(0, progress - trim.start), segmentLength) / segmentLength) * 100 : 0;
 
   const togglePlay = () => {
     if (!audioRef.current) return;
     if (playing) audioRef.current.pause();
     else audioRef.current.play().catch(() => {});
-    setPlaying(!playing);
   };
 
   const skinClass =
@@ -112,7 +126,8 @@ export default function AudioPlayerElementContent({ element, editable, actions, 
       className={`w-full h-full rounded-2xl border shadow-lg px-3 py-2 flex items-center gap-2 ${skinClass} ${textClass}`}
       onPointerDown={(e) => editable && e.stopPropagation()}
     >
-      <audio ref={audioRef} src={element.src} muted={element.muted} loop={false} />
+      {/* Looping is set by attachTrim, which also keeps playback inside the trim. */}
+      <audio ref={audioRef} src={element.src} muted={element.muted} />
       <button
         type="button"
         className="shrink-0 h-9 w-9 rounded-full flex items-center justify-center"
@@ -130,8 +145,8 @@ export default function AudioPlayerElementContent({ element, editable, actions, 
         </div>
         <input
           type="range"
-          min={0}
-          max={duration || 0}
+          min={trim.start}
+          max={segmentEnd || 0}
           value={progress}
           onChange={(e) => {
             const t = Number(e.target.value);

@@ -24,6 +24,7 @@ import {
   Scissors,
   Sparkles,
   Sun,
+  Timer,
   Trash2,
   Type,
   X,
@@ -44,6 +45,8 @@ import {
 } from "../../../lib/canvasElements";
 import { DEFAULT_BACKGROUND, backgroundCss, photosUploadedPatch } from "../../../lib/collage";
 import { CANVAS_FONTS, findFont } from "../../../lib/canvasFonts";
+import { canTrimVideo } from "../../../lib/media";
+import TrimFields from "../TrimFields";
 import { ART_TONES, artFilter, findArt } from "../../../data/scrapbookArt";
 
 const ALIGN_ICONS = { left: AlignLeft, center: AlignCenter, right: AlignRight };
@@ -207,10 +210,17 @@ export default function ElementToolbar({ element, editing, actions, onPickMedia,
   }
   if ((kind === ELEMENT_KIND.VIDEO || kind === ELEMENT_KIND.VIEWFINDER) && element.url) {
     kindControls.push(
-      <Btn key="replace" label="Change video" onClick={() => update({ url: "" })}>
+      <Btn key="replace" label="Change video" onClick={() => update({ url: "", startSec: null, endSec: null })}>
         <RefreshCw size={16} />
       </Btn>
     );
+    if (canTrimVideo(element.url)) {
+      kindControls.push(
+        <Btn key="trim" label="Start & end time" active={panel === "trim"} onClick={() => toggle("trim")}>
+          <Timer size={16} />
+        </Btn>
+      );
+    }
   }
   if (kind === ELEMENT_KIND.AUDIO) {
     kindControls.push(
@@ -392,6 +402,17 @@ export default function ElementToolbar({ element, editing, actions, onPickMedia,
           {panel === "layout" && <CollageLayoutPanel element={element} actions={actions} />}
           {panel === "background" && <CollageBackgroundPanel element={element} actions={actions} />}
           {panel === "recolor" && <ArtRecolorPanel element={element} update={update} />}
+          {panel === "trim" && (
+            <div className="w-[264px]">
+              <TrimFields
+                key={`${element.id}:${element.url}`}
+                dark
+                value={{ startSec: element.startSec ?? null, endSec: element.endSec ?? null, loop: element.loop ?? true }}
+                onChange={(trim) => update(trim, "trim")}
+                hint="Optional: play only part of the clip, e.g. 0:45 to 2:15."
+              />
+            </div>
+          )}
         </div>
       )}
     </FloatingPanel>

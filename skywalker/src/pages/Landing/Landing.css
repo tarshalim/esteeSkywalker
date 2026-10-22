@@ -8,18 +8,26 @@
   overflow-x: hidden;
   scroll-snap-type: y proximity;
   scroll-behavior: smooth;
+  /* Feed anchors land just below the fixed TopNav. */
+  scroll-padding-top: calc(var(--nav-bottom) + 8px);
   background: var(--bg);
 }
 
 .landing-globe {
   scroll-snap-align: start;
   border-top: 1px solid var(--border);
+  /* The globe is a full-viewport section that already pads itself below the
+     nav, so it must snap flush to the top: inherit the page's scroll padding
+     and its bottom (pin dock included) is pushed off-screen by the same
+     amount. Cancel the padding, plus 1px so the border tucks just above. */
+  scroll-margin-top: calc(-1 * (var(--nav-bottom) + 8px) - 1px);
 }
 
 .landing-feed {
   scroll-snap-align: start;
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(ellipse 80% 300px at 50% 0%, color-mix(in srgb, var(--blue) 10%, transparent), transparent),
     var(--bg);

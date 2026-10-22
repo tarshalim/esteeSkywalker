@@ -25,6 +25,7 @@ import { followParent, hostAt, paintOrder } from "../../../lib/canvasGroups";
 import { DECORATION_LIBRARY, LIBRARY_DRAG_TYPE, findLibraryItem } from "../../../lib/scrapbookLibrary";
 import { paperBackground } from "../../../lib/paperStyles";
 import { fileToUrl } from "../../../lib/files";
+import { useCameraCapture } from "../../CameraCapture/useCameraCapture";
 
 const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 const STAMP_JITTER = 60; // px spread so pieces tapped onto the same collage don't stack exactly
@@ -37,7 +38,7 @@ const isLibraryDrag = (e) => [...(e.dataTransfer?.types ?? [])].includes(LIBRARY
  * toolbar above it, and page-level controls (paper, undo/redo) live in a
  * small dock pinned to the bottom of the viewport.
  */
-export default function ScrapbookCanvas({ onError }) {
+export default function ScrapbookCanvas({ onError, onPhotoCaptured }) {
   const { doc, ui, canUndo, canRedo, actions } = useCanvas();
   const frameRef = useRef(null);
   const pageRef = useRef(null);
@@ -122,8 +123,32 @@ export default function ScrapbookCanvas({ onError }) {
     return actions.addElement(element, opts);
   };
 
+  // Live captures are placed only once the photo is uploaded, so cancelling
+  // the camera leaves no empty frame behind.
+  const capturePointRef = useRef(null);
+  const insertCapturedPhoto = async (file) => {
+    const point = capturePointRef.current ?? visibleCenter();
+    setUploads((n) => n + 1);
+    try {
+      const url = await fileToUrl(file);
+      place(createImageElement({ src: url }), undefined, point);
+      onPhotoCaptured?.(file);
+    } catch (err) {
+      console.error(err);
+      onError?.(`Couldn't upload ${file.name}: ${err.message}`);
+    } finally {
+      setUploads((n) => n - 1);
+    }
+  };
+  const liveCamera = useCameraCapture({ onCapture: insertCapturedPhoto, onError });
+
   const handleQuickAdd = (kind) => {
     if (kind === "text") place(createTextElement(), { edit: true });
+    else if (kind === "camera") {
+      capturePointRef.current = menu.point;
+      setMenu(null);
+      liveCamera.open(); // synchronously, inside the menu click: the native camera needs the gesture
+    }
     else if (kind === "video") place(createVideoElement());
     else if (kind === "image") {
       const id = place(createImageElement());
@@ -322,6 +347,7 @@ export default function ScrapbookCanvas({ onError }) {
       {collagePoint && <CollageTemplatePicker onPick={addCollage} onClose={() => setCollagePoint(null)} />}
 
       <input ref={fileInputRef} type="file" hidden onChange={handleFile} />
+      {liveCamera.element}
 
       {createPortal(
         <div className="fixed bottom-[max(12px,env(safe-area-inset-bottom))] left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center">

@@ -1,15 +1,17 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Disc3, Eye, EyeOff, Music, RefreshCw, SquarePlay, Trash2, Upload } from "lucide-react";
 import {
   AUDIO_ACCEPT,
   MUSIC_SOURCES,
   fetchMusicTitle,
   musicFromLink,
-  spotifyEmbedUrl,
+  musicKey,
   uploadBlogAudio,
   validateAudioFile,
-  youTubeEmbedUrl,
 } from "../../lib/music";
+import { attachTrim, readTrim } from "../../lib/mediaTrim";
+import TrimFields from "../../components/Editor/TrimFields";
+import TrimmedEmbed from "../../components/Editor/TrimmedEmbed";
 
 const TABS = [
   { id: "upload", label: "Upload" },
@@ -28,28 +30,24 @@ function SourceIcon({ type }) {
   return <Music size={16} aria-hidden="true" />;
 }
 
+// Background tracks loop unless the author turns it off.
+const LOOP_BY_DEFAULT = true;
+
+const SPOTIFY_TRIM_HINT = "Readers without Spotify Premium only hear a 30-second preview, so times past 0:30 won't play for them.";
+
+function AudioPreview({ music }) {
+  const audioRef = useRef(null);
+  const { url, startSec, endSec, loop } = music;
+  useEffect(() => attachTrim(audioRef.current, readTrim({ startSec, endSec, loop }, { loop: LOOP_BY_DEFAULT })), [url, startSec, endSec, loop]);
+  return <audio ref={audioRef} className="editor-music-preview" src={url} controls autoPlay preload="metadata" />;
+}
+
+/** Plays the track as readers will hear it, trim included. */
 function MusicPreview({ music }) {
-  if (music.type === "upload") return <audio className="editor-music-preview" src={music.url} controls autoPlay preload="metadata" />;
-  if (music.type === "youtube") {
-    return (
-      <iframe
-        className="editor-music-embed editor-music-embed--youtube"
-        src={`${youTubeEmbedUrl(music.id)}?autoplay=1`}
-        title="YouTube preview"
-        allow="autoplay; encrypted-media"
-        allowFullScreen
-      />
-    );
-  }
-  return (
-    <iframe
-      className="editor-music-embed"
-      src={spotifyEmbedUrl(music.id)}
-      title="Spotify preview"
-      allow="autoplay; clipboard-write; encrypted-media"
-      loading="lazy"
-    />
-  );
+  if (music.type === "upload") return <AudioPreview music={music} />;
+  const trimmed = { ...music, loop: music.loop ?? LOOP_BY_DEFAULT };
+  if (music.type === "youtube") return <TrimmedEmbed music={trimmed} className="editor-music-embed editor-music-embed--youtube" />;
+  return <TrimmedEmbed music={trimmed} className="editor-music-embed" height={80} />;
 }
 
 function MusicPicker({ onPick, onCancel, onError }) {
@@ -174,16 +172,20 @@ function MusicPicker({ onPick, onCancel, onError }) {
 
 /**
  * Background music for a post: pick an uploaded file, a YouTube video or a
- * Spotify track. `value` is a music object (see lib/music.js) or null. The
- * editor owns storage cleanup, since a replaced file may still be the saved one.
+ * Spotify track, optionally trimmed to a start/end time. `value` is a music
+ * object (see lib/music.js) or null. The editor owns storage cleanup, since a
+ * replaced file may still be the saved one. onTrimErrorChange reports an
+ * unsaveable start/end time (or null) so the editor can block saving.
  */
-export default function BackgroundMusicField({ value, onChange, onError }) {
+export default function BackgroundMusicField({ value, onChange, onError, onTrimErrorChange }) {
   const [replacing, setReplacing] = useState(false);
   const [previewing, setPreviewing] = useState(false);
 
   const pick = (music) => {
     setReplacing(false);
     setPreviewing(false);
+    // A new (or no) track starts with no trim; its fields re-report once shown.
+    onTrimErrorChange?.(null);
     onChange(music);
   };
 
@@ -229,6 +231,14 @@ export default function BackgroundMusicField({ value, onChange, onError }) {
               <Trash2 size={14} aria-hidden="true" /> Remove music
             </button>
           </div>
+          <TrimFields
+            key={musicKey(value)}
+            value={{ startSec: value.startSec ?? null, endSec: value.endSec ?? null, loop: value.loop ?? LOOP_BY_DEFAULT }}
+            onChange={(trim) => onChange({ ...value, ...trim })}
+            onErrorChange={onTrimErrorChange}
+            loopLabel="Loop"
+            hint={value.type === "spotify" ? SPOTIFY_TRIM_HINT : "Optional: play only part of the track, e.g. 0:45 to 2:15."}
+          />
           {previewing && <MusicPreview music={value} />}
         </div>
       ) : (

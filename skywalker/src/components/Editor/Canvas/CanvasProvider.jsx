@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useReducer } from "react";
 import { canvasReducer, createInitialState } from "./canvasReducer";
 import { canUndo as computeCanUndo, canRedo as computeCanRedo } from "../../../lib/canvasHistory";
-import { DEFAULT_THEME, makeElementId, nextZIndex } from "../../../lib/canvasElements";
+import { DEFAULT_THEME, dockPatch, dockPayload, makeElementId, nextZIndex } from "../../../lib/canvasElements";
 import { duplicateWithGroups, removeWithGroups, reorderWithinGroup, updateWithGroups, withAttachment } from "../../../lib/canvasGroups";
 
 const CanvasContext = createContext(null);
@@ -45,7 +45,7 @@ export function CanvasProvider({ initialDoc, onDocChange, children }) {
       /**
        * `patch` is an object, or a function of the latest element returning
        * one. `coalesce` groups rapid edits (typing, nudging) into one undo step.
-       * Moving a collage carries its attached overlays (lib/canvasGroups.js).
+       * Moving a host carries its attached overlays (lib/canvasGroups.js).
        */
       updateElement(id, patch, { coalesce } = {}) {
         mutate((d) => updateWithGroups(d, id, patch), coalesce ? `${id}:${coalesce}` : undefined);
@@ -54,6 +54,22 @@ export function CanvasProvider({ initialDoc, onDocChange, children }) {
       deleteElement(id) {
         mutate((d) => ({ ...d, elements: removeWithGroups(d.elements, id) }));
         dispatch({ type: "FORGET", id });
+      },
+
+      /**
+       * Drops `sourceId`'s photo, clip or words into `hostId`'s empty slot
+       * (lib/canvasElements.js dockPatch) and removes the source, as one undo
+       * step. A host that no longer fits leaves the doc alone.
+       */
+      dockInto(sourceId, hostId) {
+        mutate((d) => {
+          const source = d.elements.find((el) => el.id === sourceId);
+          const host = d.elements.find((el) => el.id === hostId);
+          const patch = source && host && dockPatch(host, dockPayload(source));
+          if (!patch) return d;
+          return { ...d, elements: removeWithGroups(updateWithGroups(d, hostId, patch).elements, sourceId) };
+        });
+        dispatch({ type: "SELECT", id: hostId });
       },
 
       duplicateElement(id) {

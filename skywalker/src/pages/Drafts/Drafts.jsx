@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CheckCircle2, Circle, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Circle, ImageOff, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
 import { deleteBlog, getBlogs } from "../../lib/blogStore";
 import { draftChecklist } from "../../lib/blogTaxonomy";
+import { PLACEHOLDER_COVER } from "../../lib/media";
 import { useAsync } from "../../hooks/useAsync";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -32,6 +33,7 @@ function DraftCard({ draft, onDelete, deleting }) {
   const doneCount = checklist.filter((c) => c.done).length;
   const pct = Math.round((doneCount / checklist.length) * 100);
   const place = [draft.city, draft.countryName].filter(Boolean).join(", ") || draft.location?.name;
+  const hasCover = Boolean(draft.coverImage) && draft.coverImage !== PLACEHOLDER_COVER;
 
   return (
     <motion.li
@@ -42,7 +44,17 @@ function DraftCard({ draft, onDelete, deleting }) {
       className="flex flex-col overflow-hidden rounded-2xl border-2 sm:flex-row"
       style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}
     >
-      <img src={draft.coverImage} alt="" className="h-36 w-full shrink-0 object-cover sm:h-auto sm:w-44" loading="lazy" />
+      {hasCover ? (
+        <img src={draft.coverImage} alt="" className="h-36 w-full shrink-0 object-cover sm:h-auto sm:w-44" loading="lazy" />
+      ) : (
+        <div
+          className="flex h-36 w-full shrink-0 items-center justify-center sm:h-auto sm:w-44"
+          style={{ background: "var(--bg-panel)", color: "var(--text-muted)" }}
+        >
+          <ImageOff size={28} aria-hidden="true" />
+          <span className="sr-only">No cover image yet</span>
+        </div>
+      )}
       <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-bold" style={{ color: "var(--text-strong, var(--text))" }}>
@@ -143,7 +155,7 @@ export default function Drafts() {
 
   return (
     <div
-      className="min-h-screen px-4 pt-[calc(var(--nav-bottom)+3rem)] pb-16 sm:pt-[calc(var(--nav-bottom)+4.5rem)]"
+      className="min-h-dvh px-4 pt-[calc(var(--nav-bottom)+3rem)] pb-16 sm:pt-[calc(var(--nav-bottom)+4.5rem)]"
       style={{ background: "var(--bg)" }}
     >
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">

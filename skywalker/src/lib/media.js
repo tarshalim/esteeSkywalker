@@ -1,4 +1,6 @@
-import { BLOCK_KIND, toEmbedUrl } from "./blocks";
+import { BLOCK_KIND, isEmbedUrl, toEmbedUrl } from "./blocks";
+import { parseYouTubeId } from "./music";
+import { hasTrim, readTrim } from "./mediaTrim";
 
 // Default cover the editor assigns when none is picked — not a real asset, so
 // the Gallery skips it.
@@ -9,6 +11,11 @@ const YOUTUBE_EMBED = /youtube\.com\/embed\/([\w-]+)/;
 
 export function isDirectVideo(url) {
   return DIRECT_VIDEO.test(url ?? "");
+}
+
+/** True when a canvas video can be held to a start/end time: uploads, direct files and YouTube (not Vimeo/Loom). */
+export function canTrimVideo(url) {
+  return Boolean(url) && (isDirectVideo(url) || Boolean(parseYouTubeId(url)) || !isEmbedUrl(toEmbedUrl(url)));
 }
 
 /** Poster image for a video, when one can be derived (YouTube only). */
@@ -28,6 +35,30 @@ export function audioEmbedSrc(element) {
     return m ? `https://open.spotify.com/embed/${m[1]}/${m[2]}` : "";
   }
   return "";
+}
+
+const SPOTIFY_ITEM = /open\.spotify\.com\/(?:intl-[\w-]+\/)?(track|album|playlist|episode)\/(\w+)/;
+
+/** True when a canvas audio element's link can be limited to a start/end time (not Spotify albums/playlists). */
+export function canTrimAudioSource(sourceType, src) {
+  if (sourceType === "spotify") return /^(track|episode)$/.test(src?.match(SPOTIFY_ITEM)?.[1] ?? "");
+  if (sourceType === "youtube") return Boolean(parseYouTubeId(src));
+  return Boolean(sourceType);
+}
+
+/**
+ * Engine-ready music object for a trimmed YouTube/Spotify canvas audio element,
+ * for <TrimmedEmbed>; null when it isn't trimmed (a plain iframe will do).
+ */
+export function trimmedAudioEmbed(element) {
+  if (!hasTrim(readTrim(element)) || !canTrimAudioSource(element.sourceType, element.src)) return null;
+  const trim = { startSec: element.startSec, endSec: element.endSec, loop: element.loop ?? false };
+  if (element.sourceType === "youtube") return { type: "youtube", id: parseYouTubeId(element.src), ...trim };
+  if (element.sourceType === "spotify") {
+    const [, kind, id] = element.src.match(SPOTIFY_ITEM);
+    return { type: "spotify", id, uri: `spotify:${kind}:${id}`, ...trim };
+  }
+  return null;
 }
 
 function blogMediaBase(blog) {

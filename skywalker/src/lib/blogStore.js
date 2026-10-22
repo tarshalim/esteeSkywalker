@@ -175,6 +175,26 @@ export async function deleteBlog(id) {
 }
 
 /**
+ * Shows or hides a post without touching its content. A hidden post goes back
+ * to being a draft, so it drops off the feed, globe and gallery; making it
+ * public again needs the same country the editor's Publish requires.
+ */
+export async function setBlogVisibility(id, visible) {
+  const blog = await getBlogById(id);
+  if (!blog) throw new Error("This post no longer exists.");
+  if (visible && !blog.countryCode) throw new Error("Add a country in the editor first.");
+  const updated = { ...blog, status: visible ? "published" : "draft", updatedAt: new Date().toISOString() };
+  if (supabase) {
+    // RLS turns a forbidden update into a silent no-op, so check a row actually changed.
+    const rows = unwrap(await supabase.from("blogs").update(toBlogRow(updated)).eq("id", id).select("id"));
+    if (rows.length === 0) throw new Error("You don't have permission to change this post.");
+    notifyDataChanged("blogs");
+    return updated;
+  }
+  return upsertBlog(updated);
+}
+
+/**
  * Files posts under a globe pin (`pin` null unpins them). A post with no
  * coordinates of its own takes the pin's, so it can be placed and searched
  * like any other; posts that have their own exact spot keep it. A trip lives

@@ -1,5 +1,6 @@
 .account-page {
   min-height: 100vh;
+  min-height: 100dvh;
   padding: calc(var(--nav-bottom) + 4.5rem) 1rem 4rem;
   background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--blue) 10%, var(--bg)) 0%, var(--bg) 55%);
   display: flex;

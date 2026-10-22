@@ -203,16 +203,17 @@ export default function Gallery() {
     const created = await createPhoto(photoData);
     const [pins, trips] = await Promise.all([getPins(), getTrips()]);
     setSources((prev) => ({ ...prev, pins, trips, photos: [...prev.photos, created] }));
-    closeUpload();
+    closeUpload(`Added to your gallery · ${created.locationName ?? photoData.locationName}`);
   };
 
-  // Drops the one-shot ?upload/pin/trip params so a reload doesn't reopen the dialog.
-  const closeUpload = () => {
+  // Drops the one-shot ?upload/pin/trip params so a reload doesn't reopen the
+  // dialog; `flash` shows a success toast via FlashToast.
+  const closeUpload = (flash) => {
     setShowUpload(false);
-    if (searchParams.has("upload")) {
+    if (searchParams.has("upload") || typeof flash === "string") {
       const next = new URLSearchParams(searchParams);
       ["upload", "pin", "trip"].forEach((key) => next.delete(key));
-      setSearchParams(next, { replace: true });
+      setSearchParams(next, { replace: true, state: typeof flash === "string" ? { flash } : undefined });
     }
   };
 

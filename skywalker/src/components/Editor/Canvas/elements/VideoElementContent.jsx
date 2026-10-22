@@ -14,7 +14,7 @@ export default function VideoElementContent({ element, editable, actions, onPick
   }
   return (
     <div className="w-full h-full overflow-hidden rounded-xl bg-black shadow-md">
-      <MediaFill src={element.url} type="video" editable={editable} />
+      <MediaFill src={element.url} type="video" editable={editable} trim={element} />
     </div>
   );
 }

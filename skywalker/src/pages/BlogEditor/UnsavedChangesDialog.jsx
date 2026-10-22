@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
  * "Save as Draft" for drafts/new posts and "Save Changes" for a post that's
  * already published (saving it as a draft would unpublish it).
  */
-export default function UnsavedChangesDialog({ saveLabel, saving, onSave, onDiscard, onCancel }) {
+export default function UnsavedChangesDialog({ saveLabel, saving, error, onSave, onDiscard, onCancel }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onCancel();
     window.addEventListener("keydown", onKey);
@@ -36,6 +36,11 @@ export default function UnsavedChangesDialog({ saveLabel, saving, onSave, onDisc
         <p id="unsaved-desc" className="editor-exit-text">
           You have changes that haven&rsquo;t been saved yet.
         </p>
+        {error && (
+          <p role="alert" className="editor-exit-error">
+            {error}
+          </p>
+        )}
         <div className="editor-exit-actions">
           <button type="button" className="editor-btn editor-btn-primary" onClick={onSave} disabled={saving} autoFocus>
             {saving ? "Saving…" : saveLabel}

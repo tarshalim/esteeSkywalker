@@ -180,6 +180,10 @@ export function createAudioElement(widgetStyle = "card", pos = {}) {
     volume: 0.8,
     muted: false,
     autoplayOnScroll: false,
+    // Optional segment (see lib/mediaTrim.js); null plays the whole track.
+    startSec: null,
+    endSec: null,
+    loop: false,
     accentColor: "#3b82f6",
     ...pos,
   });
@@ -305,6 +309,74 @@ export function createDecorElement(decorId, pos = {}) {
 /** Patch for elements with a `mediaSrc` slot (notes, polaroids) after an upload. */
 export function mediaPatch(url, file) {
   return { mediaSrc: url, mediaType: file.type.startsWith("video/") ? "video" : "image" };
+}
+
+/** Media type of an uploaded file, or null for anything that isn't a photo or clip. */
+export function fileMediaType(file) {
+  if (file?.type?.startsWith("image/")) return "image";
+  if (file?.type?.startsWith("video/")) return "video";
+  return null;
+}
+
+/**
+ * The photo/video slot built into an element: which media it takes, whether
+ * it's already filled, and the patch that fills it. Null when it has none.
+ */
+export function mediaSlot(element) {
+  switch (element.kind) {
+    case ELEMENT_KIND.IMAGE:
+      return { accepts: ["image"], filled: Boolean(element.src), fill: (src) => ({ src }) };
+    case ELEMENT_KIND.VIDEO:
+    case ELEMENT_KIND.VIEWFINDER:
+      return { accepts: ["video"], filled: Boolean(element.url), fill: (src) => ({ url: src }) };
+    case ELEMENT_KIND.POLAROID:
+    case ELEMENT_KIND.NOTE:
+      return { accepts: ["image", "video"], filled: Boolean(element.mediaSrc), fill: (src, type) => ({ mediaSrc: src, mediaType: type }) };
+    case ELEMENT_KIND.FRAME_STICKER:
+      return { accepts: ["image"], filled: Boolean(element.imageSrc), fill: (src) => ({ imageSrc: src, imageOffsetX: 0, imageOffsetY: 0 }) };
+    default:
+      return null;
+  }
+}
+
+const hasWords = (html) => (html ?? "").replace(/<[^>]*>|&nbsp;/g, "").trim().length > 0;
+
+/** What a dragged element would put into a slot it's dropped on: its photo, clip or words. */
+export function dockPayload(element) {
+  if (element.kind === ELEMENT_KIND.IMAGE && element.src) return { type: "image", src: element.src };
+  if (element.kind === ELEMENT_KIND.VIDEO && element.url) return { type: "video", src: element.url };
+  if (element.kind === ELEMENT_KIND.TEXT && hasWords(element.html)) return { type: "text", html: element.html };
+  return null;
+}
+
+/**
+ * Patch that docks `payload` into `host`'s empty photo/video slot or blank
+ * caption, or null if it doesn't fit there. Filled slots are left alone, so a
+ * drop on them overlays instead of replacing what's inside.
+ */
+export function dockPatch(host, payload) {
+  if (!payload) return null;
+  if (payload.type === "text") {
+    return host.kind !== ELEMENT_KIND.TEXT && hasText(host) && !hasWords(host.html) ? { html: payload.html } : null;
+  }
+  const slot = mediaSlot(host);
+  return slot && !slot.filled && slot.accepts.includes(payload.type) ? slot.fill(payload.src, payload.type) : null;
+}
+
+/** `element` shrunk to fit within `fill` of `host`, centred on it, turned with it and attached to it. */
+export function placeOn(host, element, fill = 0.7) {
+  const scale = Math.min(1, (host.width * fill) / element.width, (host.height * fill) / element.height);
+  const width = Math.max(24, Math.round(element.width * scale));
+  const height = Math.max(24, Math.round(element.height * scale));
+  return {
+    ...element,
+    width,
+    height,
+    x: Math.round(host.x + host.width / 2 - width / 2),
+    y: Math.round(host.y + host.height / 2 - height / 2),
+    rotation: host.rotation,
+    attachedTo: host.id,
+  };
 }
 
 /** Elements whose content includes writeable text (and so get the text controls). */

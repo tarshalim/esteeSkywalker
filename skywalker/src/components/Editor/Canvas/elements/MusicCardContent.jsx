@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Music2, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward } from "lucide-react";
-import { audioEmbedSrc } from "../../../../lib/media";
+import { audioEmbedSrc, trimmedAudioEmbed } from "../../../../lib/media";
+import { attachTrim, readTrim } from "../../../../lib/mediaTrim";
+import TrimmedEmbed from "../../TrimmedEmbed";
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return "0:00";
@@ -20,6 +22,8 @@ export default function MusicCardContent({ element, editable, onRequestSource, o
   const [duration, setDuration] = useState(0);
   const [showEmbed, setShowEmbed] = useState(false);
   const embed = audioEmbedSrc(element);
+  const trimmedEmbed = trimmedAudioEmbed(element);
+  const trim = readTrim({ startSec: element.startSec, endSec: element.endSec, loop: element.loop });
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -27,17 +31,24 @@ export default function MusicCardContent({ element, editable, onRequestSource, o
     audio.volume = element.volume ?? 0.8;
     const onTime = () => setProgress(audio.currentTime);
     const onLoaded = () => setDuration(audio.duration || 0);
-    const onEnd = () => setPlaying(false);
+    // play/pause also fire when the trim loops or stops the track at its end time.
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("ended", onEnd);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    const detachTrim = attachTrim(audio, readTrim({ startSec: element.startSec, endSec: element.endSec, loop: element.loop }));
     return () => {
+      detachTrim();
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("loadedmetadata", onLoaded);
-      audio.removeEventListener("ended", onEnd);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
     };
-  }, [element.src, element.volume]);
+  }, [element.src, element.volume, element.startSec, element.endSec, element.loop]);
 
+  if (showEmbed && trimmedEmbed) return <TrimmedEmbed music={trimmedEmbed} className="w-full h-full overflow-hidden rounded-2xl" />;
   if (showEmbed && embed) {
     return (
       <iframe
@@ -57,10 +68,13 @@ export default function MusicCardContent({ element, editable, onRequestSource, o
     if (!audio) return;
     if (playing) audio.pause();
     else audio.play().catch(() => {});
-    setPlaying(!playing);
   };
 
-  const pct = duration ? (progress / duration) * 100 : 0;
+  // The progress bar and times cover just the trimmed segment.
+  const segmentEnd = trim.end != null ? Math.min(trim.end, duration || trim.end) : duration;
+  const segmentLength = Math.max(0, segmentEnd - trim.start);
+  const segmentProgress = Math.min(Math.max(0, progress - trim.start), segmentLength);
+  const pct = segmentLength ? (segmentProgress / segmentLength) * 100 : 0;
   const accent = element.accentColor || "#3b82f6";
 
   return (
@@ -98,16 +112,16 @@ export default function MusicCardContent({ element, editable, onRequestSource, o
           className="mt-1 h-1 w-full cursor-pointer rounded-full bg-white/25"
           onClick={(e) => {
             const audio = audioRef.current;
-            if (!audio || !duration) return;
+            if (!audio || !segmentLength) return;
             const rect = e.currentTarget.getBoundingClientRect();
-            audio.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+            audio.currentTime = trim.start + ((e.clientX - rect.left) / rect.width) * segmentLength;
           }}
         >
           <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
         </div>
         <div className="flex justify-between text-[10px] text-white/60">
-          <span>{formatTime(progress)}</span>
-          <span>{formatTime(duration)}</span>
+          <span>{formatTime(segmentProgress)}</span>
+          <span>{formatTime(segmentLength)}</span>
         </div>
         <div className="flex items-center justify-between px-[2%] text-white/80">
           <Shuffle size={14} aria-hidden="true" />
@@ -115,7 +129,7 @@ export default function MusicCardContent({ element, editable, onRequestSource, o
             type="button"
             aria-label="Restart track"
             onClick={() => {
-              if (audioRef.current) audioRef.current.currentTime = 0;
+              if (audioRef.current) audioRef.current.currentTime = trim.start;
             }}
           >
             <SkipBack size={16} fill="currentColor" />

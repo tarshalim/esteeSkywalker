@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { MapPin } from "lucide-react";
+import { Camera, ImagePlus, MapPin } from "lucide-react";
 import { fileToUrl } from "../../lib/files";
-import { extractPhotoMetadata } from "../../lib/exif";
+import { extractPhotoMetadata, formatFileSize } from "../../lib/exif";
 import { cityFromPlaceName, reverseGeocode } from "../../lib/geocode";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { findCountryForPoint, continentForCountryCode, centroidForCountryCode } from "../../utils/geo";
@@ -12,6 +12,7 @@ import { createPin, distanceKm, pinsNear } from "../../lib/pinStore";
 import { saveTrip } from "../../lib/tripStore";
 import { NEW_TRIP, emptyTripDraft, isWithinTrip, parseTags, tripCovering, validateTrip } from "../../lib/hierarchy";
 import { formatDate, formatDateRange } from "../../utils/dateFilters";
+import { useCameraCapture } from "../CameraCapture/useCameraCapture";
 import CountrySelect from "../CountrySelect/CountrySelect";
 import MediaView from "../MediaView/MediaView";
 import TripSelect from "../TripPicker/TripSelect";
@@ -24,6 +25,33 @@ function todayISO() {
 
 /** Location select value for "create a location at the photo's GPS spot". */
 const NEW_LOCATION = "new";
+
+/**
+ * Field-label marker for a value pre-filled from the file: "from photo" (+ Clear)
+ * while untouched, or a Restore button once the user has changed it.
+ */
+function AutoFillHint({ value, auto, source, onClear, onRestore }) {
+  if (auto == null || auto === "") return null;
+  if (value === auto) {
+    return (
+      <span className="upload-modal-auto">
+        <em>✨ from {source}</em>
+        {onClear && (
+          <button type="button" onClick={onClear}>
+            Clear
+          </button>
+        )}
+      </span>
+    );
+  }
+  return (
+    <span className="upload-modal-auto">
+      <button type="button" onClick={onRestore} title={`Restore the value from the ${source}`}>
+        ↺ Restore
+      </button>
+    </span>
+  );
+}
 
 /**
  * "+ Add Media" flow for the Gallery: picks (or drops) a file, extracts EXIF
@@ -63,9 +91,12 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
   const pickTokenRef = useRef(0); // ignores results from a file that was since replaced
   const [date, setDate] = useState(() => trips.find((t) => t.id === initialTripId)?.startDate ?? todayISO());
   const [time, setTime] = useState(""); // "HH:MM" | "" (unknown)
-  const [camera, setCamera] = useState(null);
+  const [camera, setCamera] = useState("");
   const [placeName, setPlaceName] = useState(null); // reverse-geocoded "Kyoto, Japan"
   const [exifFound, setExifFound] = useState(null); // { date, location } once a file is read
+  const [fileInfo, setFileInfo] = useState(null); // { width, height, fileSize, gps, dateSource } of the picked file
+  // Values pre-filled from the file, so each field can show "from photo" / Restore.
+  const [autoFilled, setAutoFilled] = useState({});
   const [suggestDismissed, setSuggestDismissed] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -140,18 +171,35 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
     if (token !== pickTokenRef.current) return;
     setPreviewUrl(dataUrl);
     setMediaType(file.type.startsWith("video/") ? "video" : "image");
-    setCamera(metadata.camera);
+    setCamera(metadata.camera ?? "");
     setPlaceName(null);
     setSuggestDismissed(false);
+
+    const point = metadata.lat != null && metadata.lng != null ? { lat: metadata.lat, lng: metadata.lng } : null;
+    const exifDate = metadata.dateSource === "exif";
+    setFileInfo({
+      width: metadata.width,
+      height: metadata.height,
+      fileSize: metadata.fileSize,
+      gps: point,
+      dateSource: metadata.dateSource,
+    });
+    setAutoFilled({
+      date: metadata.dateTaken,
+      time: metadata.timeTaken,
+      dateSource: exifDate ? "photo" : "file date",
+      camera: metadata.camera,
+    });
 
     const notes = [];
     if (metadata.dateTaken) {
       setDate(metadata.dateTaken);
       setTime(metadata.timeTaken ?? "");
-      notes.push(formatDate(metadata.dateTaken) + (metadata.timeTaken ? ` ${metadata.timeTaken}` : ""));
+      notes.push(
+        formatDate(metadata.dateTaken) + (metadata.timeTaken ? ` ${metadata.timeTaken}` : "") + (exifDate ? "" : " (file date)")
+      );
     }
 
-    const point = metadata.lat != null && metadata.lng != null ? { lat: metadata.lat, lng: metadata.lng } : null;
     setCoords(point);
     // Suggest the location the photo was taken at, unless one was already chosen.
     let targetPin = pinChoice;
@@ -168,7 +216,8 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
       setBlogChoice("");
     }
     // ...and the trip covering the day it was taken, unless one is already chosen there.
-    if (metadata.dateTaken && !(tripChoice && targetPin === pinChoice)) {
+    // A file's modified date is often just when it was downloaded, so only a real capture date counts.
+    if (exifDate && !(tripChoice && targetPin === pinChoice)) {
       const trip = tripCovering(trips, targetPin, metadata.dateTaken);
       if (trip) {
         setTripChoice(trip.id);
@@ -179,7 +228,9 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
     if (point) {
       const match = countries.length > 0 ? findCountryForPoint(point.lat, point.lng, countries) : null;
       if (match) {
-        setCountry({ code: match.code, name: match.name });
+        const found = { code: match.code, name: match.name };
+        setCountry(found);
+        setAutoFilled((prev) => ({ ...prev, country: found, locationName: match.name }));
         if (!locationTouchedRef.current) setLocationName(match.name);
         notes.push(match.name);
       }
@@ -187,15 +238,35 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
       reverseGeocode(point.lat, point.lng).then((name) => {
         if (token !== pickTokenRef.current || !name) return;
         setPlaceName(name);
+        setAutoFilled((prev) => ({ ...prev, locationName: name }));
         if (!locationTouchedRef.current) setLocationName(name);
       });
     }
     if (metadata.camera) notes.push(`📷 ${metadata.camera}`);
 
-    setExifFound({ date: Boolean(metadata.dateTaken), location: Boolean(point) });
-    setDetectedNote(notes.length > 0 ? `Detected from photo: ${notes.join(", ")}` : "No EXIF metadata found — fill in the details below.");
+    setExifFound({ date: exifDate, location: Boolean(point) });
+    const hasExif = exifDate || point || metadata.camera;
+    setDetectedNote(
+      hasExif
+        ? `Detected from photo: ${notes.join(", ")}`
+        : notes.length > 0
+        ? `No EXIF metadata found — using the file's date (${notes.join(", ")}). Check the details below.`
+        : "No EXIF metadata found — fill in the details below."
+    );
     setExtracting(false);
   };
+
+  // Ignore (or re-apply) the photo's GPS — e.g. it was taken somewhere other than where it belongs.
+  const toggleGps = () => {
+    const next = coords ? null : fileInfo?.gps ?? null;
+    setCoords(next);
+    setExifFound((prev) => ({ ...prev, location: Boolean(next) }));
+    if (!next && pinChoice === NEW_LOCATION) choosePin("");
+  };
+
+  // A live capture arrives as a JPEG already stamped with time + GPS, so it
+  // takes the exact same EXIF -> geocode -> Location/Trip path as a picked file.
+  const liveCamera = useCameraCapture({ onCapture: loadFile, onError: setError });
 
   const handleFilePick = (e) => {
     loadFile(e.target.files?.[0]);
@@ -265,8 +336,11 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
         locationName: locationName.trim() || country.name,
         timestamp: new Date(date).toISOString(),
         timeTaken: time || null,
-        camera,
+        camera: camera.trim() || null,
         locationSource: exifFound?.location ? "exif" : "manual",
+        width: fileInfo?.width ?? null,
+        height: fileInfo?.height ?? null,
+        fileSize: fileInfo?.fileSize ?? null,
         pinId,
         tripId,
         blogId: tripId && blogChoice ? blogChoice : null,
@@ -326,15 +400,47 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
                   : "Manual location required"}
               </span>
               <span className={`upload-modal-badge ${exifFound.date ? "is-auto" : ""}`}>
-                {exifFound.date ? "🕒 Date & time from EXIF" : "✎ Set the date manually"}
+                {exifFound.date
+                  ? "🕒 Date & time from EXIF"
+                  : fileInfo?.dateSource === "file"
+                  ? "🗂 Date from file — check it"
+                  : "✎ Set the date manually"}
               </span>
             </div>
           )}
           <input ref={fileInputRef} type="file" accept="image/*,video/*" hidden onChange={handleFilePick} />
         </div>
 
+        <div className="upload-modal-sources">
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={extracting || liveCamera.busy}>
+            <ImagePlus size={16} aria-hidden="true" /> Upload from gallery
+          </button>
+          <button type="button" className="is-camera" onClick={liveCamera.open} disabled={extracting || liveCamera.busy}>
+            <Camera size={16} aria-hidden="true" /> {liveCamera.busy ? "Processing…" : "Take photo live"}
+          </button>
+        </div>
+        {liveCamera.element}
+
         {extracting && <p className="upload-modal-status">Reading photo metadata…</p>}
         {!extracting && detectedNote && <p className="upload-modal-status">{detectedNote}</p>}
+        {!extracting && previewUrl && fileInfo && (
+          <ul className="upload-modal-meta" aria-label="File details">
+            {fileInfo.width && (
+              <li>
+                📐 {fileInfo.width} × {fileInfo.height}
+              </li>
+            )}
+            {fileInfo.fileSize && <li>💾 {formatFileSize(fileInfo.fileSize)}</li>}
+            {fileInfo.gps && (
+              <li className={coords ? "" : "is-off"}>
+                📍 {fileInfo.gps.lat.toFixed(4)}, {fileInfo.gps.lng.toFixed(4)}
+                <button type="button" onClick={toggleGps}>
+                  {coords ? "Ignore GPS" : "Use GPS"}
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
         {error && <p className="upload-modal-status" role="alert">{error}</p>}
 
         {showTripSuggestion && (
@@ -401,7 +507,18 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
         </section>
 
         <label className="upload-modal-field">
-          <span>Country {!country && <em>(required)</em>}</span>
+          <span>
+            Country {!country && <em>(required)</em>}
+            <AutoFillHint
+              value={country?.code}
+              auto={autoFilled.country?.code}
+              source="photo GPS"
+              onRestore={() => {
+                setCountry(autoFilled.country);
+                if (!locationTouchedRef.current) setLocationName(autoFilled.locationName ?? autoFilled.country.name);
+              }}
+            />
+          </span>
           <CountrySelect
             value={country}
             onChange={(next) => {
@@ -412,7 +529,16 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
         </label>
 
         <label className="upload-modal-field">
-          <span>Date taken</span>
+          <span>
+            Date taken
+            <AutoFillHint
+              value={date}
+              auto={autoFilled.date}
+              source={autoFilled.dateSource}
+              onClear={() => setDate("")}
+              onRestore={() => setDate(autoFilled.date)}
+            />
+          </span>
           <input
             type="date"
             value={date}
@@ -432,12 +558,34 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
         <label className="upload-modal-field">
           <span>
             Time taken <em>(optional)</em>
+            <AutoFillHint
+              value={time}
+              auto={autoFilled.time}
+              source={autoFilled.dateSource}
+              onClear={() => setTime("")}
+              onRestore={() => setTime(autoFilled.time)}
+            />
           </span>
           <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="upload-modal-date" />
         </label>
 
         <label className="upload-modal-field">
-          <span>Place name</span>
+          <span>
+            Place name
+            <AutoFillHint
+              value={locationName}
+              auto={autoFilled.locationName}
+              source="photo GPS"
+              onClear={() => {
+                locationTouchedRef.current = true;
+                setLocationName("");
+              }}
+              onRestore={() => {
+                locationTouchedRef.current = false;
+                setLocationName(autoFilled.locationName);
+              }}
+            />
+          </span>
           <input
             type="text"
             value={locationName}
@@ -447,6 +595,20 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
               setLocationName(e.target.value);
             }}
           />
+        </label>
+
+        <label className="upload-modal-field">
+          <span>
+            Camera <em>(optional)</em>
+            <AutoFillHint
+              value={camera}
+              auto={autoFilled.camera}
+              source="photo"
+              onClear={() => setCamera("")}
+              onRestore={() => setCamera(autoFilled.camera)}
+            />
+          </span>
+          <input type="text" value={camera} placeholder="e.g. FUJIFILM X100V" onChange={(e) => setCamera(e.target.value)} />
         </label>
 
         <label className="upload-modal-field">

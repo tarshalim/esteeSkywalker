@@ -133,9 +133,14 @@
   color: var(--text-muted);
 }
 
-.pin-name-popover input,
-.pin-name-popover textarea {
+/* Direct children only: the name/note fields. A descendant `input` selector
+   also caught the "Start a trip here" checkbox (stretching it to 100% and
+   shoving its label off the right edge) and overrode TripFields' own inputs. */
+.pin-name-popover > input,
+.pin-name-popover > textarea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -145,8 +150,8 @@
   font-size: 13px;
   resize: vertical;
 }
-.pin-name-popover input::placeholder,
-.pin-name-popover textarea::placeholder {
+.pin-name-popover > input::placeholder,
+.pin-name-popover > textarea::placeholder {
   color: var(--text-muted);
 }
 
@@ -197,8 +202,8 @@
   .pin-name-popover-place svg {
     margin-top: 14px;
   }
-  .pin-name-popover input,
-  .pin-name-popover textarea {
+  .pin-name-popover > input,
+  .pin-name-popover > textarea {
     min-height: 44px;
   }
   .pin-name-popover-cancel,
@@ -247,7 +252,15 @@
   font-weight: 600;
   cursor: pointer;
 }
+.pin-name-popover-trip-toggle input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--blue);
+}
 .pin-name-popover-trip {
+  min-width: 0;
   padding: 0.75rem;
   border: 2px dashed var(--border);
   border-radius: 1rem;

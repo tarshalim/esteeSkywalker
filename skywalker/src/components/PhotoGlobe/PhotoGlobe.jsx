@@ -84,6 +84,18 @@ const ZOOM_DEBOUNCE_MS = 150;
 const DEFAULT_VIEW = { lat: 15, lng: 95, altitude: 2.1 };
 // Fly-to framing when the target doesn't carry its own altitude.
 const FLY_TO_ALTITUDE = 0.45;
+// globe.gl frames the sphere by the camera's vertical FOV, so on a portrait
+// stage (phones) the default altitude spills it off both sides. Pull the
+// camera back until the sphere, plus this much breathing room for the
+// atmosphere, fits the narrower axis. Landscape stages are left untouched.
+const FIT_MARGIN = 1.12;
+function fitAltitudeToStage(altitude, camera, width, height) {
+  if (!width || !height) return altitude;
+  const halfV = ((camera.fov ?? 50) * Math.PI) / 360;
+  const halfH = Math.atan(Math.tan(halfV) * (width / height));
+  // Altitude is in globe radii; the sphere fits once asin(R·margin / d) ≤ half-angle.
+  return Math.max(altitude, FIT_MARGIN / Math.sin(Math.min(halfV, halfH)) - 1);
+}
 const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 // Lat/lng graticule for the "grid lines" setting: a meridian every 15° and a
@@ -322,8 +334,12 @@ export default function PhotoGlobe({
 
   const handleGlobeReady = useCallback(() => {
     const target = flyToTargetRef.current;
+    const initial = initialViewRef.current;
+    const { clientWidth, clientHeight } = wrapperRef.current;
     globeEl.current.pointOfView(
-      target ? { lat: target.lat, lng: target.lng, altitude: target.altitude ?? FLY_TO_ALTITUDE } : initialViewRef.current,
+      target
+        ? { lat: target.lat, lng: target.lng, altitude: target.altitude ?? FLY_TO_ALTITUDE }
+        : { ...initial, altitude: fitAltitudeToStage(initial.altitude, globeEl.current.camera(), clientWidth, clientHeight) },
       0
     );
     onViewportChange(globeEl.current.pointOfView());

@@ -111,6 +111,11 @@ export interface GalleryItem {
   camera?: string | null;
   /** Whether lat/lng came from the photo's EXIF GPS or were entered by hand. */
   locationSource?: "exif" | "manual";
+  /** Pixel size as displayed (orientation applied), measured on upload; older items don't have one. */
+  width?: number | null;
+  height?: number | null;
+  /** Original file size in bytes, measured on upload. */
+  fileSize?: number | null;
 }
 
 /** How a gallery item hangs off the hierarchy (Gallery's photo-type filter). */

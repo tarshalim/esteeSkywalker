@@ -63,10 +63,19 @@ export function createTextboxBlock(columns = 2, html = "") {
   };
 }
 
-/** Normalizes any youtube/vimeo/mp4 link into an embeddable src. */
+/** Normalizes any YouTube/Vimeo/Loom/mp4 link into an embeddable src. */
 export function toEmbedUrl(url) {
   if (!url) return "";
-  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([\w-]+)/);
+  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtube\.com\/embed\/)([\w-]+)/);
   if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+  const loom = url.match(/loom\.com\/(?:share|embed)\/([\w-]+)/);
+  if (loom) return `https://www.loom.com/embed/${loom[1]}`;
   return url;
+}
+
+/** True for player URLs that need an <iframe> rather than a <video>. */
+export function isEmbedUrl(url) {
+  return /youtube\.com\/embed\/|player\.vimeo\.com\/video\/|loom\.com\/embed\//.test(url ?? "");
 }

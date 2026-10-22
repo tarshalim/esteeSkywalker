@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { X, Upload, Link2 } from "lucide-react";
 import { fileToUrl } from "../../../lib/files";
+import { canTrimAudioSource } from "../../../lib/media";
+import TrimFields from "../TrimFields";
 
 function detectUrlSourceType(url) {
   if (/youtu\.be\/|youtube\.com\//.test(url)) return "youtube";
@@ -23,6 +25,8 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
   const [widgetStyle, setWidgetStyle] = useState(element.widgetStyle || "pill");
   const [accentColor, setAccentColor] = useState(element.accentColor || "#3b82f6");
   const [pendingUpload, setPendingUpload] = useState(null);
+  const [trim, setTrim] = useState({ startSec: element.startSec ?? null, endSec: element.endSec ?? null, loop: element.loop ?? false });
+  const [trimError, setTrimError] = useState(null);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -32,7 +36,11 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
     if (!title) setTitle(file.name.replace(/\.[^.]+$/, ""));
   };
 
-  const canSave = tab === "upload" ? Boolean(pendingUpload || element.sourceType === "upload") : url.trim().length > 0;
+  const urlSourceType = detectUrlSourceType(url.trim());
+  // Albums/playlists have no single timeline to trim.
+  const trimmable = tab === "upload" || !url.trim() || canTrimAudioSource(urlSourceType, url.trim());
+  const canSave = (tab === "upload" ? Boolean(pendingUpload || element.sourceType === "upload") : url.trim().length > 0) && !(trimmable && trimError);
+  const savedTrim = trimmable ? trim : { startSec: null, endSec: null, loop: trim.loop };
 
   const handleSave = () => {
     if (tab === "upload") {
@@ -43,15 +51,17 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
         artist,
         widgetStyle,
         accentColor,
+        ...savedTrim,
       });
     } else {
       onSave({
-        sourceType: detectUrlSourceType(url.trim()),
+        sourceType: urlSourceType,
         src: url.trim(),
         title,
         artist,
         widgetStyle,
         accentColor,
+        ...savedTrim,
       });
     }
   };
@@ -117,6 +127,24 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
           value={artist}
           onChange={(e) => setArtist(e.target.value)}
         />
+
+        <div className="mt-4">
+          {trimmable ? (
+            <TrimFields
+              dark
+              value={trim}
+              onChange={setTrim}
+              onErrorChange={setTrimError}
+              hint={
+                urlSourceType === "spotify" && tab === "url"
+                  ? "Without Spotify Premium, readers only hear a 30-second preview."
+                  : "Optional: play only part of the track, e.g. 0:45 to 2:15."
+              }
+            />
+          ) : (
+            <p className="m-0 text-[11px] text-slate-400">Start and end times work with single tracks and episodes, not albums or playlists.</p>
+          )}
+        </div>
 
         <div className="mt-4">
           <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5">Widget style</div>

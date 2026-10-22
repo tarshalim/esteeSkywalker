@@ -97,7 +97,7 @@ export async function prepareCapturedPhoto({ jpeg, file, position = null }) {
 
   if (file) {
     const meta = await extractPhotoMetadata(file);
-    if (meta.dateTaken) date = new Date(`${meta.dateTaken}T${meta.timeTaken ?? "12:00"}`);
+    if (meta.dateSource === "exif") date = new Date(`${meta.dateTaken}T${meta.timeTaken ?? "12:00"}`);
     if (meta.lat != null && meta.lng != null) coords = { lat: meta.lat, lng: meta.lng };
     try {
       compressed = await compressImageFile(file);

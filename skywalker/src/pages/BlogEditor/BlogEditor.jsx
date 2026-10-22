@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, BookmarkPlus, LayoutTemplate, LoaderCircle, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, BookmarkPlus, Eye, LayoutTemplate, LoaderCircle, Send, Trash2 } from "lucide-react";
 import { getBlogById, upsertBlog, deleteBlog, getTemplates, getTemplateById, saveTemplate, deleteTemplate } from "../../lib/blogStore";
 import { normalizeTemplate } from "../../lib/templates";
 import { useVibes } from "../../lib/vibes";
@@ -21,6 +21,7 @@ import { COUNTRY_TO_CONTINENT } from "../../utils/countries";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
 import DeletePostDialog from "./DeletePostDialog";
 import BackgroundMusicField from "./BackgroundMusicField";
+import PostPreview from "./PostPreview";
 import WeatherField from "./WeatherField";
 import VibesField from "./VibesField";
 import LocationField from "./LocationField";
@@ -74,6 +75,8 @@ export default function BlogEditor() {
   const [weatherKey, setWeatherKey] = useState(0);
   const { vibes: vibeList } = useVibes();
   const [music, setMusic] = useState(null);
+  // A start/end time the music field can't save yet (e.g. end before start).
+  const [musicTrimError, setMusicTrimError] = useState(null);
   // The track as last loaded/saved: its file must survive until a save replaces it.
   const savedMusicRef = useRef(null);
   const countries = useCountriesGeoJson();
@@ -95,9 +98,12 @@ export default function BlogEditor() {
   const toastTimer = useRef(null);
   const coverInputRef = useRef(null);
   const [exitPromptOpen, setExitPromptOpen] = useState(false);
+  const [exitError, setExitError] = useState(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  // Reader-mode preview: a snapshot of the post as it would save right now.
+  const [preview, setPreview] = useState(null); // { blog, trip } | null
   // Unsaved-change tracking: the form fields are compared against a snapshot
   // taken at load/save; the canvas against the doc it first emitted after
   // being seeded (CanvasProvider reports its initial doc on mount).
@@ -180,7 +186,7 @@ export default function BlogEditor() {
           setBlogId(blog.id);
           setTitle(blog.title ?? "");
           setExcerpt(blog.excerpt ?? "");
-          setCoverImage(blog.coverImage || "");
+          setCoverImage(blog.coverImage && blog.coverImage !== PLACEHOLDER_COVER ? blog.coverImage : "");
           setLocationName(blog.location?.name || "");
           setCoords(hasCoords(blog.location) ? { lat: blog.location.lat, lng: blog.location.lng } : null);
           setPinChoice(blog.pinId ?? "auto");
@@ -390,12 +396,29 @@ export default function BlogEditor() {
       return;
     }
     setCoverImage(dataUrl);
+    const detected = applyPhotoMetadata(metadata);
+    if (detected.length > 0) {
+      showToast(`Detected from cover photo: ${detected.join(", ")} — feel free to change it`);
+    }
+  };
 
-    // Auto-fill Country/Date from the cover photo's EXIF, but never clobber
-    // a value the user already set (manually, from a previous upload, or
-    // from loading an existing post).
+  // A photo taken live is stamped with the current GPS fix + time, so it
+  // files the post under the right Location (auto pin from coords) and Trip
+  // dates exactly like an EXIF'd cover photo does.
+  const handlePhotoCaptured = async (file) => {
+    const detected = applyPhotoMetadata(await extractPhotoMetadata(file));
+    showToast(detected.length > 0 ? `📸 Live photo added · detected ${detected.join(", ")}` : "📸 Live photo added to your story");
+  };
+
+  /**
+   * Auto-fills Country/Date/City/coords from a photo's EXIF, but never
+   * clobbers a value the user already set (manually, from a previous upload,
+   * or from loading an existing post). Returns what was filled in, for a toast.
+   */
+  const applyPhotoMetadata = (metadata) => {
     const detected = [];
-    if (metadata.dateTaken && !startDateTouched) {
+    // Only a real capture date — a file's modified date is often just when it was downloaded.
+    if (metadata.dateSource === "exif" && !startDateTouched) {
       setStartDate(metadata.dateTaken);
       detected.push(metadata.dateTaken);
     }
@@ -416,9 +439,7 @@ export default function BlogEditor() {
         detected.push(match.name);
       }
     }
-    if (detected.length > 0) {
-      showToast(`Detected from cover photo: ${detected.join(", ")} — feel free to change it`);
-    }
+    return detected;
   };
 
   // Without lat/lng a post can never be pinned on, searched on, or deep-linked
@@ -469,7 +490,8 @@ export default function BlogEditor() {
     id: blogId ?? undefined,
     title: title.trim() || "Untitled Blog Post",
     excerpt: excerpt.trim(),
-    coverImage: coverImage || PLACEHOLDER_COVER,
+    // Drafts keep an empty cover; only published posts fall back to the placeholder.
+    coverImage: coverImage || (nextStatus === "draft" ? "" : PLACEHOLDER_COVER),
     location: { name: locationName.trim() || country?.name || "Unnamed waypoint", ...resolveCoords() },
     countryCode: country?.code ?? "",
     countryName: country?.name ?? "",
@@ -523,9 +545,14 @@ export default function BlogEditor() {
 
   // Shared by draft + publish. Previously a rejected upsert (RLS, network)
   // left `saving` true — both buttons disabled for good, with no message.
-  const persist = async (nextStatus) => {
+  // `onError` lets a dialog show the failure itself instead of a toast.
+  const persist = async (nextStatus, onError = showToast) => {
     if (dateRangeError || tripError) {
-      showToast(dateRangeError || tripError);
+      onError(dateRangeError || tripError);
+      return null;
+    }
+    if (musicTrimError) {
+      onError(`Background music: ${musicTrimError}`);
       return null;
     }
     setSaving(true);
@@ -552,7 +579,7 @@ export default function BlogEditor() {
       return saved;
     } catch (err) {
       console.error(err);
-      showToast(`Couldn't save: ${err.message}`);
+      onError(`Couldn't save: ${err.message}`);
       return null;
     } finally {
       setSaving(false);
@@ -568,9 +595,11 @@ export default function BlogEditor() {
   };
 
   // Editing a published post keeps it published; everything else becomes a draft.
+  // A failed save keeps the dialog open with the reason, instead of closing it
+  // and leaving the user on the editor with only a brief toast to explain why.
   const handleExitSave = async () => {
-    const saved = await persist(isPublished ? "published" : "draft");
-    setExitPromptOpen(false);
+    setExitError(null);
+    const saved = await persist(isPublished ? "published" : "draft", setExitError);
     if (saved) navigate(isPublished ? `/blogs/${saved.id}` : "/blogs/drafts");
   };
 
@@ -590,7 +619,10 @@ export default function BlogEditor() {
     navigate("/blogs");
   };
 
-  const closeExitPrompt = useCallback(() => setExitPromptOpen(false), []);
+  const closeExitPrompt = useCallback(() => {
+    setExitPromptOpen(false);
+    setExitError(null);
+  }, []);
 
   const closeDeleteDialog = useCallback(() => {
     setDeleteOpen(false);
@@ -626,6 +658,13 @@ export default function BlogEditor() {
     const saved = await persist("published");
     if (saved) navigate(`/blogs/${saved.id}`);
   };
+
+  // Built from the same payload a save sends, so the preview is the post as saved.
+  const openPreview = () => {
+    const trip = tripDisabledReason ? null : selectedTrip ?? (effectiveTripId === NEW_TRIP ? tripDraft : null);
+    setPreview({ blog: buildPayload(status), trip });
+  };
+  const closePreview = useCallback(() => setPreview(null), []);
 
   const closeTemplateModal = () => {
     setShowTemplateModal(false);
@@ -736,6 +775,15 @@ export default function BlogEditor() {
           >
             <BookmarkPlus size={16} className="sm:hidden" aria-hidden="true" />
             <span className="hidden sm:inline">Save as Template</span>
+          </button>
+          <button
+            className="editor-btn"
+            onClick={openPreview}
+            aria-label="Preview as a reader"
+            title="Preview as a reader"
+          >
+            <Eye size={16} aria-hidden="true" />
+            <span className="hidden sm:inline">Preview</span>
           </button>
           <button className="editor-btn editor-btn-primary" onClick={handlePublish} disabled={saving || deleting}>
             <Send size={15} className="sm:hidden" aria-hidden="true" />
@@ -873,12 +921,17 @@ export default function BlogEditor() {
         <VibesField value={vibes} onChange={setVibes} />
 
         <div data-tour="editor-music">
-          <BackgroundMusicField value={music} onChange={handleMusicChange} onError={showToast} />
+          <BackgroundMusicField
+            value={music}
+            onChange={handleMusicChange}
+            onError={showToast}
+            onTrimErrorChange={setMusicTrimError}
+          />
         </div>
 
         <div className="editor-scrapbook" data-tour="editor-scrapbook">
           <CanvasProvider key={canvasSeed.key} initialDoc={canvasSeed.doc} onDocChange={handleCanvasChange}>
-            <ScrapbookCanvas onError={showToast} />
+            <ScrapbookCanvas onError={showToast} onPhotoCaptured={handlePhotoCaptured} />
           </CanvasProvider>
         </div>
 
@@ -967,6 +1020,7 @@ export default function BlogEditor() {
           <UnsavedChangesDialog
             saveLabel={isPublished ? "Save Changes" : "Save as Draft"}
             saving={saving}
+            error={exitError}
             onSave={handleExitSave}
             onDiscard={handleExitDiscard}
             onCancel={closeExitPrompt}
@@ -985,6 +1039,10 @@ export default function BlogEditor() {
             onCancel={closeDeleteDialog}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {preview && <PostPreview blog={preview.blog} trip={preview.trip} onClose={closePreview} />}
       </AnimatePresence>
 
       <AnimatePresence>

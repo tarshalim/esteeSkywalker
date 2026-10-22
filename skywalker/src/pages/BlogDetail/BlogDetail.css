@@ -1,5 +1,6 @@
 .blog-detail-status {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -57,6 +58,18 @@
   border-color: rgba(250, 204, 21, 0.5);
 }
 
+.blog-detail-trip-badge {
+  display: inline-block;
+  margin: 0 0 0.75rem 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px);
+}
+
 .blog-detail-hero-content h1 {
   font-size: clamp(1.8rem, 4vw, 3rem);
   font-weight: 600;
@@ -104,6 +117,12 @@
 }
 .blog-detail-back:hover {
   color: var(--text);
+}
+
+.blog-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .blog-detail-edit {

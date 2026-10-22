@@ -23,7 +23,7 @@ export default function ViewfinderElementContent({ element, editable, editing, a
           {!hasMedia ? (
             editable ? sourceInput : null
           ) : playing ? (
-            <MediaFill src={element.url} type="video" />
+            <MediaFill src={element.url} type="video" trim={element} />
           ) : (
             <button
               type="button"
@@ -47,7 +47,7 @@ export default function ViewfinderElementContent({ element, editable, editing, a
   return (
     <div className="relative w-full h-full rounded-[14px] bg-[#141414] p-[3.5%] shadow-[0_12px_28px_rgba(0,0,0,0.4)]">
       <div className="relative w-full h-full overflow-hidden rounded-md bg-slate-900">
-        {hasMedia ? <MediaFill src={element.url} type="video" editable={editable} /> : editable ? sourceInput : null}
+        {hasMedia ? <MediaFill src={element.url} type="video" editable={editable} trim={element} /> : editable ? sourceInput : null}
         {hasMedia && (
           <>
             <div className="sb-viewfinder pointer-events-none absolute inset-[4%]">
