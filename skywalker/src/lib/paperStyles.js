@@ -11,6 +11,31 @@ function noise(opacity, frequency = 0.85, octaves = 3) {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
+// Map contours: wobbly rings around a few summits, all kept inside the tile so
+// no ring is cut at a seam.
+function contours(opacity) {
+  const ring = (cx, cy, r, seed) => {
+    const points = Array.from({ length: 48 }, (_, i) => {
+      const a = (i / 48) * Math.PI * 2;
+      const rr = r * (1 + 0.14 * Math.sin(3 * a + seed) + 0.07 * Math.sin(5 * a + 2 * seed));
+      return `${(cx + rr * Math.cos(a)).toFixed(1)} ${(cy + rr * 0.8 * Math.sin(a)).toFixed(1)}`;
+    });
+    return `M${points.join("L")}Z`;
+  };
+  // [x, y, rings, seed]
+  const summits = [
+    [110, 120, 4, 0.4],
+    [300, 290, 4, 1.9],
+    [320, 70, 2, 3.1],
+    [70, 330, 2, 4.4],
+  ];
+  const d = summits.flatMap(([cx, cy, n, seed]) => Array.from({ length: n }, (_, i) => ring(cx, cy, 16 + i * 18, seed + i * 0.35))).join("");
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'>` +
+    `<path d='${d}' fill='none' stroke='rgba(80,55,25,${opacity})' stroke-width='1.3'/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
 // Each layer: [backgroundImage, backgroundSize]
 const LAYERS = {
   clean: [],
@@ -50,6 +75,12 @@ const LAYERS = {
     ["radial-gradient(ellipse at center, transparent 50%, rgba(130,85,30,0.3) 100%)", "100% 100%"],
     [noise(0.3, 0.55, 4), "220px 220px"],
   ],
+  // Heavy kraft with a topographic map showing through.
+  topo: [
+    [contours(0.4), "400px 400px"],
+    [noise(0.45, 0.7), "220px 220px"],
+    ["radial-gradient(ellipse at center, transparent 55%, rgba(70,45,20,0.22) 100%)", "100% 100%"],
+  ],
 };
 
 export const PAPER_GROUPS = [
@@ -79,6 +110,7 @@ export const PAPER_GROUPS = [
     styles: [
       { id: "kraft", label: "Kraft", color: "#c9a87c" },
       { id: "parchment", label: "Parchment", color: "#f1e3c3" },
+      { id: "topo", label: "Topo map", color: "#d8c3a0" },
     ],
   },
 ];

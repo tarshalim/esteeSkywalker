@@ -107,14 +107,31 @@
   align-items: flex-start;
   height: 100%;
   padding: 0.6rem 0.7rem;
+  padding-left: 1.15rem;
   border-radius: inherit;
-  /* Ruled letter paper. */
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0 19px,
-    color-mix(in srgb, var(--blue) 12%, transparent) 19px 20px
-  );
+  /* Notebook paper: red margin rule over blue ruled lines. */
+  background:
+    linear-gradient(
+        to right,
+        transparent 0.65rem,
+        color-mix(in srgb, var(--pin-red) 45%, transparent) 0.65rem calc(0.65rem + 1px),
+        transparent calc(0.65rem + 1px)
+      ),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 19px,
+      color-mix(in srgb, var(--blue) 16%, transparent) 19px 20px
+    );
   color: var(--text);
+}
+
+/* Fanned-out slips lift toward the reader on hover. `translate` composes with framer's transform. */
+.trip-env-slip {
+  transition: translate 0.2s ease, box-shadow 0.2s ease;
+}
+.trip-env.is-open .trip-env-slip:hover {
+  translate: 0 -8px;
+  box-shadow: 0 14px 28px var(--shadow-color);
 }
 .trip-env-slip-link:hover .trip-env-slip-title {
   text-decoration: underline;
@@ -165,11 +182,39 @@
   border-radius: 0.9rem;
   /* drop-shadow (not box-shadow) so the shadow follows the notched outline. */
   filter: drop-shadow(0 8px 18px var(--shadow-color));
-  transition: transform 0.25s ease, filter 0.25s ease;
+  transition: transform 0.25s ease, filter 0.25s ease, outline-color 0.2s ease;
 }
 .trip-env.is-open .trip-env-front {
   transform: translateY(4px);
   filter: drop-shadow(0 16px 28px var(--shadow-color));
+}
+
+/* The whole pass is clickable: a dashed "stamp" outline and a little wiggle say so. */
+.trip-env-front {
+  outline: 2px dashed transparent;
+  outline-offset: 5px;
+}
+@media (hover: hover) {
+  .trip-env-front:hover {
+    outline-color: color-mix(in srgb, var(--yellow) 75%, transparent);
+    animation: trip-pass-wiggle 0.55s ease-in-out;
+  }
+}
+/* Animates `rotate` (not `transform`) so it stacks on the open state's translate. */
+@keyframes trip-pass-wiggle {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  25% {
+    rotate: -1.2deg;
+  }
+  55% {
+    rotate: 1deg;
+  }
+  80% {
+    rotate: -0.4deg;
+  }
 }
 
 .trip-pass {
@@ -460,7 +505,11 @@
   .trip-pass,
   .trip-pass-thumb,
   .trip-pass-toggle,
-  .trip-pass-toggle-icon {
+  .trip-pass-toggle-icon,
+  .trip-env-slip {
     transition: none;
+  }
+  .trip-env-front:hover {
+    animation: none;
   }
 }

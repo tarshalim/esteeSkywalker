@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Check, LayoutTemplate, Palette, Pencil, Sparkles, X } from "lucide-react";
-import { BUILT_IN_TEMPLATES, TEMPLATE_AESTHETICS, TEMPLATE_PALETTES, findAesthetic, findPalette } from "../../lib/templates";
-import { ELEMENT_KIND, hasText } from "../../lib/canvasElements";
+import {
+  BUILT_IN_TEMPLATES,
+  TEMPLATE_AESTHETICS,
+  TEMPLATE_LAYOUTS,
+  TEMPLATE_PALETTES,
+  findAesthetic,
+  findLayout,
+  findPalette,
+} from "../../lib/templates";
+import { ELEMENT_KIND, canvasHeight, hasText } from "../../lib/canvasElements";
 import { artFilter, findArt } from "../../data/scrapbookArt";
 import { paperBackground } from "../../lib/paperStyles";
 import { formatWeather } from "../../lib/weather";
@@ -30,14 +38,17 @@ function miniStyle(el) {
       const cover = el.collage?.items?.find((it) => it.src)?.src;
       return { background: cover ? `center / cover url("${cover}")` : "#94a3b8", borderRadius: 3, boxShadow: "0 0 0 2px #fff" };
     }
+    case ELEMENT_KIND.SECTION:
+      return { background: el.color, borderRadius: 4, boxShadow: "0 1px 3px rgba(0,0,0,0.12)" };
     default:
       return {};
   }
 }
 
-/** A to-scale miniature of a template's scrapbook page: paper plus element shapes. */
+/** A to-scale miniature of a template's whole scrapbook page: paper plus element shapes. */
 function MiniPage({ canvas }) {
-  const { width, height } = canvas.size;
+  const { width } = canvas.size;
+  const height = canvasHeight(canvas);
   return (
     <div
       className="relative w-full overflow-hidden"
@@ -88,7 +99,10 @@ function MiniPage({ canvas }) {
   );
 }
 
-/** A template's vibe, or its color palette as a dot + name; nothing if it has neither. */
+/**
+ * A vibe template's layout (its vibe already heads its section) or vibe, else
+ * its color palette as a dot + name; nothing if it has none of these.
+ */
 function StyleTag({ template }) {
   const aesthetic = findAesthetic(template.aesthetic);
   const palette = findPalette(template.palette);
@@ -98,7 +112,7 @@ function StyleTag({ template }) {
         className="w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wide"
         style={{ background: "color-mix(in srgb, var(--blue) 14%, transparent)", color: "var(--blue)" }}
       >
-        {aesthetic.label}
+        {findLayout(template.layout)?.label ?? aesthetic.label}
       </span>
     );
   }
@@ -151,6 +165,39 @@ function PaletteFilter({ value, counts, onChange }) {
           Clear
         </button>
       )}
+    </div>
+  );
+}
+
+/** Switches between a vibe's layouts; renders nothing for templates without siblings. */
+function LayoutPicker({ template, onPick }) {
+  if (!template.aesthetic) return null;
+  const options = TEMPLATE_LAYOUTS.map((layout) => ({
+    layout,
+    template: BUILT_IN_TEMPLATES.find((t) => t.aesthetic === template.aesthetic && t.layout === layout.id),
+  })).filter((o) => o.template);
+  if (options.length < 2) return null;
+  return (
+    <div role="radiogroup" aria-label="Layout" className="grid grid-cols-3 gap-1 rounded-lg border border-(--border) p-1">
+      {options.map(({ layout, template: t }) => {
+        const active = t.id === template.id;
+        return (
+          <button
+            key={layout.id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onPick(t)}
+            title={layout.description}
+            className={`min-h-9 rounded-md px-1 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--blue) ${
+              active ? "bg-(--blue) text-white" : "hover:bg-(--blue)/10"
+            }`}
+            style={active ? undefined : { color: "var(--text)" }}
+          >
+            {layout.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -289,6 +336,11 @@ export default function TemplateGallery({ savedTemplates, onApply, onDelete, onC
   const cardProps = { onSelect: setSelected, onHover: setHovered, onApply };
   const shownStyle = findAesthetic(shown.aesthetic);
   const shownPalette = findPalette(shown.palette);
+  const shownLayout = findLayout(shown.layout);
+  const pickLayout = (t) => {
+    setHovered(null);
+    setSelected(t);
+  };
 
   const paletteCounts = {};
   for (const t of [...BUILT_IN_TEMPLATES, ...savedTemplates]) {
@@ -435,7 +487,8 @@ export default function TemplateGallery({ savedTemplates, onApply, onDelete, onC
 
           {/* Preview of the hovered card, else the selected one. Phones get a compact bar instead. */}
           <aside className="hidden min-h-0 flex-col gap-3 overflow-y-auto border-l border-(--border) p-5 md:flex" aria-live="polite">
-            <div className="overflow-hidden rounded-lg border border-(--border) shadow-sm">
+            <LayoutPicker template={shown} onPick={pickLayout} />
+            <div className="shrink-0 overflow-hidden rounded-lg border border-(--border) shadow-sm">
               <MiniPage canvas={shown.canvas} />
             </div>
             <div>
@@ -459,7 +512,10 @@ export default function TemplateGallery({ savedTemplates, onApply, onDelete, onC
                 </>
               )}
               <dt style={{ color: "var(--text-muted)" }}>Layout</dt>
-              <dd>{shown.canvas.elements.length} elements</dd>
+              <dd>
+                {shownLayout ? `${shownLayout.label} · ` : ""}
+                {shown.canvas.elements.length} elements
+              </dd>
               {shown.title && (
                 <>
                   <dt style={{ color: "var(--text-muted)" }}>Title</dt>

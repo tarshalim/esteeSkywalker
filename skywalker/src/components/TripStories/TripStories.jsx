@@ -46,8 +46,9 @@ function slipVariants(i, n, reduceMotion) {
 /**
  * "My Stories" on the homepage: one envelope per trip. Its published posts sit
  * tucked behind it as paper slips with a coloured tab peeking out, and fan up
- * out of the envelope on hover / keyboard focus. The envelope opens the trip
- * (its gallery); each slip opens its post. Editors get inline edit/delete.
+ * out of the envelope on hover (or via the stories count on touch). The
+ * envelope opens the trip (its gallery); each slip opens its post. Editors get
+ * inline edit/delete.
  *
  * @param {{ blogs: Array }} props - every post (the homepage already loads them)
  */
@@ -128,7 +129,7 @@ export default function TripStories({ blogs }) {
       <header className="trip-stories-header">
         <h2 id="trip-stories-title">My Stories</h2>
         <p>
-          {trips.length} {trips.length === 1 ? "trip" : "trips"} — tap a pass’s stories count to peek at them
+          {trips.length} {trips.length === 1 ? "trip" : "trips"} — hover a boarding pass (or tap its stories count) to peek at its stories
         </p>
       </header>
 
@@ -229,6 +230,15 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
     if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setOpen(false);
   };
 
+  // A mouse hover fans the slips out (touch has no hover, so it relies on the click below).
+  const hasSlips = slips.length > 0;
+  const onPointerEnter = (e) => {
+    if (hasSlips && e.pointerType === "mouse") setOpen(true);
+  };
+  const onPointerLeave = (e) => {
+    if (e.pointerType === "mouse") setOpen(false);
+  };
+
   return (
     <motion.article
       ref={rootRef}
@@ -237,6 +247,8 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       animate={open ? "open" : "rest"}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       onBlur={onBlur}
     >
       {slips.length > 0 && (
@@ -336,7 +348,7 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
             <span className="trip-pass-code" title="Trip code">
               {ticketCode(trip, destination)}
             </span>
-            {slips.length > 0 ? (
+            {hasSlips ? (
               <button
                 type="button"
                 className="trip-pass-field trip-pass-toggle"
