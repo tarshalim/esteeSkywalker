@@ -205,6 +205,8 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
   const slips = posts.slice(0, MAX_SLIPS);
   const cover = posts.map((p) => realCover(p.coverImage)).find(Boolean);
   const companions = allCompanions(trip);
+  // Whoever published the trip's posts; stamped onto each post as `authorName` server-side.
+  const passengerName = [...new Set(posts.map((p) => p.authorName).filter(Boolean))].join(", ");
   const tripHref = `/gallery?trip=${encodeURIComponent(trip.id)}`;
   const slipsId = `trip-slips-${trip.id}`;
 
@@ -305,6 +307,12 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                 <CoverPlaceholder variant="trip" seed={trip.id} compact className="trip-pass-thumb" />
               )}
               <div className="trip-pass-fields">
+                {passengerName && (
+                  <span className="trip-pass-field trip-pass-passenger">
+                    <span className="trip-pass-label">Passenger name</span>
+                    <span className="trip-pass-value">{passengerName}</span>
+                  </span>
+                )}
                 <span className="trip-pass-label">Route</span>
                 <h3 className="trip-env-title">
                   {/* Stretched over the whole front so the card is one big target. */}
@@ -333,7 +341,7 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                     <span className="trip-pass-value">{formatDateRange(trip.startDate, trip.endDate)}</span>
                   </span>
                   <span className="trip-pass-field">
-                    <span className="trip-pass-label">Passengers</span>
+                    <span className="trip-pass-label">Travelling with</span>
                     <span className="trip-pass-value">{companions.length > 0 ? companions.join(", ") : "Solo"}</span>
                   </span>
                 </div>

@@ -312,6 +312,12 @@
   text-overflow: ellipsis;
 }
 
+/* Printed in caps, like the name on a real ticket. */
+.trip-pass-passenger .trip-pass-value {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .trip-pass-route,
 .trip-pass-row {
   display: flex;
