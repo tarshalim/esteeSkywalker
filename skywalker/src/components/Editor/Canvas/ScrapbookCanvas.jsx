@@ -16,12 +16,17 @@ import {
   canvasHeight,
   createCollageElement,
   createImageElement,
+  createSectionElement,
   createTextElement,
   createVideoElement,
+  dockPatch,
+  fileMediaType,
   hasEditMode,
+  placeOn,
 } from "../../../lib/canvasElements";
+import { sectionWidth } from "../../../lib/canvasSections";
 import { photosUploadedPatch } from "../../../lib/collage";
-import { followParent, hostAt, paintOrder } from "../../../lib/canvasGroups";
+import { dockTargetAt, followLive, hostAt, paintOrder, slotTargetAt } from "../../../lib/canvasGroups";
 import { DECORATION_LIBRARY, LIBRARY_DRAG_TYPE, findLibraryItem } from "../../../lib/scrapbookLibrary";
 import { paperBackground } from "../../../lib/paperStyles";
 import { fileToUrl } from "../../../lib/files";
@@ -30,6 +35,10 @@ const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], Arrow
 const STAMP_JITTER = 60; // px spread so pieces tapped onto the same collage don't stack exactly
 
 const isLibraryDrag = (e) => [...(e.dataTransfer?.types ?? [])].includes(LIBRARY_DRAG_TYPE);
+const isFileDrag = (e) => [...(e.dataTransfer?.types ?? [])].includes("Files");
+/** Media type of the first file being dragged in (browsers expose types, not files, until the drop). */
+const draggedFileType = (e) => fileMediaType([...(e.dataTransfer?.items ?? [])].find((item) => item.kind === "file"));
+const DOCK_HINT = "Drop to place inside";
 
 /**
  * Free-form scrapbook editor surface. There is no static toolbar: clicking
@@ -48,8 +57,9 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
   const [interacting, setInteracting] = useState(false);
   const [dock, setDock] = useState(null); // "paper" | "elements": the panel open above the bottom dock
   const [elementsTargetId, setElementsTargetId] = useState(null); // collage the elements drawer was opened from
-  const [dropHostId, setDropHostId] = useState(null); // collage under a library piece being dragged
-  const [liveDrag, setLiveDrag] = useState(null); // { id, patch } while a collage with overlays is being transformed
+  const [dropHostId, setDropHostId] = useState(null); // host under a library piece being dragged
+  const [dockHint, setDockHint] = useState(null); // { id, label }: element whose empty slot a drag or file drop would fill
+  const [liveDrag, setLiveDrag] = useState(null); // { id, patch } while a host with overlays is being transformed
   const [audioTargetId, setAudioTargetId] = useState(null);
   const [collagePoint, setCollagePoint] = useState(null); // canvas point a new collage goes, while its template gallery is open
   const [uploads, setUploads] = useState(0);
@@ -122,21 +132,74 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
     return actions.addElement(element, opts);
   };
 
-  const handleQuickAdd = (kind) => {
-    if (kind === "text") place(createTextElement(), { edit: true });
-    else if (kind === "video") place(createVideoElement());
+  /** Creates a text box, image or video and hands it to `put(element, opts)`, which adds it and returns its id. */
+  const addBasic = (kind, put) => {
+    if (kind === "text") put(createTextElement(), { edit: true });
+    else if (kind === "video") put(createVideoElement());
     else if (kind === "image") {
       // No `capture` attribute: phones then offer Take Photo / Photo Library / Browse natively.
-      const id = place(createImageElement());
+      const id = put(createImageElement());
       pickMedia(id, "image/*", (url, file) => {
         onPhotoAdded?.(file);
         return { src: url };
       });
-    } else if (kind === "collage") {
+    }
+  };
+
+  const handleQuickAdd = (kind) => {
+    if (kind === "collage") {
       // Template first: the gallery places the collage once a layout is chosen.
       setCollagePoint(menu.point);
       setMenu(null);
+    } else if (kind === "section") {
+      // Full width across the page, its top edge at the click.
+      const section = createSectionElement({ width: sectionWidth("full", doc.size.width) });
+      section.x = Math.round((doc.size.width - section.width) / 2);
+      section.y = Math.round(Math.max(menu.point.y - 24, 0));
+      setMenu(null);
+      actions.addSection(section);
+    } else addBasic(kind, place);
+  };
+
+  /**
+   * "Add text / photo / video" on a selected host: into a section box's flow,
+   * or laid on top of any other scrapbook piece and attached to it. With `src`
+   * (a gallery pick) the photo or clip comes ready-filled instead of asking for a file.
+   */
+  const addInside = (hostId, kind, src) => {
+    const host = byId.get(hostId);
+    if (!host) return;
+    const put =
+      host.kind === "section"
+        ? (element, opts) => actions.addToSection(hostId, element, opts)
+        : (element, opts) => actions.addElement(placeOn(host, element), opts);
+    if (src) put(kind === "video" ? createVideoElement({ url: src }) : createImageElement({ src }));
+    else addBasic(kind, put);
+  };
+
+  /**
+   * Photos/clips dropped from the computer: the first fills the empty slot it
+   * lands on (polaroid, frame, note…), the rest become new elements at the
+   * drop point, which attach to whatever piece they land on.
+   */
+  const dropFiles = (files, point) => {
+    const media = files.filter(fileMediaType);
+    if (!media.length) {
+      onError?.("Only photos and videos can be dropped onto the page.");
+      return;
     }
+    media.forEach((file) => fileMediaType(file) === "image" && onPhotoAdded?.(file));
+    const host = slotTargetAt(doc.elements, point, fileMediaType(media[0]));
+    if (host) {
+      const [file] = media;
+      // Re-checked against the latest host once the upload lands.
+      uploadFiles(host.id, [file], ([{ url }]) => (cur) => dockPatch(cur, { type: fileMediaType(file), src: url }) ?? {});
+    }
+    media.slice(host ? 1 : 0).forEach((file, i) => {
+      const video = fileMediaType(file) === "video";
+      const id = place(video ? createVideoElement() : createImageElement(), undefined, { x: point.x + i * 24, y: point.y + i * 24 });
+      uploadFiles(id, [file], ([{ url }]) => (video ? { url } : { src: url }));
+    });
   };
 
   /** Page point at the middle of the part of the page that's on screen. */
@@ -163,13 +226,31 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
 
   const dropProps = {
     onDragOver: (e) => {
+      if (isFileDrag(e)) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        const type = draggedFileType(e);
+        const host = type && slotTargetAt(doc.elements, toCanvasPoint(e.clientX, e.clientY), type);
+        setDockHint(host ? { id: host.id, label: DOCK_HINT } : null);
+        return;
+      }
       if (!isLibraryDrag(e)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
       setDropHostId(hostAt(doc.elements, toCanvasPoint(e.clientX, e.clientY))?.id ?? null);
     },
-    onDragLeave: (e) => !e.currentTarget.contains(e.relatedTarget) && setDropHostId(null),
+    onDragLeave: (e) => {
+      if (e.currentTarget.contains(e.relatedTarget)) return;
+      setDropHostId(null);
+      setDockHint(null);
+    },
     onDrop: (e) => {
+      if (isFileDrag(e)) {
+        e.preventDefault();
+        setDockHint(null);
+        dropFiles([...e.dataTransfer.files], toCanvasPoint(e.clientX, e.clientY));
+        return;
+      }
       if (!isLibraryDrag(e)) return;
       e.preventDefault();
       setDropHostId(null);
@@ -259,16 +340,16 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
             const Content = CONTENT_BY_KIND[element.kind];
             if (!Content) return null;
             const editing = ui.editingId === element.id;
-            const parent = element.attachedTo && byId.get(element.attachedTo);
-            const follow = parent && liveDrag?.id === parent.id ? followParent(element, parent, { ...parent, ...liveDrag.patch }) : undefined;
             return (
               <CanvasElement
                 key={element.id}
                 element={element}
                 layer={index + 1}
-                follow={follow}
+                follow={followLive(element, byId, liveDrag)}
                 onLive={parentIds.has(element.id) ? (patch) => setLiveDrag(patch ? { id: element.id, patch } : null) : undefined}
-                dropTarget={dropHostId === element.id}
+                dropTarget={dockHint?.id === element.id ? dockHint.label : dropHostId === element.id}
+                findDock={(view) => dockTargetAt(doc.elements, view)}
+                onDockHover={(id) => setDockHint(id ? { id, label: DOCK_HINT } : null)}
                 selected={ui.selectedId === element.id}
                 editing={editing}
                 zoom={zoom}
@@ -302,7 +383,7 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
             <div className="pointer-events-none absolute inset-x-0 top-40 flex flex-col items-center gap-3 px-10 text-center text-slate-500">
               <MousePointerClick size={36} strokeWidth={1.5} />
               <p className="max-w-md text-xl font-medium">Click anywhere on the page to add text, photos, videos or scrapbook pieces.</p>
-              <p className="text-sm opacity-80">Drag to move · corner handle to resize · top handle to rotate · tap a text twice to write</p>
+              <p className="text-sm opacity-80">Drag to move · corner handle to resize · top handle to rotate · tap a text twice to write · drop photos or clips from your computer</p>
             </div>
           )}
         </div>
@@ -314,9 +395,11 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
           element={selected}
           editing={ui.editingId === selected.id}
           actions={actions}
+          pageWidth={doc.size.width}
           onPickMedia={pickMedia}
           onRequestSource={setAudioTargetId}
           onOpenElements={openElements}
+          onAddInside={addInside}
           elementsOpen={dock === "elements" && elementsTargetId === selected.id}
         />
       )}
@@ -350,7 +433,8 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
                 <div>
                   <span className="text-[13px] font-semibold">Scrapbook elements</span>
                   <p className="text-[11px] text-slate-400">
-                    Drag onto {byId.has(elementsTargetId) ? "your collage" : "the page"}, or tap to stamp it in the middle. Pieces on a collage move with it.
+                    Drag onto {byId.get(elementsTargetId)?.kind === "section" ? "your section box" : byId.has(elementsTargetId) ? "your collage" : "the page"}, or tap
+                    to stamp it in the middle. Pieces on a collage or section box move with it.
                   </p>
                 </div>
                 <button type="button" className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={() => setDock(null)} aria-label="Close">
@@ -376,7 +460,7 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
             <button
               type="button"
               className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium ${dock === "elements" ? "bg-blue-500/30 text-white" : "hover:bg-slate-700"}`}
-              onClick={() => openElements(selected?.kind === "collage" ? selected.id : null)}
+              onClick={() => openElements(selected?.kind === "collage" || selected?.kind === "section" ? selected.id : null)}
               aria-expanded={dock === "elements"}
               aria-label="Scrapbook elements"
               title="Scrapbook elements: drag stickers, tape and stamps onto the page"

@@ -166,7 +166,7 @@ function SignInForm() {
 }
 
 function Profile({ user }) {
-  const { username, role, isAdmin, isPending, isSuperAdmin } = useAuth();
+  const { username, role, isAdmin, isPending, isSuperAdmin, signOut } = useAuth();
   const [displayName, setDisplayName] = useState(user.user_metadata?.display_name ?? "");
   // Preselect whatever the user currently sees (their saved pick or the fallback).
   const [avatar, setAvatar] = useState(() => avatarFor(user).id);
@@ -189,8 +189,8 @@ function Profile({ user }) {
   };
 
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) setStatus({ error: error.message });
+    const error = await signOut();
+    if (error) setStatus({ error });
   };
 
   return (

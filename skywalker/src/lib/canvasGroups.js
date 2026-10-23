@@ -24,6 +24,7 @@ const normalizeAngle = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
 export function canHost(el) {
   switch (el.kind) {
     case ELEMENT_KIND.COLLAGE:
+    case ELEMENT_KIND.SECTION:
     case ELEMENT_KIND.POLAROID:
     case ELEMENT_KIND.FRAME_STICKER:
     case ELEMENT_KIND.NOTE:
@@ -196,6 +197,17 @@ export function updateWithGroups(doc, id, patch) {
 export function withAttachment(elements, element) {
   if (element.attachedTo !== undefined) return element;
   return { ...element, attachedTo: attachTarget(elements, element) };
+}
+
+/**
+ * Adds `host` beneath everything on the page and attaches the top-level pieces
+ * whose centres it covers, so a backdrop laid over existing content gathers it up.
+ */
+export function addBeneath(elements, host) {
+  const placed = { ...host, attachedTo: null, zIndex: elements.reduce((min, el) => Math.min(min, el.zIndex), 1) - 1 };
+  const ids = new Set(elements.map((el) => el.id));
+  const adopts = (el) => !(el.attachedTo && ids.has(el.attachedTo)) && canAttach(placed, el) && containsPoint(placed, center(el));
+  return [...elements.map((el) => (adopts(el) ? { ...el, attachedTo: placed.id } : el)), placed];
 }
 
 /** Removes an element and everything attached to it. */

@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { LoaderCircle, Pencil, Plane, Scissors, Trash2 } from "lucide-react";
+import { ChevronDown, LoaderCircle, Pencil, Plane, Scissors, Trash2 } from "lucide-react";
 import TripDialog from "../TripPicker/TripDialog";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 import { realCover } from "../../lib/media";
@@ -13,12 +13,15 @@ import { useDataChanges } from "../../lib/liveSync";
 import { useAuth } from "../../lib/auth";
 import { useAsync } from "../../hooks/useAsync";
 import { formatBlogDate, formatDateRange } from "../../utils/dateFilters";
+import { findArt } from "../../data/scrapbookArt";
 import "./TripStories.css";
 
 /** At most this many post slips fan out of an envelope. */
 const MAX_SLIPS = 3;
 /** Where each slip's tab peeks out along the envelope's top edge (% of width). */
 const TAB_LEFT = ["12%", "42%", "70%"];
+/** Travel sticker that marks each slip's tab: airplane, passport, globe. */
+const TAB_ART = ["travel3-09", "travel3-04", "travel3-02"].map(findArt);
 
 const postTime = (b) => new Date(b.postDate ?? b.startDate ?? b.date ?? 0).getTime();
 
@@ -125,7 +128,7 @@ export default function TripStories({ blogs }) {
       <header className="trip-stories-header">
         <h2 id="trip-stories-title">My Stories</h2>
         <p>
-          {trips.length} {trips.length === 1 ? "trip" : "trips"} — hover a boarding pass to peek at its stories
+          {trips.length} {trips.length === 1 ? "trip" : "trips"} — tap a pass’s stories count to peek at them
         </p>
       </header>
 
@@ -197,30 +200,47 @@ function Barcode({ seed }) {
 function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting, onEdit, onDelete }) {
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
   const slips = posts.slice(0, MAX_SLIPS);
   const cover = posts.map((p) => realCover(p.coverImage)).find(Boolean);
   const companions = allCompanions(trip);
   const tripHref = `/gallery?trip=${encodeURIComponent(trip.id)}`;
+  const slipsId = `trip-slips-${trip.id}`;
 
-  // Keyboard users get the same reveal as hover while focus is anywhere inside.
+  // While open, a click/tap outside the envelope or Esc tucks the slips back in.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (e) => {
+      if (!rootRef.current?.contains(e.target)) setOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  // Tabbing out of an open envelope closes it too.
   const onBlur = (e) => {
-    if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+    if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setOpen(false);
   };
 
   return (
     <motion.article
+      ref={rootRef}
       className={`trip-env${open ? " is-open" : ""}`}
       initial={reduceMotion ? false : { opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       animate={open ? "open" : "rest"}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
       onBlur={onBlur}
     >
       {slips.length > 0 && (
-        <ul className="trip-env-slips" aria-label={`Stories from ${trip.title}`}>
+        <ul id={slipsId} className="trip-env-slips" aria-label={`Stories from ${trip.title}`}>
           {slips.map((post, i) => (
             <motion.li
               key={post.id}
@@ -228,8 +248,20 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
               style={{ zIndex: MAX_SLIPS - i }}
               variants={slipVariants(i, slips.length, reduceMotion)}
             >
-              <span className="trip-env-slip-tab" style={{ left: TAB_LEFT[i] }} aria-hidden="true" />
-              <Link to={`/blogs/${post.id}`} className="trip-env-slip-link">
+              {TAB_ART[i] ? (
+                <img
+                  className="trip-env-slip-tab"
+                  src={TAB_ART[i].src}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  style={{ left: TAB_LEFT[i] }}
+                />
+              ) : (
+                <span className="trip-env-slip-tab trip-env-slip-tab--plain" style={{ left: TAB_LEFT[i] }} aria-hidden="true" />
+              )}
+              {/* Closed slips sit behind the pass; keep them out of the tab order until revealed. */}
+              <Link to={`/blogs/${post.id}`} className="trip-env-slip-link" tabIndex={open ? undefined : -1}>
                 {realCover(post.coverImage) ? (
                   <img src={post.coverImage} alt="" loading="lazy" />
                 ) : (
@@ -304,10 +336,25 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
             <span className="trip-pass-code" title="Trip code">
               {ticketCode(trip, destination)}
             </span>
-            <span className="trip-pass-field">
-              <span className="trip-pass-label">Stories</span>
-              <span className="trip-pass-count">{posts.length}</span>
-            </span>
+            {slips.length > 0 ? (
+              <button
+                type="button"
+                className="trip-pass-field trip-pass-toggle"
+                onClick={() => setOpen((o) => !o)}
+                aria-expanded={open}
+                aria-controls={slipsId}
+                title={open ? "Tuck stories away" : "Peek at stories"}
+              >
+                <span className="trip-pass-label">Stories</span>
+                <span className="trip-pass-count">{posts.length}</span>
+                <ChevronDown size={12} className="trip-pass-toggle-icon" aria-hidden="true" />
+              </button>
+            ) : (
+              <span className="trip-pass-field">
+                <span className="trip-pass-label">Stories</span>
+                <span className="trip-pass-count">{posts.length}</span>
+              </span>
+            )}
             <span className="trip-pass-field">
               <span className="trip-pass-label">Photos</span>
               <span className="trip-pass-count">{photoCount}</span>

@@ -11,6 +11,7 @@ import { CanvasProvider } from "../../components/Editor/Canvas/CanvasProvider";
 import ScrapbookCanvas from "../../components/Editor/Canvas/ScrapbookCanvas";
 import { createEmptyCanvasDoc } from "../../lib/canvasElements";
 import { blocksToCanvas, canvasToBlocks, cloneCanvasDoc } from "../../lib/canvasConvert";
+import { exportCanvasLayout, importCanvasLayout } from "../../lib/canvasLayout";
 import CountrySelect from "../../components/CountrySelect/CountrySelect";
 import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata } from "../../lib/exif";
@@ -201,7 +202,7 @@ export default function BlogEditor() {
           setWeather(blog.weather ?? null);
           savedMusicRef.current = getBlogMusic(blog);
           setMusic(savedMusicRef.current);
-          seedCanvas(blog.canvas ? blog.canvas : blocksToCanvas(blog.blocks));
+          seedCanvas(importCanvasLayout(blog.canvas) ?? blocksToCanvas(blog.blocks));
           setStatus(blog.status || "draft");
           setLoadState("ready");
         })
@@ -505,7 +506,7 @@ export default function BlogEditor() {
     music,
     // Legacy field older readers use; also clears a stale one when music changes.
     audioUrl: music?.type === "upload" ? music.url : "",
-    canvas: canvasDocRef.current,
+    canvas: exportCanvasLayout(canvasDocRef.current),
     // Derived, so block-only consumers (Gallery media, excerpts) still work.
     blocks: canvasToBlocks(canvasDocRef.current),
     status: nextStatus,
@@ -685,7 +686,7 @@ export default function BlogEditor() {
         coverImage,
         vibes,
         weather,
-        canvas: canvasDocRef.current,
+        canvas: exportCanvasLayout(canvasDocRef.current),
         blocks: canvasToBlocks(canvasDocRef.current),
       });
       setTemplates((prev) => [...prev, tpl]);

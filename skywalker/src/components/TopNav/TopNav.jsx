@@ -20,10 +20,12 @@ import {
   Image as ImageIcon,
   Luggage,
   Menu,
+  LogOut,
+  Settings,
 } from "lucide-react";
 import { useTheme } from "../../lib/theme";
 import { GLOBE_HASH, GLOBE_PATH } from "../../utils/routes";
-import { useAuth } from "../../lib/auth";
+import { ROLE_LABELS, useAuth } from "../../lib/auth";
 import { useTour } from "../../lib/tour";
 import { useSearch } from "../../lib/search";
 import Avatar from "../Avatar/Avatar";
@@ -146,23 +148,16 @@ function SearchResults({ id, results, pending, highlight, onHighlight, onSelect 
 }
 
 const MENU_ROW =
-  "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors hover:bg-[color-mix(in_srgb,var(--blue)_10%,transparent)]";
+  "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-colors hover:bg-[color-mix(in_srgb,var(--blue)_10%,transparent)] disabled:cursor-wait disabled:opacity-60";
+const DANGER_ROW_STYLE = { color: "#dc2626" };
 
 /**
- * Phones only: the avatar opens a dropdown holding what no longer fits in
- * the bar (My Blogs, My Gallery, tour, theme) plus the Account link. Pinned
- * `right-0` under the trigger, which sits at the bar's right edge, so the
- * panel always opens inside the viewport.
+ * Closes a dropdown on an outside press, on Escape (returning focus to the
+ * trigger) and on route changes (browser back/forward while open).
  */
-function MobileMenu({ user, accountLabel, theme, onToggleTheme, onStartTour, isActive }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-  const triggerRef = useRef(null);
-  const panelId = useId();
+function useDismiss(open, setOpen, rootRef, triggerRef) {
   const location = useLocation();
-
-  // Browser back/forward while open.
-  useEffect(() => setOpen(false), [location.pathname]);
+  useEffect(() => setOpen(false), [location.pathname, setOpen]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -180,9 +175,179 @@ function MobileMenu({ user, accountLabel, theme, onToggleTheme, onStartTour, isA
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
+  }, [open, setOpen, rootRef, triggerRef]);
+}
+
+/** Signs out via the auth context, tracking the in-flight call and any error. */
+function useSignOut(onDone) {
+  const { signOut } = useAuth();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(null);
+  const run = async () => {
+    setPending(true);
+    setError(null);
+    const message = await signOut();
+    setPending(false);
+    if (message) setError(message);
+    else onDone();
+  };
+  return { run, pending, error };
+}
+
+function SignOutRow({ signOut, role }) {
+  return (
+    <>
+      <button
+        type="button"
+        role={role}
+        onClick={signOut.run}
+        disabled={signOut.pending}
+        className={MENU_ROW}
+        style={DANGER_ROW_STYLE}
+      >
+        <LogOut size={18} strokeWidth={2.25} aria-hidden="true" />
+        {signOut.pending ? "Signing out…" : "Sign out"}
+      </button>
+      {signOut.error && (
+        <p role="alert" className="px-3 pt-1 pb-1.5 text-xs" style={DANGER_ROW_STYLE}>
+          Couldn&apos;t sign out: {signOut.error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * sm and up, signed in: the avatar opens an account menu with the profile
+ * summary, a link to account settings and Sign out. Follows the WAI-ARIA menu
+ * button pattern: opening focuses the first item, arrows/Home/End move
+ * between items, Escape returns to the avatar, Tab closes.
+ */
+function AccountMenu({ user, username, role, active }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+  const menuId = useId();
+  const navigate = useNavigate();
+  useDismiss(open, setOpen, rootRef, triggerRef);
+  const signOut = useSignOut(() => {
+    setOpen(false);
+    navigate("/account");
+  });
+
+  const items = () => [...(menuRef.current?.querySelectorAll('[role="menuitem"]') ?? [])];
+  useEffect(() => {
+    if (open) items()[0]?.focus();
   }, [open]);
 
+  const onMenuKeyDown = (e) => {
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    const focusAt = (n) => list[(n + list.length) % list.length]?.focus();
+    if (e.key === "ArrowDown") focusAt(i + 1);
+    else if (e.key === "ArrowUp") focusAt(i - 1);
+    else if (e.key === "Home") focusAt(0);
+    else if (e.key === "End") focusAt(list.length - 1);
+    else if (e.key === "Tab") return setOpen(false);
+    else return;
+    e.preventDefault();
+  };
+
+  const displayName = user.user_metadata?.display_name || username || "Signed in";
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" && !open) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        className={`theme-toggle overflow-hidden p-0 ${TAP_SQUARE}`}
+        aria-label={`Account menu (${username ?? "signed in"})`}
+        title="Account"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        style={active || open ? { boxShadow: "0 0 0 2px var(--blue)" } : undefined}
+      >
+        <Avatar user={user} className="h-full! w-full!" />
+      </button>
+
+      {open && (
+        <div
+          className="glass-panel absolute top-full right-0 mt-2 w-64 rounded-2xl border p-1.5 shadow-xl"
+          style={{ borderColor: "var(--border-strong)", background: "var(--bg-panel-strong)" }}
+        >
+          <div className="flex items-center gap-3 px-3 pt-2 pb-2.5">
+            <Avatar user={user} size={40} className="shrink-0" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>
+                {displayName}
+              </p>
+              {username && (
+                <p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
+                  @{username}
+                </p>
+              )}
+              {role && (
+                <p className="mt-0.5 text-[11px] font-semibold tracking-wide uppercase" style={{ color: "var(--blue)" }}>
+                  {ROLE_LABELS[role]}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="mx-3 mb-1 h-px" style={{ background: "var(--border)" }} aria-hidden="true" />
+          <div
+            ref={menuRef}
+            id={menuId}
+            role="menu"
+            aria-label="Account"
+            onKeyDown={onMenuKeyDown}
+            className="flex flex-col gap-0.5"
+          >
+            <Link
+              to="/account"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className={MENU_ROW}
+              style={{ color: "var(--text)" }}
+            >
+              <Settings size={18} strokeWidth={2.25} aria-hidden="true" />
+              Account settings
+            </Link>
+            <SignOutRow signOut={signOut} role="menuitem" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Phones only: the avatar opens a dropdown holding what no longer fits in
+ * the bar (My Blogs, My Gallery, tour, theme) plus the Account link. Pinned
+ * `right-0` under the trigger, which sits at the bar's right edge, so the
+ * panel always opens inside the viewport.
+ */
+function MobileMenu({ user, accountLabel, theme, onToggleTheme, onStartTour, isActive }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelId = useId();
+  const navigate = useNavigate();
+  useDismiss(open, setOpen, rootRef, triggerRef);
+
   const close = () => setOpen(false);
+  const signOut = useSignOut(() => {
+    close();
+    navigate("/account");
+  });
   const rowStyle = (active) =>
     active
       ? { background: "var(--blue)", color: "#ffffff" }
@@ -267,6 +432,12 @@ function MobileMenu({ user, accountLabel, theme, onToggleTheme, onStartTour, isA
               )}
               {theme === "dark" ? "Light mode" : "Dark mode"}
             </button>
+            {user && (
+              <>
+                <div className="mx-3 my-1 h-px" style={{ background: "var(--border)" }} aria-hidden="true" />
+                <SignOutRow signOut={signOut} />
+              </>
+            )}
           </nav>
         </div>
       )}
@@ -288,7 +459,7 @@ export default function TopNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
-  const { user, username, canEdit } = useAuth();
+  const { user, username, role, canEdit } = useAuth();
   const { start: startTour } = useTour();
   const accountLabel = user ? `Account (${username ?? "signed in"})` : "Sign in";
 
@@ -532,25 +703,19 @@ export default function TopNav() {
             {theme === "dark" ? <Moon size={17} strokeWidth={2.25} /> : <Sun size={17} strokeWidth={2.25} />}
           </button>
 
-          <Link
-            to="/account"
-            className={`theme-toggle ${TAP_SQUARE}${user ? " overflow-hidden p-0" : ""}`}
-            aria-label={accountLabel}
-            title={accountLabel}
-            style={
-              isActive("/account")
-                ? user
-                  ? { boxShadow: "0 0 0 2px var(--blue)" }
-                  : { background: "var(--blue)", color: "#ffffff" }
-                : undefined
-            }
-          >
-            {user ? (
-              <Avatar user={user} className="h-full! w-full!" />
-            ) : (
+          {user ? (
+            <AccountMenu user={user} username={username} role={role} active={isActive("/account")} />
+          ) : (
+            <Link
+              to="/account"
+              className={`theme-toggle ${TAP_SQUARE}`}
+              aria-label={accountLabel}
+              title={accountLabel}
+              style={isActive("/account") ? { background: "var(--blue)", color: "#ffffff" } : undefined}
+            >
               <UserRound size={17} strokeWidth={2.25} />
-            )}
-          </Link>
+            </Link>
+          )}
         </div>
       </div>
     </motion.header>

@@ -1,7 +1,8 @@
-// Cuts the illustrated sticker sheets in public/assets/*.svg into individual,
+// Cuts the illustrated sticker sheets in art/sheets/*.svg into individual,
 // transparent scrapbook pieces. The sheets are Illustrator exports (some 20MB+)
-// with many pieces on one background, far too heavy to ship as-is, so this:
-//   1. drops each sheet's background layer,
+// with many pieces on one background, far too heavy to ship as-is (so they live
+// outside public/ and never reach the build), so this:
+//   1. drops each sheet's background layer (and any credit line),
 //   2. rasterises the rest at high resolution,
 //   3. finds the separate pieces (alpha islands, with nearby bits merged),
 //   4. writes each one as a trimmed WebP to public/assets/scrapbook/<sheet>/,
@@ -12,7 +13,7 @@
 import sharp from "sharp";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
-const SRC = "public/assets";
+const SRC = "art/sheets";
 const OUT = "public/assets/scrapbook";
 const MANIFEST = "src/data/scrapbookArt.json";
 const RASTER = 3000; // long side of the working raster
@@ -22,15 +23,26 @@ const MIN_AREA = 0.0012; // pieces smaller than this share of the sheet are drop
 // `--contact=<dir>` also writes a numbered contact sheet per sheet there, for naming pieces.
 const CONTACT = process.argv.find((a) => a.startsWith("--contact="))?.slice("--contact=".length);
 
-// Sheets to cut into pieces, and the background layer to drop from each.
+// Sheets to cut into pieces, and the layers to drop from each (background, Freepik credit line).
+// `noText` strips live <text> (sheet titles, frame captions) whose fonts aren't installed and
+// would otherwise render as stray fallback letters.
+const FREEPIK = "DESIGNED_BY_FREEPIK";
 const SHEETS = [
   { id: "cinematic", file: "cinematic.svg" },
-  { id: "cute", file: "cute.svg", bg: "BACKGROUND" },
-  { id: "party", file: "cute_02.svg", bg: "BACKGROUND" },
-  { id: "planner", file: "cute_03.svg", bg: "BACKGROUND" },
-  { id: "oldschool", file: "old_school.svg", bg: "BACKGROUND" },
-  { id: "paper", file: "rustic_02.svg", bg: "Background" },
-  { id: "washi", file: "washi tape_01.svg", bg: "Background" },
+  { id: "cute", file: "cute.svg", drop: ["BACKGROUND"] },
+  { id: "party", file: "cute_02.svg", drop: ["BACKGROUND"] },
+  { id: "planner", file: "cute_03.svg", drop: ["BACKGROUND"] },
+  { id: "oldschool", file: "old_school.svg", drop: ["BACKGROUND"] },
+  { id: "paper", file: "rustic_02.svg", drop: ["Background"] },
+  { id: "washi", file: "washi tape_01.svg", drop: ["Background"] },
+  { id: "travel", file: "travel-icons.svg", drop: ["Background"], noText: true },
+  { id: "travel2", file: "travel-icons-02.svg", drop: ["BACKGROUND_1_"], noText: true },
+  { id: "travel3", file: "travel-icons-03.svg", drop: ["BACKGROUND", FREEPIK] },
+  { id: "camping", file: "camping-icons.svg", drop: ["BACKGROUND", FREEPIK] },
+  { id: "camping2", file: "camping-icons-02.svg", drop: ["Layer_1"] },
+  { id: "autumn", file: "autumn-icons.svg", drop: ["BACKGROUND"] },
+  { id: "autumn2", file: "autumn-icons-02.svg", drop: ["BACKGROUND", FREEPIK], noText: true },
+  { id: "winter", file: "winter-icons.svg", drop: ["BACKGROUND", FREEPIK] },
 ];
 
 // Whole compositions kept intact as full-page backdrops.
@@ -163,9 +175,10 @@ function isolate(data, sheetWidth, box) {
   return { buffer, width, height };
 }
 
-async function cutSheet({ id, file, bg }) {
+async function cutSheet({ id, file, drop = [], noText = false }) {
   let svg = await readFile(`${SRC}/${file}`, "utf8");
-  if (bg) svg = dropGroup(svg, bg);
+  for (const group of drop) svg = dropGroup(svg, group);
+  if (noText) svg = svg.replace(/<text[\s>][\s\S]*?<\/text>/g, "");
   const { data, info } = await render(svg, RASTER).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const boxes = findPieces(data, info.width, info.height);
   await mkdir(`${OUT}/${id}`, { recursive: true });

@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useReducer } from "react
 import { canvasReducer, createInitialState } from "./canvasReducer";
 import { canUndo as computeCanUndo, canRedo as computeCanRedo } from "../../../lib/canvasHistory";
 import { DEFAULT_THEME, dockPatch, dockPayload, makeElementId, nextZIndex } from "../../../lib/canvasElements";
-import { duplicateWithGroups, removeWithGroups, reorderWithinGroup, updateWithGroups, withAttachment } from "../../../lib/canvasGroups";
+import { addBeneath, duplicateWithGroups, removeWithGroups, reorderWithinGroup, updateWithGroups, withAttachment } from "../../../lib/canvasGroups";
+import { fitSection, placeInSection, restyleSection } from "../../../lib/canvasSections";
 
 const CanvasContext = createContext(null);
 
@@ -40,6 +41,25 @@ export function CanvasProvider({ initialDoc, onDocChange, children }) {
         mutate((d) => ({ ...d, elements: [...d.elements, withAttachment(d.elements, { ...element, zIndex: nextZIndex(d.elements) })] }));
         dispatch({ type: edit ? "EDIT" : "SELECT", id: element.id });
         return element.id;
+      },
+
+      /** Lays a section box beneath the page's content, gathering up whatever it covers. */
+      addSection(section) {
+        mutate((d) => fitSection({ ...d, elements: addBeneath(d.elements, section) }, section.id));
+        dispatch({ type: "SELECT", id: section.id });
+        return section.id;
+      },
+
+      /** Adds `element` inside a section box, under what it already holds. */
+      addToSection(sectionId, element, { edit = false } = {}) {
+        mutate((d) => placeInSection(d, sectionId, element));
+        dispatch({ type: edit ? "EDIT" : "SELECT", id: element.id });
+        return element.id;
+      },
+
+      /** Color, texture, width preset or padding of a section box (lib/canvasSections.js). */
+      updateSection(id, patch, { coalesce } = {}) {
+        mutate((d) => restyleSection(d, id, patch), coalesce ? `${id}:${coalesce}` : undefined);
       },
 
       /**

@@ -30,7 +30,7 @@ export default function CanvasReadOnlyView({ doc, renderAnchor = null }) {
               <div
                 key={el.id}
                 className="absolute"
-                style={{ left: el.x, top: el.y, width: el.width, height: el.height, transform: `rotate(${el.rotation}deg)`, zIndex: index + 1 }}
+                style={{ left: el.x, top: el.y, width: el.width, height: el.height, transform: `rotate(${el.rotation}deg)`, zIndex: index + 1, mixBlendMode: el.blend ? "multiply" : undefined }}
               >
                 <Content element={el} editable={false} zoom={zoom} autoplayOnVisible />
               </div>

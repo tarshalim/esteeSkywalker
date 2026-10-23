@@ -22,6 +22,7 @@ export const ELEMENT_KIND = {
   VIEWFINDER: "viewfinder", // retro camcorder frame / play-button card around a video
   DECOR: "decor", // washi tape, stamps, seals, clips, pins, location badges
   COLLAGE: "collage", // multi-photo grid/masonry; layout + items live in `collage` (lib/collage.js)
+  SECTION: "section", // colored/textured backdrop box that carries text, photos and clips (lib/canvasSections.js)
 };
 
 export const DEFAULT_CANVAS_SIZE = { width: 794, height: 1123 }; // A4 @ 96dpi
@@ -267,6 +268,25 @@ export function createCollageElement(pos = {}, { template } = {}) {
     width,
     height: naturalHeight(collage, width),
     collage,
+    ...pos,
+  });
+}
+
+// --- Section boxes -------------------------------------------------------
+
+/**
+ * A backdrop for one part of the story. Its color, paper texture, width preset
+ * and inner padding are its own; whatever is attached to it sits on top.
+ */
+export function createSectionElement(pos = {}) {
+  return base(ELEMENT_KIND.SECTION, {
+    width: DEFAULT_CANVAS_SIZE.width - 80,
+    height: 240,
+    color: "#fbf5e6",
+    texture: "canvas", // a paper style id (lib/paperStyles.js)
+    widthPreset: "full", // "full" | "half" | "compact"
+    padding: "md", // "sm" | "md" | "lg"
+    radius: 18,
     ...pos,
   });
 }

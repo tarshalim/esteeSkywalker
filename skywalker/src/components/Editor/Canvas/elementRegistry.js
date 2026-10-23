@@ -10,6 +10,7 @@ import PolaroidElementContent from "./elements/PolaroidElementContent";
 import ViewfinderElementContent from "./elements/ViewfinderElementContent";
 import DecorElementContent from "./elements/DecorElementContent";
 import CollageElementContent from "./elements/CollageElementContent";
+import SectionElementContent from "./elements/SectionElementContent";
 import "./scrapbook.css";
 
 // One renderer per element kind, shared by the editor, the read-only post
@@ -26,4 +27,5 @@ export const CONTENT_BY_KIND = {
   [ELEMENT_KIND.VIEWFINDER]: ViewfinderElementContent,
   [ELEMENT_KIND.DECOR]: DecorElementContent,
   [ELEMENT_KIND.COLLAGE]: CollageElementContent,
+  [ELEMENT_KIND.SECTION]: SectionElementContent,
 };

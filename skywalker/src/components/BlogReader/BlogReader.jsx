@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { getBlogMusic, musicKey } from "../../lib/music";
@@ -6,6 +7,7 @@ import CanvasReadOnlyView from "../Editor/Canvas/CanvasReadOnlyView";
 import BackgroundAudioPlayer from "../BackgroundAudioPlayer/BackgroundAudioPlayer";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 import { realCover } from "../../lib/media";
+import { importCanvasLayout } from "../../lib/canvasLayout";
 import { countryCodeToFlagEmoji } from "../../utils/countries";
 import { formatBlogDate } from "../../utils/dateFilters";
 import { hasCoords } from "../../utils/geo";
@@ -43,6 +45,7 @@ export default function BlogReader({ blog, trip = null, toolbar = null, preview 
   const { user } = useAuth();
   // Comments are for published posts; the editor preview may not even be saved.
   const threads = useSectionThreads(blog.id, { enabled: !preview && blog.status === "published", viewerKey: user?.id });
+  const canvasDoc = useMemo(() => importCanvasLayout(blog.canvas), [blog.canvas]);
   const anchorFor = (section) => {
     const label = SECTION_LABELS[section.kind];
     return threads.enabled && label ? <SectionThread sectionId={section.id} threads={threads} label={label} /> : null;
@@ -102,11 +105,11 @@ export default function BlogReader({ blog, trip = null, toolbar = null, preview 
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.15 }}
-        className={`blog-detail-canvas ${blog.canvas ? "blog-detail-canvas--scrapbook" : ""}`}
+        className={`blog-detail-canvas ${canvasDoc ? "blog-detail-canvas--scrapbook" : ""}`}
       >
         {/* Canvas-authored posts render as their scrapbook page; older posts keep the block list. */}
-        {blog.canvas ? (
-          <CanvasReadOnlyView doc={blog.canvas} renderAnchor={threads.enabled ? anchorFor : null} />
+        {canvasDoc ? (
+          <CanvasReadOnlyView doc={canvasDoc} renderAnchor={threads.enabled ? anchorFor : null} />
         ) : (
           (blog.blocks ?? []).map((block) => (
             <div key={block.id} className="section-anchor">

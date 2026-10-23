@@ -85,6 +85,14 @@ export const PAPER_GROUPS = [
 
 export const PAPER_SWATCHES = ["#ffffff", "#fde2e4", "#fef3c7", "#dcfce7", "#dbeafe", "#ede9fe", "#f4f1ea", "#c9a87c"];
 
+/**
+ * The paper textures on their own, for surfaces that pick a tint separately
+ * (section boxes). "Colored" is dropped since it's the same plain surface as "clean".
+ */
+export const PAPER_TEXTURES = PAPER_GROUPS.flatMap((group) => group.styles)
+  .filter((style) => style.id !== "colored")
+  .map((style) => (style.id === "clean" ? { ...style, label: "Smooth" } : style));
+
 export function findPaperStyle(styleId) {
   for (const group of PAPER_GROUPS) {
     const style = group.styles.find((s) => s.id === styleId);

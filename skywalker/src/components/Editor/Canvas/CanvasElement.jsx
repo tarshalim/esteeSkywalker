@@ -24,9 +24,14 @@ function rounded(patch) {
  * threshold is a tap: it selects, and a second tap on a text-bearing element
  * starts editing it.
  *
- * `layer` is the paint position (collage overlays sit right above their
- * collage), `follow` is where a collage overlay is while its collage is being
- * dragged, and `onLive` reports this element's own in-progress transform.
+ * `layer` is the paint position (overlays sit right above their host),
+ * `follow` is where an overlay is while its host is being dragged, and
+ * `onLive` reports this element's own in-progress transform.
+ *
+ * `findDock(view)` names the element whose empty slot a drag would fill if
+ * released now; the drag reports it through `onDockHover` and docks into it
+ * on release. `dropTarget` highlights this element as a drop target, with a
+ * hint pill when it's a string.
  */
 export default function CanvasElement({
   element,
@@ -41,6 +46,8 @@ export default function CanvasElement({
   follow,
   onLive,
   dropTarget,
+  findDock,
+  onDockHover,
   children,
 }) {
   const liveRef = useRef(null);
@@ -94,14 +101,27 @@ export default function CanvasElement({
     e.stopPropagation();
     const wasSelected = selected;
     if (!selected) actions.select(element.id);
+    // Element whose empty slot this drag would fill on release (Alt overlays instead).
+    let dockId = null;
+    const setDock = (id) => {
+      if (id === dockId) return;
+      dockId = id;
+      onDockHover?.(id);
+    };
     startSession(e, {
-      onMove: ({ dx, dy }) => {
+      onMove: ({ dx, dy, event }) => {
         const x = Math.min(Math.max(element.x + dx, KEEP_VISIBLE - element.width), pageWidth - KEEP_VISIBLE);
         const y = Math.max(element.y + dy, KEEP_VISIBLE - element.height);
         setLive({ x, y });
+        if (findDock) setDock(event.altKey ? null : findDock({ ...element, x, y }));
       },
       onEnd: ({ dragged, cancelled }) => {
-        if (dragged && !cancelled) commitLive();
+        const host = dockId;
+        setDock(null);
+        if (dragged && !cancelled && host) {
+          setLive(null);
+          actions.dockInto(element.id, host);
+        } else if (dragged && !cancelled) commitLive();
         else if (!dragged && allowEdit && wasSelected && !editing && hasEditMode(element)) actions.edit(element.id);
       },
     });
@@ -186,6 +206,8 @@ export default function CanvasElement({
         height: view.height,
         transform: `rotate(${view.rotation}deg)`,
         zIndex: layer,
+        // On the wrapper, not the art: the rotate transform isolates its children from the paper.
+        mixBlendMode: element.blend ? "multiply" : undefined,
         cursor: editing ? "auto" : "grab",
         touchAction: selected ? "none" : "pan-y",
         outline: selected
@@ -199,6 +221,15 @@ export default function CanvasElement({
       onDoubleClick={() => hasEditMode(element) && actions.edit(element.id)}
     >
       {children}
+
+      {typeof dropTarget === "string" && (
+        <span
+          className="pointer-events-none absolute left-1/2 top-1/2 whitespace-nowrap rounded-full bg-amber-500 font-semibold text-white shadow-lg"
+          style={{ fontSize: 12 / zoom, padding: `${4 / zoom}px ${10 / zoom}px`, transform: `translate(-50%, -50%) rotate(${-view.rotation}deg)` }}
+        >
+          {dropTarget}
+        </span>
+      )}
 
       {selected && (
         <>

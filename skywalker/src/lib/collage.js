@@ -281,16 +281,20 @@ export function displayColumns(collage) {
 export const DEFAULT_BACKGROUND = { color: "#ffffff" };
 
 // Warm scrapbook tones and soft pastels; the picker also takes any hex.
+// Shared by collage backdrops and section boxes.
 export const BACKGROUND_SOLIDS = [
   { label: "White", color: "#ffffff" },
   { label: "Soft cream", color: "#fbf5e6" },
   { label: "Craft paper", color: "#e9dcc3" },
   { label: "Kraft", color: "#cdb08a" },
+  { label: "Vintage sage", color: "#d5ddc8" },
   { label: "Pastel mint", color: "#d7eee2" },
+  { label: "Muted rose", color: "#e8cfcf" },
   { label: "Blush", color: "#f7dfe3" },
   { label: "Powder blue", color: "#dce9f5" },
   { label: "Lavender", color: "#e7e0f3" },
   { label: "Butter", color: "#faf0c8" },
+  { label: "Warm slate", color: "#8c8580" },
   { label: "Charcoal", color: "#2f2f33" },
 ];
 

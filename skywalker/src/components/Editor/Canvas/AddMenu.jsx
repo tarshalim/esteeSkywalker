@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronLeft, Clapperboard, ImagePlus, LayoutGrid, Sparkles, Type } from "lucide-react";
+import { ChevronLeft, Clapperboard, ImagePlus, LayoutGrid, RectangleHorizontal, Sparkles, Type } from "lucide-react";
 import FloatingPanel from "./FloatingPanel";
 import LibraryGrid from "./LibraryGrid";
 import { SCRAPBOOK_LIBRARY } from "../../../lib/scrapbookLibrary";
@@ -10,6 +10,8 @@ const QUICK_ACTIONS = [
   { id: "image", label: "Image", icon: ImagePlus },
   { id: "video", label: "Video", icon: Clapperboard },
   { id: "collage", label: "Photo collage", icon: LayoutGrid },
+  // A colored/textured backdrop that text, photos and clips can sit inside.
+  { id: "section", label: "Section box", icon: RectangleHorizontal },
   { id: "scrapbook", label: "Scrapbook element", icon: Sparkles },
 ];
 
@@ -28,6 +30,7 @@ export default function AddMenu({ clientPoint, onAdd, onAddElement, onClose }) {
             <button
               key={id}
               type="button"
+              title={id === "section" ? "Add a section background box" : undefined}
               className="flex min-h-[64px] flex-col last:odd:col-span-2 items-center justify-center gap-1.5 rounded-xl bg-slate-800/80 px-2 py-2.5 text-[12px] font-medium text-slate-200 transition hover:bg-blue-500/25 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
               onClick={() => (id === "scrapbook" ? setView("library") : onAdd(id))}
             >

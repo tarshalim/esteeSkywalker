@@ -142,12 +142,14 @@ export default function CollageElementContent({ element, editable, editing, acti
           onDragOver: (e) => {
             if (!hasFiles(e)) return;
             e.preventDefault();
+            e.stopPropagation(); // the collage takes these, not the page underneath
             setDropActive(true);
           },
           onDragLeave: (e) => !e.currentTarget.contains(e.relatedTarget) && setDropActive(false),
           onDrop: (e) => {
             if (!hasFiles(e)) return;
             e.preventDefault();
+            e.stopPropagation();
             setDropActive(false);
             const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
             onUploadFiles(element.id, files, photosUploadedPatch);

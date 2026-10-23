@@ -63,13 +63,33 @@
   transform-origin: 50% 100%;
 }
 
+/* A travel sticker peeking over the slip's top edge, as if tucked in with it. */
 .trip-env-slip-tab {
   position: absolute;
+  top: -24px;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px var(--shadow-color));
+  transform: rotate(-8deg);
+  pointer-events: none;
+  user-select: none;
+}
+.trip-env-slip--1 .trip-env-slip-tab {
+  transform: rotate(6deg);
+}
+.trip-env-slip--2 .trip-env-slip-tab {
+  transform: rotate(-3deg);
+}
+/* Fallback if the sticker art is missing. */
+.trip-env-slip-tab--plain {
   top: -14px;
   width: 18%;
   height: 16px;
   border-radius: 6px 6px 0 0;
   background: var(--slip-tab);
+  filter: none;
+  transform: none;
 }
 .trip-env-slip--0 {
   --slip-tab: var(--pin-red);
@@ -325,6 +345,35 @@
   color: var(--text-on-accent);
 }
 
+/* Stories count doubles as the drawer toggle; sits above the stretched link. */
+.trip-pass-toggle {
+  position: relative;
+  z-index: 2;
+  padding: 0.3rem 0.55rem 0.15rem;
+  border: 1px dashed color-mix(in srgb, var(--text-muted) 50%, transparent);
+  border-radius: 0.5rem;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.trip-pass-toggle:hover,
+.trip-env.is-open .trip-pass-toggle {
+  background: color-mix(in srgb, var(--yellow) 22%, transparent);
+  border-color: var(--border-strong);
+}
+.trip-pass-toggle:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.trip-pass-toggle-icon {
+  color: var(--text-muted);
+  transition: transform 0.25s ease;
+}
+.trip-env.is-open .trip-pass-toggle-icon {
+  transform: rotate(180deg);
+}
+
 .trip-pass-count {
   font-size: 1.15rem;
   font-weight: 800;
@@ -409,7 +458,9 @@
 @media (prefers-reduced-motion: reduce) {
   .trip-env-front,
   .trip-pass,
-  .trip-pass-thumb {
+  .trip-pass-thumb,
+  .trip-pass-toggle,
+  .trip-pass-toggle-icon {
     transition: none;
   }
 }

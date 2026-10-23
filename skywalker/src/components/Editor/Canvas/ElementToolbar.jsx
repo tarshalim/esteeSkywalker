@@ -5,14 +5,17 @@ import {
   AlignRight,
   ArrowDown,
   ArrowUp,
+  Blend,
   Bold,
   ChevronDown,
+  Clapperboard,
   Copy,
   Droplet,
   GripVertical,
   Highlighter,
   ImagePlus,
   Italic,
+  Layers,
   LayoutGrid,
   Maximize2,
   Minus,
@@ -21,6 +24,7 @@ import {
   Palette,
   Plus,
   RefreshCw,
+  Ruler,
   Scissors,
   Sparkles,
   Sun,
@@ -32,6 +36,9 @@ import {
 import FloatingPanel from "./FloatingPanel";
 import CollageLayoutPanel from "./CollageLayoutPanel";
 import CollageBackgroundPanel from "./CollageBackgroundPanel";
+import SectionStylePanel from "./SectionStylePanel";
+import FillPanel from "./FillPanel";
+import { canHost } from "../../../lib/canvasGroups";
 import {
   ACCENT_COLORS,
   ELEMENT_KIND,
@@ -42,6 +49,7 @@ import {
   createCollageTextElement,
   hasText,
   mediaPatch,
+  mediaSlot,
 } from "../../../lib/canvasElements";
 import { DEFAULT_BACKGROUND, backgroundCss, photosUploadedPatch } from "../../../lib/collage";
 import { CANVAS_FONTS, findFont } from "../../../lib/canvasFonts";
@@ -150,8 +158,12 @@ function applyToSelection(elementId, command) {
  * Compact toolbar floating above the selected element. Text controls appear
  * for anything with writeable text; the middle group adapts to the kind.
  */
-export default function ElementToolbar({ element, editing, actions, onPickMedia, onRequestSource, onOpenElements, elementsOpen }) {
-  const [panel, setPanel] = useState(null);
+export default function ElementToolbar({ element, editing, actions, pageWidth, onPickMedia, onRequestSource, onOpenElements, onAddInside, elementsOpen }) {
+  // Scrapbook pieces (collages and section boxes have their own add controls) get the
+  // click-to-fill panel, opened straight away on an empty photo frame.
+  const fillable = canHost(element) && element.kind !== ELEMENT_KIND.COLLAGE && element.kind !== ELEMENT_KIND.SECTION;
+  const emptyFrame = [ELEMENT_KIND.POLAROID, ELEMENT_KIND.FRAME_STICKER].includes(element.kind) && mediaSlot(element)?.filled === false;
+  const [panel, setPanel] = useState(() => (fillable && emptyFrame && !editing ? "fill" : null));
   const update = (patch, coalesce) => actions.updateElement(element.id, patch, { coalesce });
   const toggle = (name) => setPanel((p) => (p === name ? null : name));
   const AlignIcon = ALIGN_ICONS[element.align] ?? AlignLeft;
@@ -270,10 +282,56 @@ export default function ElementToolbar({ element, editing, actions, onPickMedia,
       </Btn>
     );
   }
+  if (fillable) {
+    kindControls.unshift(
+      <button
+        key="fill"
+        type="button"
+        title="Type on it, or add a photo or video"
+        aria-expanded={panel === "fill"}
+        className={`sb-tool flex !w-auto shrink-0 items-center gap-1 rounded-lg px-2 text-[13px] font-medium text-white ${
+          panel === "fill" ? "bg-blue-500/55" : "bg-blue-500/25 hover:bg-blue-500/45"
+        }`}
+        onClick={() => toggle("fill")}
+      >
+        <Plus size={15} /> Add
+      </button>
+    );
+  }
+  if (kind === ELEMENT_KIND.SECTION) {
+    kindControls.push(
+      <Btn key="color" label="Background color" active={panel === "sectionColor"} onClick={() => toggle("sectionColor")}>
+        <PaintBucket size={16} />
+        <span className="-ml-1 mt-3 h-2 w-2 shrink-0 rounded-full border border-white/50" style={{ background: element.color }} aria-hidden="true" />
+      </Btn>,
+      <Btn key="texture" label="Paper texture" active={panel === "sectionTexture"} onClick={() => toggle("sectionTexture")}>
+        <Layers size={16} />
+      </Btn>,
+      <Btn key="size" label="Width & padding" active={panel === "sectionSize"} onClick={() => toggle("sectionSize")}>
+        <Ruler size={16} />
+      </Btn>,
+      <Divider key="d-inside" />,
+      <Btn key="text" label="Add text inside" onClick={() => onAddInside?.(element.id, "text")}>
+        <Type size={16} />
+      </Btn>,
+      <Btn key="image" label="Add photo inside" onClick={() => onAddInside?.(element.id, "image")}>
+        <ImagePlus size={16} />
+      </Btn>,
+      <Btn key="video" label="Add video inside" onClick={() => onAddInside?.(element.id, "video")}>
+        <Clapperboard size={16} />
+      </Btn>,
+      <Btn key="elements" label="Scrapbook elements (drag onto the box)" active={elementsOpen} onClick={() => onOpenElements?.(element.id)}>
+        <Sparkles size={16} />
+      </Btn>
+    );
+  }
   if (kind === ELEMENT_KIND.STICKER && element.category === "art") {
     kindControls.push(
       <Btn key="recolor" label="Recolor" active={panel === "recolor"} onClick={() => toggle("recolor")}>
         <Palette size={16} />
+      </Btn>,
+      <Btn key="blend" label="Blend into paper" active={element.blend} onClick={() => update({ blend: !element.blend })}>
+        <Blend size={16} />
       </Btn>
     );
   }
@@ -401,7 +459,13 @@ export default function ElementToolbar({ element, editing, actions, onPickMedia,
           )}
           {panel === "layout" && <CollageLayoutPanel element={element} actions={actions} />}
           {panel === "background" && <CollageBackgroundPanel element={element} actions={actions} />}
-          {panel === "recolor" && <ArtRecolorPanel element={element} update={update} />}
+          {panel === "sectionColor" && <SectionStylePanel element={element} view="color" pageWidth={pageWidth} actions={actions} />}
+          {panel === "sectionTexture" && <SectionStylePanel element={element} view="texture" pageWidth={pageWidth} actions={actions} />}
+          {panel === "sectionSize" && <SectionStylePanel element={element} view="size" pageWidth={pageWidth} actions={actions} />}
+          {panel === "recolor" &&<ArtRecolorPanel element={element} update={update} />}
+          {panel === "fill" && (
+            <FillPanel element={element} actions={actions} onPickMedia={onPickMedia} onAddInside={onAddInside} onDone={() => setPanel(null)} />
+          )}
           {panel === "trim" && (
             <div className="w-[264px]">
               <TrimFields

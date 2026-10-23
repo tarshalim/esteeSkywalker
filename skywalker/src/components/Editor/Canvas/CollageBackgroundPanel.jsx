@@ -9,11 +9,11 @@ const ANGLES = [
   { value: 45, label: "↗", name: "Rising diagonal" },
 ];
 
-function Heading({ children }) {
+export function Heading({ children }) {
   return <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{children}</h4>;
 }
 
-function PresetSwatch({ preset, active, onPick }) {
+export function PresetSwatch({ preset, active, onPick }) {
   return (
     <button
       type="button"
@@ -28,7 +28,7 @@ function PresetSwatch({ preset, active, onPick }) {
 }
 
 /** Native color well plus a hex field that applies once the value is a full #rrggbb. */
-function ColorField({ label, value, onChange }) {
+export function ColorField({ label, value, onChange }) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
   return (

@@ -75,6 +75,13 @@ export function AuthProvider({ children }) {
       isPending: role === "pending",
       isSuperAdmin: role === "super_admin",
       canEdit: !supabase || isAdmin,
+      // Resolves to an error message, or null on success; onAuthStateChange
+      // (SIGNED_OUT) clears `user` everywhere.
+      signOut: async () => {
+        if (!supabase) return null;
+        const { error } = await supabase.auth.signOut();
+        return error?.message ?? null;
+      },
     }),
     [user, username, role, loading, isAdmin]
   );

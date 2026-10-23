@@ -85,6 +85,11 @@ export function cloneCanvasDoc(doc) {
     // reach back into the template it came from.
     size: { ...empty.size, ...doc.size },
     theme: { ...empty.theme, ...doc.theme, paper: { ...empty.theme.paper, ...doc.theme?.paper } },
-    elements: (doc.elements ?? []).map((el) => ({ ...structuredClone(el), id: makeElementId() })),
+    // Overlays point at their host's new id, so templates keep their groupings.
+    elements: (() => {
+      const source = doc.elements ?? [];
+      const newIds = new Map(source.map((el) => [el.id, makeElementId()]));
+      return source.map((el) => ({ ...structuredClone(el), id: newIds.get(el.id), attachedTo: newIds.get(el.attachedTo) ?? null }));
+    })(),
   };
 }
