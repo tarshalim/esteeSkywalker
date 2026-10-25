@@ -9,6 +9,7 @@
  *   locations        Location          (the globe pin; formerly `pins`)
  *   trips            Trip              trips.location_id -> locations.id
  *   trip_companions  TripCompanionInterval  -> trips.id
+ *   trip_stops       TripStop          -> trips.id (20261024000000_trip_stops.sql)
  *   blogs            BlogPost          blogs.trip_id -> trips.id, blogs.location_id -> locations.id
  *   gallery_items    GalleryItem       gallery_items.trip_id -> trips.id, .blog_id -> blogs.id
  */
@@ -45,7 +46,30 @@ export interface TripCompanionInterval {
   names: string[];
 }
 
-/** One journey at a location, e.g. "Summer Kyoto Food Tour 2026". */
+/**
+ * One leg of a multi-location trip: "Cusco, Peru" for Oct 3–6. Stops must sit
+ * inside the trip dates; the journey runs in `startDate`, then
+ * `sequenceOrder`, order (tripStore always returns them that way).
+ */
+export interface TripStop {
+  id: string;
+  locationName: string;
+  country: string;
+  countryCode: string;
+  continent: string;
+  /** Null until placed (search pick or typed coordinates); unplaced stops draw no arc. */
+  lat: number | null;
+  lng: number | null;
+  startDate: ISODate;
+  endDate: ISODate;
+  sequenceOrder: number;
+}
+
+/**
+ * One journey, e.g. "Summer Kyoto Food Tour 2026" or "South America 2026"
+ * (Chile -> Peru -> Bolivia). `locationId` is its home pin on the globe; the
+ * stops are its route.
+ */
 export interface Trip {
   id: string;
   locationId: Location["id"];
@@ -54,6 +78,7 @@ export interface Trip {
   endDate: ISODate;
   note?: string;
   companions: TripCompanionInterval[];
+  stops: TripStop[];
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }
@@ -146,4 +171,5 @@ export interface TripDraft {
   endDate: ISODate;
   note: string;
   companions: TripCompanionInterval[];
+  stops: TripStop[];
 }

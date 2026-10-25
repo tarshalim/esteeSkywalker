@@ -5,6 +5,7 @@ import { formatDateRange } from "../utils/dateFilters";
 
 /** @typedef {import("../types/hierarchy").Trip} Trip */
 /** @typedef {import("../types/hierarchy").TripDraft} TripDraft */
+/** @typedef {import("../types/hierarchy").TripStop} TripStop */
 /** @typedef {import("../types/hierarchy").GalleryItem} GalleryItem */
 
 /** TripSelect's value for "create a new trip". */
@@ -14,7 +15,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 /** @returns {TripDraft} */
 export function emptyTripDraft(startDate = todayISO(), endDate = startDate) {
-  return { title: "", startDate, endDate, note: "", companions: [] };
+  return { title: "", startDate, endDate, note: "", companions: [], stops: [] };
 }
 
 /** @returns {TripDraft} */
@@ -25,7 +26,42 @@ export function draftFromTrip(trip) {
     endDate: trip.endDate,
     note: trip.note ?? "",
     companions: (trip.companions ?? []).map((c) => ({ ...c, names: [...c.names] })),
+    stops: sortStops(trip.stops ?? []).map((s) => ({ ...s })),
   };
+}
+
+/**
+ * Stops in journey order: by start date, then `sequenceOrder` for stops
+ * starting the same day. Returns a new array.
+ * @param {TripStop[]} stops
+ */
+export function sortStops(stops) {
+  return [...stops].sort(
+    (a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? "") || (a.sequenceOrder ?? 0) - (b.sequenceOrder ?? 0)
+  );
+}
+
+const isCoord = (value, limit) => typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit;
+
+/** Whether a stop has been placed on the globe. */
+export const stopHasCoords = (stop) => isCoord(stop?.lat, 90) && isCoord(stop?.lng, 180);
+
+/**
+ * Consecutive placed stops of a trip, as the legs of its route:
+ * [{ from, to, index }]. Unplaced stops are skipped over, not breaks.
+ * @param {Trip} trip
+ */
+export function journeyLegs(trip) {
+  const placed = sortStops(trip.stops ?? []).filter(stopHasCoords);
+  return placed.slice(1).map((to, i) => ({ from: placed[i], to, index: i }));
+}
+
+/** Unique countries / continents a trip visits, in journey order. */
+export function tripCountries(trip) {
+  return [...new Set(sortStops(trip?.stops ?? []).map((s) => s.country).filter(Boolean))];
+}
+export function tripContinents(trip) {
+  return [...new Set(sortStops(trip?.stops ?? []).map((s) => s.continent).filter(Boolean))];
 }
 
 /** "Kyoto Food Tour · Oct 1 – Oct 9, 2026" */
@@ -55,7 +91,8 @@ export function tripCovering(trips, locationId, day) {
 
 /**
  * Why a trip (or draft) can't be saved, or null. Companion intervals must sit
- * inside the trip and name at least one person.
+ * inside the trip and name at least one person; stops must sit inside the
+ * trip, have a name, and either valid coordinates or none.
  * @param {TripDraft | Trip} trip
  */
 export function validateTrip(trip) {
@@ -68,6 +105,17 @@ export function validateTrip(trip) {
     if (!c.startDate || !c.endDate) return `${who}: pick both dates`;
     if (c.endDate < c.startDate) return `${who}: the end date is before the start date`;
     if (c.startDate < trip.startDate || c.endDate > trip.endDate) return `${who}: dates must fall within the trip`;
+  }
+  for (const [i, s] of (trip.stops ?? []).entries()) {
+    const where = s.locationName?.trim() || `Stop ${i + 1}`;
+    if (!s.locationName?.trim()) return `Stop ${i + 1}: give it a place name`;
+    if (!s.startDate || !s.endDate) return `${where}: pick both dates`;
+    if (s.endDate < s.startDate) return `${where}: the end date is before the start date`;
+    if (s.startDate < trip.startDate || s.endDate > trip.endDate) return `${where}: dates must fall within the trip`;
+    const hasLat = s.lat != null && s.lat !== "";
+    const hasLng = s.lng != null && s.lng !== "";
+    if (hasLat !== hasLng) return `${where}: enter both latitude and longitude, or neither`;
+    if (hasLat && !stopHasCoords({ lat: Number(s.lat), lng: Number(s.lng) })) return `${where}: those coordinates aren't on the globe`;
   }
   return null;
 }

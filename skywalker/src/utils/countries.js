@@ -12,6 +12,9 @@ export function countryCodeToFlagEmoji(code) {
     .replace(/./g, (char) => String.fromCodePoint(REGIONAL_INDICATOR_OFFSET + char.charCodeAt(0)));
 }
 
+/** Continent tags, spelled as countries.geojson's `CONTINENT` values. */
+export const CONTINENTS = ["Africa", "Antarctica", "Asia", "Europe", "North America", "Oceania", "South America"];
+
 /**
  * ISO_A2 -> continent, matching countries.geojson's own `CONTINENT` values
  * (verified against that dataset) — used to backfill mock data once rather

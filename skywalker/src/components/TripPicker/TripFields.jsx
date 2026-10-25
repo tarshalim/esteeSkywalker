@@ -2,6 +2,7 @@ import { useId } from "react";
 import { Plus, Trash2, Users } from "lucide-react";
 import { parseNames } from "../../lib/hierarchy";
 import { FIELD_INPUT, FIELD_LABEL, fieldInputStyle, fieldLabelStyle as labelStyle } from "./fieldStyles";
+import TripStopsEditor from "./TripStopsEditor";
 
 let rowSeq = 0;
 const newRowId = () => `new-${Date.now().toString(36)}-${rowSeq++}`;
@@ -103,17 +104,20 @@ export function CompanionIntervalsEditor({ value, onChange, tripStart, tripEnd }
 }
 
 /**
- * The trip form: name, start/end dates, an optional note, and companion
- * intervals. Controlled — `draft` is a TripDraft.
+ * The trip form: name, start/end dates, an optional note, companion
+ * intervals and — with `itinerary` — the multi-location stop builder.
+ * Controlled — `draft` is a TripDraft.
  *
  * @param {{
  *   draft: import("../../types/hierarchy").TripDraft,
  *   onChange: (next: import("../../types/hierarchy").TripDraft) => void,
  *   error?: ?string,
  *   autoFocus?: boolean,
+ *   itinerary?: boolean,
+ *   home?: ?{ title: string, lat: number, lng: number },  // the trip's pin, seeds the first stop
  * }} props
  */
-export default function TripFields({ draft, onChange, error = null, autoFocus = false }) {
+export default function TripFields({ draft, onChange, error = null, autoFocus = false, itinerary = false, home = null }) {
   const errorId = useId();
   const set = (key) => (e) => {
     const value = e.target.value;
@@ -161,6 +165,15 @@ export default function TripFields({ draft, onChange, error = null, autoFocus = 
         tripStart={draft.startDate}
         tripEnd={draft.endDate}
       />
+      {itinerary && (
+        <TripStopsEditor
+          value={draft.stops ?? []}
+          onChange={(stops) => onChange({ ...draft, stops })}
+          tripStart={draft.startDate}
+          tripEnd={draft.endDate}
+          seed={home}
+        />
+      )}
       {error && (
         <p id={errorId} role="alert" className="text-xs font-semibold text-red-600">
           {error}

@@ -12,12 +12,13 @@ import TripFields from "./TripFields";
  * @param {{
  *   trip?: ?import("../../types/hierarchy").Trip,   // null to create
  *   locationTitle: string,
+ *   home?: ?{ title: string, lat: number, lng: number },   // the trip's pin, seeds the first stop
  *   onSave: (draft: import("../../types/hierarchy").TripDraft) => Promise<void>,
  *   onDelete?: ?(() => Promise<void>),
  *   onCancel: () => void,
  * }} props
  */
-export default function TripDialog({ trip = null, locationTitle, onSave, onDelete = null, onCancel }) {
+export default function TripDialog({ trip = null, locationTitle, home = null, onSave, onDelete = null, onCancel }) {
   const [draft, setDraft] = useState(() => (trip ? draftFromTrip(trip) : emptyTripDraft()));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null); // "save" | "delete" | null
@@ -59,7 +60,7 @@ export default function TripDialog({ trip = null, locationTitle, onSave, onDelet
         role="dialog"
         aria-labelledby="trip-dialog-title"
         onSubmit={handleSubmit}
-        className="glass-panel flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl sm:max-w-xl sm:rounded-2xl"
+        className="glass-panel flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl sm:max-w-2xl sm:rounded-2xl"
         style={{ background: "var(--bg-panel-strong)", color: "var(--text)" }}
         initial={{ y: 32, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -86,7 +87,7 @@ export default function TripDialog({ trip = null, locationTitle, onSave, onDelet
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 glass-scrollbar">
-          <TripFields draft={draft} onChange={setDraft} error={error} autoFocus={!trip} />
+          <TripFields draft={draft} onChange={setDraft} error={error} autoFocus={!trip} itinerary home={home} />
         </div>
 
         <footer className="flex gap-2 border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]" style={{ borderColor: "var(--glass-border)" }}>

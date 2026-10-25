@@ -7,14 +7,15 @@ import { supabase } from "./supabase";
 //   * other tabs — the same notice over a BroadcastChannel
 //   * other users — Supabase Realtime row changes (see the
 //     location_trip_hierarchy migration, which adds `locations`, `trips`,
-//     `trip_companions`, `gallery_items` and `blogs` to the realtime publication)
+//     `trip_companions`, `gallery_items` and `blogs` to the realtime publication,
+//     and the trip_stops migration, which adds `trip_stops`)
 
 const EVENT = "skywalker:data-changed";
 const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("skywalker-data") : null;
 // A save fires the local event and then echoes back over Realtime; one reload covers both.
 const RELOAD_DEBOUNCE_MS = 250;
 
-/** @param {"blogs"|"locations"|"trips"|"trip_companions"|"gallery_items"} table - a real table name: Realtime subscribes by it */
+/** @param {"blogs"|"locations"|"trips"|"trip_companions"|"trip_stops"|"gallery_items"} table - a real table name: Realtime subscribes by it */
 export function notifyDataChanged(table) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { table } }));
   channel?.postMessage({ table });

@@ -143,7 +143,7 @@ export default function BlogEditor() {
       .catch((err) => console.error("Failed to load trips", err));
   }, []);
   useEffect(loadTrips, [loadTrips]);
-  useDataChanges(["trips", "trip_companions"], loadTrips);
+  useDataChanges(["trips", "trip_companions", "trip_stops"], loadTrips);
 
   useEffect(() => {
     if (!countryFromCoordsRef.current || !coords || countries.length === 0) return;

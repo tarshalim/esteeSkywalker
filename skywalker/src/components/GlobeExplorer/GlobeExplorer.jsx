@@ -12,7 +12,7 @@ import AttachStoriesDialog from "../PinQuickCard/AttachStoriesDialog";
 import TripDialog from "../TripPicker/TripDialog";
 import { getPhotos } from "../../lib/photoStore";
 import { deleteTrip, getTrips, saveTrip } from "../../lib/tripStore";
-import { allCompanions } from "../../lib/hierarchy";
+import { allCompanions, tripContinents, tripCountries } from "../../lib/hierarchy";
 import { getBlogs, setBlogsPin } from "../../lib/blogStore";
 import * as pinStore from "../../lib/pinStore";
 import { buildStoryPins, materializePin, pinsNear } from "../../lib/pinStore";
@@ -113,7 +113,7 @@ export default function GlobeExplorer({
 
   // Publishing/editing a post or (un)linking it to a pin — here, in another
   // tab, or by another editor — refreshes the pins without a page reload.
-  useDataChanges(["blogs", "locations", "trips", "trip_companions", "gallery_items"], loadStories);
+  useDataChanges(["blogs", "locations", "trips", "trip_companions", "trip_stops", "gallery_items"], loadStories);
 
   useEffect(() => () => clearTimeout(hoverFlyTimeoutRef.current), []);
 
@@ -156,12 +156,17 @@ export default function GlobeExplorer({
               p.placeName,
               p.note,
               p.posts.map((b) => b.title),
-              p.trips.map((t) => [t.title, allCompanions(t)]),
+              p.trips.map((t) => [t.title, allCompanions(t), t.stops.map((s) => s.locationName), tripCountries(t), tripContinents(t)]),
               p.photos.map((ph) => [ph.caption, ph.tags])
             )
           )
         : storyPins,
     [storyPins, pinQuery]
+  );
+  // Multi-stop trips at the visible pins, drawn as journey arcs.
+  const visibleJourneys = useMemo(
+    () => visibleCustomPins.flatMap((pin) => pin.trips.filter((t) => t.stops?.length > 1).map((trip) => ({ trip, pinId: pin.id }))),
+    [visibleCustomPins]
   );
   const visibleBlogs = useMemo(
     () =>
@@ -572,6 +577,7 @@ export default function GlobeExplorer({
             ref={globeRef}
             photos={visiblePhotos}
             customPins={visibleCustomPins}
+            journeys={visibleJourneys}
             blogs={visibleBlogs}
             selectedCountryCode={selectedCountry?.code ?? null}
             selectedLocationId={selectedLocationId}
@@ -655,6 +661,7 @@ export default function GlobeExplorer({
           <TripDialog
             trip={tripDialog.trip}
             locationTitle={selectedStoryPin.title}
+            home={selectedStoryPin}
             onSave={handleSaveTrip}
             onDelete={tripDialog.trip ? handleDeleteTrip : null}
             onCancel={() => setTripDialog(null)}

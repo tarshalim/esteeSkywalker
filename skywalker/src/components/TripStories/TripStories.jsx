@@ -60,7 +60,7 @@ export default function TripStories({ blogs }) {
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  useDataChanges(["trips", "trip_companions", "locations"], () => {
+  useDataChanges(["trips", "trip_companions", "trip_stops", "locations"], () => {
     getTrips().then(setTrips, console.error);
     getPins().then(setPins, console.error);
   });
@@ -154,6 +154,7 @@ export default function TripStories({ blogs }) {
           <TripDialog
             trip={editing}
             locationTitle={destinationOf(editing) || "this location"}
+            home={pins.find((p) => p.id === editing.locationId) ?? null}
             onSave={handleSave}
             onCancel={() => setEditing(null)}
           />

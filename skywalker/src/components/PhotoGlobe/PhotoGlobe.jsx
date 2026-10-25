@@ -2,6 +2,8 @@ import { useEffect, useImperativeHandle, useMemo, useRef, useState, useCallback 
 import * as THREE from "three";
 import Globe from "react-globe.gl";
 import { angularDistanceDeg, clusterPhotosByLocation, escapeHtml, slerpLatLng } from "../../utils/geo";
+import { formatDateRange } from "../../utils/dateFilters";
+import { journeyLegs, sortStops, stopHasCoords } from "../../lib/hierarchy";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { createIdyllicTexture, createYellowBlueGlobeDataUrl, enhanceTexture } from "../../utils/proceduralGlobeTexture";
 import { useTheme } from "../../lib/theme";
@@ -34,6 +36,12 @@ const PALETTES = {
     customPin: "#2563eb",
     customPinSelected: "#eab308",
     blogPin: "#e11d48",
+    // Journey arcs: gradient from each leg's start to its end; dimmed unless
+    // their trip's pin is selected (or nothing is).
+    arcFrom: "rgba(225, 29, 72, 0.9)",
+    arcTo: "rgba(245, 158, 11, 0.9)",
+    arcDim: "rgba(225, 29, 72, 0.25)",
+    stopPin: "#be123c",
     ringColor: "30, 64, 175",
     atmosphereColor: "#8fdcff",
     atmosphereAltitude: 0.2,
@@ -56,6 +64,10 @@ const PALETTES = {
     customPin: "#7dd3fc",
     customPinSelected: "#fef9c3",
     blogPin: "#fb7185",
+    arcFrom: "rgba(251, 113, 133, 0.95)",
+    arcTo: "rgba(253, 224, 71, 0.95)",
+    arcDim: "rgba(251, 113, 133, 0.3)",
+    stopPin: "#fda4af",
     ringColor: "253, 224, 71",
     atmosphereColor: "#7dd3fc",
     atmosphereAltitude: 0.26,
@@ -113,6 +125,14 @@ const graticuleLng = (point) => point[1];
 // GlobeExplorer's quick card.
 const isStoryPin = (d) => d.kind === "custom" && d.posts?.length > 0;
 
+const arcStartLat = (d) => d.from.lat;
+const arcStartLng = (d) => d.from.lng;
+const arcEndLat = (d) => d.to.lat;
+const arcEndLng = (d) => d.to.lng;
+
+/** "Cusco, Peru" for a stop's tooltip line. */
+const stopPlace = (stop) => [stop.locationName, stop.country].filter((part, i, all) => part && all.indexOf(part) === i).join(", ");
+
 /**
  * Thin wrapper around react-globe.gl that owns only rendering + raw camera/click
  * events. All filtering/selection state lives in GlobeExplorer — this component
@@ -120,6 +140,10 @@ const isStoryPin = (d) => d.kind === "custom" && d.posts?.length > 0;
  *
  * `customPins` may carry `posts` (pinStore.buildStoryPins); `blogs` only
  * marks countries as visited — posts are drawn through their pins.
+ *
+ * `journeys` ([{ trip, pinId }]) draws each multi-stop trip as animated arcs
+ * from stop to stop, with a small dot per stop; clicking either opens the
+ * trip's pin (onCustomPinClick).
  *
  * `ref` exposes coordsAtClientPoint(clientX, clientY) -> {lat,lng} | null, used
  * by the draggable pin to resolve where it was released.
@@ -133,6 +157,7 @@ export default function PhotoGlobe({
   ref,
   photos,
   customPins,
+  journeys = [],
   blogs = [],
   selectedCountryCode,
   selectedLocationId,
@@ -281,12 +306,31 @@ export default function PhotoGlobe({
   // Photo pins (clustered photos) and custom/story pins share one
   // react-globe.gl points layer, tagged by `kind` so click/hover/color/label
   // logic can dispatch to the right handler and dataset.
+  const journeyArcs = useMemo(
+    () =>
+      journeys.flatMap(({ trip, pinId }) =>
+        journeyLegs(trip).map((leg) => ({ ...leg, id: `${trip.id}:${leg.index}`, pinId, tripTitle: trip.title }))
+      ),
+    [journeys]
+  );
+  // Every placed stop of those trips, as a small dot in the points layer.
+  const stopPoints = useMemo(
+    () =>
+      journeys.flatMap(({ trip, pinId }) =>
+        sortStops(trip.stops)
+          .filter(stopHasCoords)
+          .map((stop, i) => ({ ...stop, id: `stop:${trip.id}:${stop.id}`, kind: "stop", pinId, tripTitle: trip.title, order: i + 1 }))
+      ),
+    [journeys]
+  );
+
   const combinedPins = useMemo(
     () => [
       ...photoPins.map((pin) => ({ ...pin, kind: "photo" })),
       ...customPins.map((pin) => ({ ...pin, kind: "custom" })),
+      ...stopPoints,
     ],
-    [photoPins, customPins]
+    [photoPins, customPins, stopPoints]
   );
 
   // react-globe.gl's own pointOfView tween lerps lat/lng, which bends long
@@ -390,6 +434,7 @@ export default function PhotoGlobe({
 
   const pointColor = useCallback(
     (d) => {
+      if (d.kind === "stop") return palette.stopPin;
       if (d.kind === "custom") {
         if (d.id === selectedCustomPinId) return palette.customPinSelected;
         return isStoryPin(d) ? palette.blogPin : palette.customPin;
@@ -410,6 +455,8 @@ export default function PhotoGlobe({
       markerScale *
       (d.kind === "photo"
         ? Math.min(0.15 + d.photos.length * 0.03, 0.45)
+        : d.kind === "stop"
+        ? 0.12
         : isStoryPin(d)
         ? Math.min(0.26 + d.posts.length * 0.03, 0.42)
         : 0.22),
@@ -418,6 +465,11 @@ export default function PhotoGlobe({
 
   // User-entered text is injected as HTML here, so it must be escaped.
   const pointLabel = useCallback((d) => {
+    if (d.kind === "stop") {
+      return `<div class="globe-tooltip"><strong>${d.order}. ${escapeHtml(stopPlace(d))}</strong><br/>${escapeHtml(
+        formatDateRange(d.startDate, d.endDate)
+      )}<br/>${escapeHtml(d.tripTitle)}</div>`;
+    }
     if (isStoryPin(d)) {
       const count = d.posts.length;
       return `<div class="globe-tooltip"><strong>${escapeHtml(d.title)}</strong>${
@@ -434,15 +486,53 @@ export default function PhotoGlobe({
     }</div>`;
   }, []);
 
+  // A journey's stops and arcs open the pin its trip belongs to.
+  const openJourneyPin = useCallback(
+    (pinId) => {
+      const pin = customPins.find((p) => p.id === pinId);
+      if (pin) onCustomPinClick(pin.id === selectedCustomPinId ? null : { ...pin, kind: "custom" });
+    },
+    [customPins, onCustomPinClick, selectedCustomPinId]
+  );
+
   const handlePointClick = useCallback(
     (d) => {
-      if (d.kind === "custom") {
+      if (d.kind === "stop") {
+        openJourneyPin(d.pinId);
+      } else if (d.kind === "custom") {
         onCustomPinClick(d.id === selectedCustomPinId ? null : d);
       } else {
         onPinClick(d.id === selectedLocationId ? null : d);
       }
     },
-    [onCustomPinClick, onPinClick, selectedCustomPinId, selectedLocationId]
+    [openJourneyPin, onCustomPinClick, onPinClick, selectedCustomPinId, selectedLocationId]
+  );
+
+  // Arcs of the selected pin's trips stand out; with nothing selected, all do.
+  const arcColor = useCallback(
+    (d) => (!selectedCustomPinId || d.pinId === selectedCustomPinId ? [palette.arcFrom, palette.arcTo] : palette.arcDim),
+    [selectedCustomPinId, palette]
+  );
+
+  const arcLabel = useCallback(
+    (d) =>
+      `<div class="globe-tooltip"><strong>${escapeHtml(d.tripTitle)}</strong><br/>${escapeHtml(stopPlace(d.from))} → ${escapeHtml(
+        stopPlace(d.to)
+      )}<br/>${escapeHtml(formatDateRange(d.from.startDate, d.to.endDate))}</div>`,
+    []
+  );
+
+  const handleArcClick = useCallback(
+    (d) => {
+      if (!isPlacingPin) openJourneyPin(d.pinId);
+    },
+    [isPlacingPin, openJourneyPin]
+  );
+
+  // The dashes travel along each leg, start to end; still for reduced motion.
+  const arcDashAnimateTime = useMemo(
+    () => (window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 3200),
+    []
   );
 
   const handlePointHover = useCallback(
@@ -463,7 +553,14 @@ export default function PhotoGlobe({
     []
   );
   const labelColor = useCallback(
-    (d) => (isStoryPin(d) ? palette.blogPin : d.kind === "custom" ? palette.customPin : palette.pinColor),
+    (d) =>
+      d.kind === "stop"
+        ? palette.stopPin
+        : isStoryPin(d)
+        ? palette.blogPin
+        : d.kind === "custom"
+        ? palette.customPin
+        : palette.pinColor,
     [palette]
   );
 
@@ -560,6 +657,21 @@ export default function PhotoGlobe({
         pointLabel={pointLabel}
         onPointClick={handlePointClickOrPlace}
         onPointHover={handlePointHover}
+        arcsData={journeyArcs}
+        arcStartLat={arcStartLat}
+        arcStartLng={arcStartLng}
+        arcEndLat={arcEndLat}
+        arcEndLng={arcEndLng}
+        arcColor={arcColor}
+        arcStroke={0.45 * markerScale}
+        arcAltitudeAutoScale={0.35}
+        arcDashLength={0.5}
+        arcDashGap={0.12}
+        arcDashInitialGap={1}
+        arcDashAnimateTime={arcDashAnimateTime}
+        arcLabel={arcLabel}
+        onArcClick={handleArcClick}
+        arcsTransitionDuration={0}
         ringsData={photoPins}
         ringLat="lat"
         ringLng="lng"

@@ -1,52 +1,76 @@
 import { delay, readJSON, writeJSON, makeId } from "./storage";
 import { supabase, unwrap } from "./supabase";
 import { notifyDataChanged } from "./liveSync";
-import { validateTrip } from "./hierarchy";
+import { sortStops, validateTrip } from "./hierarchy";
 
-// Trips API: Supabase `trips` + `trip_companions` when configured, otherwise
-// a localStorage mock (companions embedded in the trip). Every function
-// returns a Promise so callers don't care which backend is active.
+// Trips API: Supabase `trips` + `trip_companions` + `trip_stops` when
+// configured, otherwise a localStorage mock (companions and stops embedded in
+// the trip). Every function returns a Promise so callers don't care which
+// backend is active.
 //
-// A trip belongs to one Location (`locationId`, the globe pin) and holds the
-// posts and gallery items written/taken on it.
+// A trip has one home Location (`locationId`, the globe pin) and holds the
+// posts and gallery items written/taken on it. Its `stops` are the itinerary
+// (one or many places, each with its own dates), always in journey order.
 
 /** @typedef {import("../types/hierarchy").Trip} Trip */
 /** @typedef {import("../types/hierarchy").TripCompanionInterval} TripCompanionInterval */
+/** @typedef {import("../types/hierarchy").TripStop} TripStop */
 
 const TRIPS_KEY = "skywalker.trips.v1";
 
 const COMPANION_COLUMNS = "id, start_date, end_date, companion_names";
+const STOP_COLUMNS =
+  "id, location_name, country, country_code, continent, latitude, longitude, start_date, end_date, sequence_order";
+const TRIP_SELECT = `data, trip_companions(${COMPANION_COLUMNS}), trip_stops(${STOP_COLUMNS})`;
 
 /** @returns {TripCompanionInterval} */
 const fromCompanionRow = (row) => ({ id: row.id, startDate: row.start_date, endDate: row.end_date, names: row.companion_names ?? [] });
+
+/** @returns {TripStop} */
+const fromStopRow = (row) => ({
+  id: row.id,
+  locationName: row.location_name,
+  country: row.country ?? "",
+  countryCode: row.country_code ?? "",
+  continent: row.continent ?? "",
+  lat: row.latitude,
+  lng: row.longitude,
+  startDate: row.start_date,
+  endDate: row.end_date,
+  sequenceOrder: row.sequence_order,
+});
 
 const byStart = (a, b) => a.startDate.localeCompare(b.startDate);
 
 /** @returns {Trip} */
 function fromTripRow(row) {
-  return { ...row.data, companions: (row.trip_companions ?? []).map(fromCompanionRow).sort(byStart) };
+  return {
+    ...row.data,
+    companions: (row.trip_companions ?? []).map(fromCompanionRow).sort(byStart),
+    stops: sortStops((row.trip_stops ?? []).map(fromStopRow)),
+  };
 }
+
+/** Mock trips saved before stops existed have none. */
+const withStops = (trip) => ({ ...trip, stops: sortStops(trip.stops ?? []) });
 
 /** @returns {Promise<Trip[]>} newest first */
 export async function getTrips() {
   if (supabase) {
-    const rows = unwrap(
-      await supabase.from("trips").select(`data, trip_companions(${COMPANION_COLUMNS})`).order("start_date", { ascending: false })
-    );
+    const rows = unwrap(await supabase.from("trips").select(TRIP_SELECT).order("start_date", { ascending: false }));
     return rows.map(fromTripRow);
   }
-  return delay([...readJSON(TRIPS_KEY, [])].sort((a, b) => b.startDate.localeCompare(a.startDate)));
+  return delay([...readJSON(TRIPS_KEY, [])].sort((a, b) => b.startDate.localeCompare(a.startDate)).map(withStops));
 }
 
 /** @returns {Promise<?Trip>} */
 export async function getTripById(id) {
   if (supabase) {
-    const row = unwrap(
-      await supabase.from("trips").select(`data, trip_companions(${COMPANION_COLUMNS})`).eq("id", id).maybeSingle()
-    );
+    const row = unwrap(await supabase.from("trips").select(TRIP_SELECT).eq("id", id).maybeSingle());
     return row ? fromTripRow(row) : null;
   }
-  return delay(readJSON(TRIPS_KEY, []).find((t) => t.id === id) ?? null);
+  const trip = readJSON(TRIPS_KEY, []).find((t) => t.id === id);
+  return delay(trip ? withStops(trip) : null);
 }
 
 function normalizeCompanions(companions = []) {
@@ -61,9 +85,33 @@ function normalizeCompanions(companions = []) {
     .sort(byStart);
 }
 
+const toCoord = (value) => (value === "" || value == null ? null : Number(value));
+
 /**
- * Creates or updates a trip together with its companion intervals (replaced
- * wholesale). Throws with a readable message when the dates don't line up.
+ * Trims and types the stops, puts them in journey order (date, then the
+ * order they were listed in) and renumbers `sequenceOrder` to match.
+ * @returns {TripStop[]}
+ */
+function normalizeStops(stops = []) {
+  const cleaned = stops.map((s, i) => ({
+    id: s.id || makeId("stop"),
+    locationName: (s.locationName ?? "").trim(),
+    country: (s.country ?? "").trim(),
+    countryCode: (s.countryCode ?? "").trim().toUpperCase(),
+    continent: (s.continent ?? "").trim(),
+    lat: toCoord(s.lat),
+    lng: toCoord(s.lng),
+    startDate: s.startDate,
+    endDate: s.endDate || s.startDate,
+    sequenceOrder: i,
+  }));
+  return sortStops(cleaned).map((s, i) => ({ ...s, sequenceOrder: i }));
+}
+
+/**
+ * Creates or updates a trip together with its companion intervals and stops
+ * (both replaced wholesale). Throws with a readable message when the dates
+ * don't line up.
  * @param {Partial<Trip> & { locationId: string, title: string, startDate: string, endDate: string }} input
  * @returns {Promise<Trip>}
  */
@@ -78,6 +126,7 @@ export async function saveTrip(input) {
     endDate: input.endDate || input.startDate,
     note: input.note ?? "",
     companions: normalizeCompanions(input.companions),
+    stops: normalizeStops(input.stops),
     createdAt: input.createdAt ?? now,
     updatedAt: now,
   };
@@ -85,8 +134,8 @@ export async function saveTrip(input) {
   if (error) throw new Error(error);
 
   if (supabase) {
-    const { companions, ...data } = trip;
-    unwrap(await supabase.rpc("save_trip", { trip: data, companions }));
+    const { companions, stops, ...data } = trip;
+    unwrap(await supabase.rpc("save_trip", { trip: data, companions, stops }));
     notifyDataChanged("trips");
     return trip;
   }
