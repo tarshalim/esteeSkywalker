@@ -571,6 +571,7 @@ export default function TopNav() {
         <form
           onSubmit={handleSearchSubmit}
           role="search"
+          data-tour="nav-search"
           className={`group min-w-0 flex-1 items-center rounded-full border-2 transition-all duration-300 ease-out sm:relative sm:inset-auto sm:z-auto sm:flex md:ml-2 ${
             mobileSearchOpen ? "absolute inset-1 z-10 flex" : "hidden"
           }`}
@@ -650,6 +651,7 @@ export default function TopNav() {
         <button
           type="button"
           onClick={openMobileSearch}
+          data-tour="nav-search-button"
           className={`theme-toggle sm:hidden ${TAP_SQUARE}`}
           aria-label={SEARCH_LABEL}
           title="Search"

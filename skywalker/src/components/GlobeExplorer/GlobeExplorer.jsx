@@ -10,7 +10,9 @@ import ErrorBoundary from "../ErrorBoundary/ErrorBoundary";
 import PinQuickCard from "../PinQuickCard/PinQuickCard";
 import AttachStoriesDialog from "../PinQuickCard/AttachStoriesDialog";
 import TripDialog from "../TripPicker/TripDialog";
+import AddStopPopover from "../AddStopPopover/AddStopPopover";
 import { getPhotos } from "../../lib/photoStore";
+import { collectMedia } from "../../lib/media";
 import { deleteTrip, getTrips, saveTrip } from "../../lib/tripStore";
 import { allCompanions, stopHasCoords, stopPinsOf, tripContinents, tripCountries } from "../../lib/hierarchy";
 import { getBlogs, setBlogsPin } from "../../lib/blogStore";
@@ -55,6 +57,9 @@ const hierarchyQuery = (pin, trip, stop = null) =>
  * @param {?function({countryCode:string,label:string}|null)} onFilterChange -
  *   reports the manual (click/search) globe selection as a country filter.
  * @param {number} clearSignal - bump to clear the selection from outside.
+ * @param {number} newTripSignal - bump to start a new trip from outside (the
+ *   homepage's "Create New Trip"): pin-drop mode turns on, and the dropped
+ *   pin's dialog arrives with "Start a trip here" already ticked.
  */
 export default function GlobeExplorer({
   variant = "standalone",
@@ -62,14 +67,20 @@ export default function GlobeExplorer({
   showGallery = true,
   onFilterChange = null,
   clearSignal = 0,
+  newTripSignal = 0,
   searchActive = true,
 }) {
-  const [photos, setPhotos] = useState([]);
+  const [galleryItems, setGalleryItems] = useState([]);
   const [blogs, setBlogs] = useState([]);
   const [customPins, setCustomPins] = useState([]);
   const [trips, setTrips] = useState([]);
-  // Trip create/edit from the quick card: { trip: null } creates, { trip } edits.
+  // Trip create/edit from the quick card: { trip: null } creates, { trip } edits,
+  // { trip, addStop: true, newStop } adds a stop picked on the globe.
   const [tripDialog, setTripDialog] = useState(null);
+  // { lat, lng } clicked on the globe while a location with trips is open:
+  // the "Add stop here?" prompt.
+  const [stopPrompt, setStopPrompt] = useState(null);
+  const stopPromptTrackRef = useRef(null);
 
   const [viewport, setViewport] = useState(null);
   const [selectedCountry, setSelectedCountry] = useState(null); // { code, name } | null
@@ -89,6 +100,8 @@ export default function GlobeExplorer({
   // naming dialog is open. placeName is known when it came from the drag HUD
   // or a search pick; otherwise PinNamePopover resolves it.
   const [pendingPin, setPendingPin] = useState(null);
+  // Set by newTripSignal: the next pin placed (or existing pin reused) goes straight into the new-trip wizard.
+  const [tripIntent, setTripIntent] = useState(false);
   const [isAttachOpen, setIsAttachOpen] = useState(false);
   const [cardBusy, setCardBusy] = useState(null); // label of the quick-card action in flight
 
@@ -109,7 +122,7 @@ export default function GlobeExplorer({
     getBlogs().then(setBlogs, reportLoadError("blogs"));
     pinStore.getPins().then(setCustomPins, reportLoadError("pins"));
     getTrips().then(setTrips, reportLoadError("trips"));
-    getPhotos().then(setPhotos, reportLoadError("photos"));
+    getPhotos().then(setGalleryItems, reportLoadError("photos"));
   }, []);
 
   useEffect(loadStories, [loadStories]);
@@ -120,6 +133,9 @@ export default function GlobeExplorer({
 
   useEffect(() => () => clearTimeout(hoverFlyTimeoutRef.current), []);
 
+  // Gallery uploads plus every photo in a published post, like the Gallery page:
+  // most photos only ever live inside posts, so uploads alone left pins at 0.
+  const photos = useMemo(() => collectMedia(galleryItems, blogs), [galleryItems, blogs]);
   const photoPins = useMemo(() => clusterPhotosByLocation(photos), [photos]);
   const blogsById = useMemo(() => new Map(blogs.map((b) => [b.id, b])), [blogs]);
   // Globe markers/search are a public showcase: published, geolocated posts only.
@@ -295,6 +311,7 @@ export default function GlobeExplorer({
       setSelectedLocationId(null);
       setSelectedCustomPinId(pin?.id ?? null);
       setSelectedStopId(null);
+      setStopPrompt(null);
       if (pin) flyToPin(pin);
     },
     [flyToPin]
@@ -428,7 +445,7 @@ export default function GlobeExplorer({
 
   const coordsAtClientPoint = useCallback((x, y) => globeRef.current?.coordsAtClientPoint(x, y) ?? null, []);
 
-  // The tour's "Name Your Pin" step opens the naming dialog on whatever the
+  // The tour's "Create Your Pin" / "Plan a Trip" steps open the naming dialog on whatever the
   // globe is facing (detail: true) and closes it again on leaving the step.
   useEffect(() => {
     if (!canEdit) return;
@@ -459,8 +476,20 @@ export default function GlobeExplorer({
   );
 
   const handleToggleClickMode = useCallback(() => {
+    setTripIntent(false);
     if (canPlacePin()) setIsPlacingPin((prev) => !prev);
   }, [canPlacePin]);
+
+  // Read through a ref so a new canPlacePin (auth change) doesn't replay the last signal.
+  const canPlacePinRef = useRef(canPlacePin);
+  canPlacePinRef.current = canPlacePin;
+  useEffect(() => {
+    if (!newTripSignal || !canPlacePinRef.current()) return;
+    setPendingPin(null);
+    setTripDialog(null);
+    setIsPlacingPin(true);
+    setTripIntent(true);
+  }, [newTripSignal]);
 
   const handleLocated = useCallback(
     (coords) => {
@@ -482,6 +511,7 @@ export default function GlobeExplorer({
         // Straight into its quick card: write a story here or attach some —
         // or, for "Start a trip here", the new-trip wizard over it.
         selectStoryPin(pin);
+        setTripIntent(false);
         if (startTrip) setTripDialog({ trip: null });
       } catch (err) {
         console.error(err);
@@ -491,14 +521,20 @@ export default function GlobeExplorer({
     [pendingPin, selectStoryPin]
   );
 
-  const handleCancelPendingPin = useCallback(() => setPendingPin(null), []);
+  const handleCancelPendingPin = useCallback(() => {
+    setPendingPin(null);
+    setTripIntent(false);
+  }, []);
 
   // A pin dropped on (or near) an existing hub offers that hub instead of a duplicate.
   const nearbyPin = useMemo(() => (pendingPin ? pinsNear(storyPins, pendingPin)[0] ?? null : null), [pendingPin, storyPins]);
   const handleUseNearbyPin = useCallback(() => {
     setPendingPin(null);
     selectStoryPin(nearbyPin);
-  }, [nearbyPin, selectStoryPin]);
+    // Creating a trip: carry on into the wizard at the existing pin.
+    if (tripIntent) setTripDialog({ trip: null });
+    setTripIntent(false);
+  }, [nearbyPin, selectStoryPin, tripIntent]);
 
   // Quick-card actions. Each write notifies liveSync, which reloads the pins.
   const runCardAction = useCallback(async (label, action) => {
@@ -517,7 +553,29 @@ export default function GlobeExplorer({
   const handleCloseCard = useCallback(() => {
     setSelectedCustomPinId(null);
     setSelectedStopId(null);
+    setStopPrompt(null);
   }, []);
+
+  // With a location's card open, a click on the globe offers to add a stop
+  // there to one of its trips (the focused stop's trip first).
+  const stopTrips = useMemo(
+    () => (canEdit && selectedStoryPin && !selectedStoryPin.virtual ? selectedStoryPin.trips : []),
+    [canEdit, selectedStoryPin]
+  );
+  const canPromptStop = stopTrips.length > 0 && !pendingPin && !tripDialog && !isPlacingPin;
+  const shownStopPrompt = canPromptStop ? stopPrompt : null;
+  const handleSurfaceClick = useCallback((coords) => setStopPrompt(coords), []);
+  const handleCancelStopPrompt = useCallback(() => setStopPrompt(null), []);
+  const handleConfirmStopPrompt = useCallback(
+    ({ trip, placeName }) => {
+      setTripDialog({ trip, addStop: true, newStop: { ...stopPrompt, locationName: placeName } });
+      setStopPrompt(null);
+    },
+    [stopPrompt]
+  );
+  const clientPointOf = useCallback((lat, lng) => globeRef.current?.clientPointOf(lat, lng) ?? null, []);
+  // Every camera frame (drag, zoom, fly-to) moves the prompt with its spot.
+  const handleCameraChange = useCallback(() => stopPromptTrackRef.current?.(), []);
 
   // Step 3 of the cascade: content at this location, inside `trip` (and at `stop`) when given.
   const handleNewStory = useCallback(
@@ -612,11 +670,13 @@ export default function GlobeExplorer({
             showBorders={prefs.showBorders}
             showGrid={prefs.showGrid}
             showAtmosphere={prefs.showAtmosphere}
-            autoRotate={prefs.autoRotate}
+            autoRotate={prefs.autoRotate && !shownStopPrompt}
             isPlacingPin={isPlacingPin}
-            pendingPin={pendingPin}
+            pendingPin={pendingPin ?? shownStopPrompt}
             flyToTarget={flyTarget}
             onViewportChange={setViewport}
+            onCameraChange={handleCameraChange}
+            onSurfaceClick={canPromptStop ? handleSurfaceClick : null}
             onCountryClick={handleCountryClick}
             onCountryHover={handleCountryHover}
             onPinClick={handlePinClick}
@@ -645,12 +705,25 @@ export default function GlobeExplorer({
             />
           )}
         </AnimatePresence>
+        {shownStopPrompt && (
+          <AddStopPopover
+            key={`${shownStopPrompt.lat}:${shownStopPrompt.lng}`}
+            coords={shownStopPrompt}
+            trips={stopTrips}
+            defaultTripId={selectedStop?.tripId ?? null}
+            locate={clientPointOf}
+            trackRef={stopPromptTrackRef}
+            onConfirm={handleConfirmStopPrompt}
+            onCancel={handleCancelStopPrompt}
+          />
+        )}
         {pendingPin && (
           <PinNamePopover
             key={`${pendingPin.lat}:${pendingPin.lng}`}
             coords={pendingPin}
             placeName={pendingPin.placeName}
             nearbyPin={nearbyPin}
+            startTrip={tripIntent}
             onConfirm={handleCreatePin}
             onCancel={handleCancelPendingPin}
             onUseExisting={handleUseNearbyPin}
@@ -688,6 +761,8 @@ export default function GlobeExplorer({
         {tripDialog && selectedStoryPin && (
           <TripDialog
             trip={tripDialog.trip}
+            addStop={Boolean(tripDialog.addStop)}
+            newStop={tripDialog.newStop ?? null}
             locationTitle={selectedStoryPin.title}
             home={selectedStoryPin}
             onSave={handleSaveTrip}

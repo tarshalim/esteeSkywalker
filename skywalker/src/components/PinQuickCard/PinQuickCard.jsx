@@ -227,12 +227,18 @@ export default function PinQuickCard({
         .filter(Boolean)
         .join(" · ");
   const rowProps = { canDetach: canEdit && !pin.virtual, busy, onOpenPost, onDetach };
+  // Header and footer stick to the card's edges while it scrolls as one.
+  const pinnedBar = { background: "var(--bg-panel-strong)" };
 
+  // The card itself is the scroller: when only the trip list scrolled, a short
+  // stage (phones, the gallery below) let the header, covers and footer eat
+  // the whole max-height and squeeze the list to nothing. overscroll-contain
+  // keeps the homepage's snap scroller from taking over at either end.
   return (
     <motion.aside
       role="dialog"
       aria-labelledby={titleId}
-      className="glass-panel absolute inset-x-2 bottom-2 flex max-h-[72%] flex-col overflow-hidden rounded-2xl sm:inset-x-auto sm:top-4 sm:right-4 sm:bottom-auto sm:max-h-[calc(100%-2rem)] sm:w-[24rem]"
+      className="glass-panel absolute inset-x-2 bottom-2 flex max-h-[72%] flex-col overflow-y-auto overscroll-contain rounded-2xl glass-scrollbar sm:inset-x-auto sm:top-4 sm:right-4 sm:bottom-auto sm:max-h-[calc(100%-2rem)] sm:w-[24rem]"
       style={{ zIndex: "var(--z-hud)", background: "var(--bg-panel-strong)", color: "var(--text)" }}
       initial={{ opacity: 0, y: 24, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -240,7 +246,7 @@ export default function PinQuickCard({
       transition={{ type: "spring", stiffness: 380, damping: 32 }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <header className="flex items-start gap-3 p-4 pb-3">
+      <header className="sticky top-0 z-10 flex shrink-0 items-start gap-3 p-4 pb-3" style={pinnedBar}>
         <MapPin className="red-pin-icon mt-0.5 shrink-0" size={26} strokeWidth={2} aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="truncate text-lg font-bold leading-tight">
@@ -274,7 +280,7 @@ export default function PinQuickCard({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 glass-scrollbar">
+      <div className="flex shrink-0 flex-col gap-2 px-2 pb-2">
         {posts.length === 0 && trips.length === 0 && (
           <p className="px-2 py-3 text-sm" style={{ color: "var(--text-muted)" }}>
             {pin.note || "No trips or stories here yet."}
@@ -310,7 +316,7 @@ export default function PinQuickCard({
       </div>
 
       {canEdit && (
-        <footer className="grid shrink-0 grid-cols-2 gap-2 border-t p-3" style={{ borderColor: "var(--glass-border)" }}>
+        <footer className="sticky bottom-0 z-10 mt-auto grid shrink-0 grid-cols-2 gap-2 border-t p-3" style={{ ...pinnedBar, borderColor: "var(--glass-border)" }}>
           <button
             type="button"
             onClick={onNewTrip}

@@ -14,6 +14,9 @@ import { supabase, unwrap } from "./supabase";
 export const REACTION_EMOJIS = ["❤️", "👏", "😍", "📍", "😂"];
 export const COMMENT_MAX = 2000;
 export const NAME_MAX = 60;
+export const EMAIL_MAX = 254;
+// Same shape the stamp_section_comment trigger enforces.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 const COMMENTS_KEY = "skywalker.sectionComments.v1";
 const REACTIONS_KEY = "skywalker.sectionReactions.v1";
@@ -57,6 +60,29 @@ export function saveGuestProfile(profile) {
   }
 }
 
+/** @returns {?string} what's wrong with a guest's name/email, or null if it's fine */
+export function validateGuest({ name, email }) {
+  if (!name.trim()) return "Please enter your name.";
+  if (name.trim().length > NAME_MAX) return `Names can be up to ${NAME_MAX} characters.`;
+  const e = email.trim();
+  if (!e || e.length > EMAIL_MAX || !EMAIL_RE.test(e)) return "Please enter a valid email address.";
+  return null;
+}
+
+// The trigger tags its errors with these hints.
+const ERROR_MESSAGES = {
+  invalid_name: "Please enter your name.",
+  invalid_email: "Please enter a valid email address.",
+  rate_limited: "You’re commenting a little fast — please wait a few minutes and try again.",
+  duplicate: "You’ve already posted that comment.",
+};
+
+/** A reader-facing message for a failed comment post. */
+export function commentErrorMessage(err) {
+  if (err?.hint === "invalid_guest") return err.message;
+  return ERROR_MESSAGES[err?.hint] ?? "Couldn’t post your comment. Please try again.";
+}
+
 /** @returns {Promise<SectionComment[]>} oldest first */
 export async function getSectionComments(blogId) {
   if (supabase) {
@@ -70,11 +96,15 @@ export async function getSectionComments(blogId) {
 
 /**
  * Signed-in, approved users post as themselves (the server fills in their
- * name and avatar); everyone else needs `guest.name`.
- * @param {{ blogId: string, sectionId: string, body: string, guest?: ?{ name: string, email?: string }, user?: ?{ id: string, username: string, avatar?: string } }} input
+ * name and avatar); everyone else needs `guest.name` and `guest.email`.
+ * @param {{ blogId: string, sectionId: string, body: string, guest?: ?{ name: string, email: string }, user?: ?{ id: string, username: string, avatar?: string } }} input
  * @returns {Promise<SectionComment>}
  */
 export async function addSectionComment({ blogId, sectionId, body, guest = null, user = null }) {
+  if (!user) {
+    const problem = validateGuest(guest ?? { name: "", email: "" });
+    if (problem) throw Object.assign(new Error(problem), { hint: "invalid_guest" });
+  }
   if (supabase) {
     const row = unwrap(
       await supabase

@@ -17,20 +17,34 @@ const WIZARD_STEPS = ["Basics", "Stops"];
  * Three shapes:
  *   - new trip (`trip` null): a two-step wizard — name, cover and dates, then
  *     the itinerary (first stop seeded from `home`) and who came along;
- *   - `addStop`: just the itinerary, with a new blank stop focused;
- *   - otherwise the full edit form.
+ *   - `addStop`: just the itinerary, with a new blank stop focused (or, with
+ *     `newStop`, one already placed at a spot picked on the globe);
+ *   - otherwise the full edit form — with the stop builder unless `itinerary`
+ *     is false (stops are only added from the 3D globe).
  *
  * @param {{
  *   trip?: ?import("../../types/hierarchy").Trip,   // null to create
  *   locationTitle: string,
  *   home?: ?{ title: string, lat: number, lng: number },   // the trip's pin, seeds the first stop
  *   addStop?: boolean,
+ *   newStop?: ?{ lat: number, lng: number, locationName?: string },
+ *   itinerary?: boolean,
  *   onSave: (draft: import("../../types/hierarchy").TripDraft) => Promise<void>,
  *   onDelete?: ?(() => Promise<void>),
  *   onCancel: () => void,
  * }} props
  */
-export default function TripDialog({ trip = null, locationTitle, home = null, addStop = false, onSave, onDelete = null, onCancel }) {
+export default function TripDialog({
+  trip = null,
+  locationTitle,
+  home = null,
+  addStop = false,
+  newStop = null,
+  itinerary = true,
+  onSave,
+  onDelete = null,
+  onCancel,
+}) {
   const creating = !trip;
   const [draft, setDraft] = useState(() => (trip ? draftFromTrip(trip) : emptyTripDraft()));
   const [step, setStep] = useState(0); // wizard step, creating only
@@ -91,6 +105,7 @@ export default function TripDialog({ trip = null, locationTitle, home = null, ad
       seed={home}
       compact
       startWithNewStop={addStop || draft.stops.length === 0}
+      newStop={addStop ? newStop : null}
     />
   );
 
@@ -121,7 +136,7 @@ export default function TripDialog({ trip = null, locationTitle, home = null, ad
       </div>
     );
   } else {
-    body = <TripFields draft={draft} onChange={setDraft} error={error} cover itinerary home={home} />;
+    body = <TripFields draft={draft} onChange={setDraft} error={error} cover itinerary={itinerary} home={home} />;
   }
 
   const secondaryButton = "inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full text-sm font-semibold hover:bg-black/5";

@@ -5,9 +5,11 @@ import { textStyle } from "../../../../lib/canvasFonts";
  * Rich-text region used by every text-bearing element (text boxes, notes,
  * polaroid captions, stamps, badges). It is only contentEditable while its
  * element is in edit mode, so a plain press on it still drags the element.
- * Without `actions` it renders read-only.
+ * Without `actions` it renders read-only. With `autoGrow` (only for regions
+ * that fill their element) typing past the bottom grows the element to fit,
+ * so the last line is never cut in half.
  */
-export default function EditableText({ element, editing, actions, placeholder = "Write something…", className = "", style }) {
+export default function EditableText({ element, editing, actions, placeholder = "Write something…", className = "", style, autoGrow = false }) {
   const ref = useRef(null);
   const html = element.html || "";
   const readOnly = !actions;
@@ -45,7 +47,14 @@ export default function EditableText({ element, editing, actions, placeholder = 
       suppressContentEditableWarning
       style={{ ...textStyle(element), ...style, touchAction: editing ? "auto" : undefined }}
       onPointerDown={editing ? (e) => e.stopPropagation() : undefined}
-      onInput={(e) => actions.updateElement(element.id, { html: e.currentTarget.innerHTML }, { coalesce: "text" })}
+      onInput={(e) => {
+        const node = e.currentTarget;
+        // Canvas px: the page's zoom is a transform, which doesn't affect these.
+        const overflow = autoGrow ? node.scrollHeight - node.clientHeight : 0;
+        const patch = { html: node.innerHTML };
+        if (overflow > 0) patch.height = element.height + Math.ceil(overflow);
+        actions.updateElement(element.id, patch, { coalesce: "text" });
+      }}
       // Paste as plain text: keeps foreign styles (and any markup) out of posts.
       onPaste={(e) => {
         e.preventDefault();

@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../lib/auth";
 import { AVATARS, avatarFor } from "../../lib/avatars";
-import { COMMENT_MAX, NAME_MAX, REACTION_EMOJIS, getGuestProfile, saveGuestProfile } from "../../lib/commentStore";
+import {
+  COMMENT_MAX,
+  EMAIL_MAX,
+  NAME_MAX,
+  REACTION_EMOJIS,
+  commentErrorMessage,
+  getGuestProfile,
+  saveGuestProfile,
+  validateGuest,
+} from "../../lib/commentStore";
 import "./SectionComments.css";
 
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
@@ -155,18 +164,38 @@ function CommentList({ comments, threads }) {
   );
 }
 
+// Spam bots tend to fill every field and submit instantly; people do neither.
+const MIN_FILL_MS = 2000;
+
 function CommentForm({ sectionId, threads }) {
   const { user, username, isPending, enabled } = useAuth();
   // Pending accounts can't act as themselves yet, so they comment as guests.
   const member = enabled && user && username && !isPending ? { id: user.id, username, avatar: user.user_metadata?.avatar } : null;
-  const [guest, setGuest] = useState(() => ({ name: "", email: "", ...getGuestProfile() }));
+  const [guest, setGuest] = useState(() => {
+    const saved = getGuestProfile();
+    return { name: saved.name ?? "", email: saved.email || user?.email || "" };
+  });
   const [body, setBody] = useState("");
+  const [honeypot, setHoneypot] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const openedAt = useRef(Date.now());
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!body.trim() || (!member && !guest.name.trim())) return;
+    if (!body.trim()) return;
+    if (!member) {
+      const problem = validateGuest(guest);
+      if (problem) {
+        setError(problem);
+        return;
+      }
+    }
+    // Looks like a bot: act as if it worked so it doesn't learn to adapt.
+    if (honeypot || Date.now() - openedAt.current < MIN_FILL_MS) {
+      setBody("");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -175,7 +204,7 @@ function CommentForm({ sectionId, threads }) {
       setBody("");
     } catch (err) {
       console.error("Failed to post comment", err);
-      setError("Couldn’t post your comment. Please try again.");
+      setError(commentErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -202,15 +231,30 @@ function CommentForm({ sectionId, threads }) {
           />
           <input
             type="email"
-            maxLength={254}
-            placeholder="Email (optional, never shown)"
-            aria-label="Email (optional, never shown publicly)"
+            required
+            maxLength={EMAIL_MAX}
+            placeholder="Email * (never shown)"
+            aria-label="Email (required, never shown publicly)"
             autoComplete="email"
             value={guest.email}
             onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))}
           />
         </div>
       )}
+      {/* Honeypot: hidden from people and screen readers, irresistible to bots. */}
+      <div className="sc-hp" aria-hidden="true">
+        <label>
+          Website
+          <input
+            type="text"
+            name="website"
+            tabIndex={-1}
+            autoComplete="off"
+            value={honeypot}
+            onChange={(e) => setHoneypot(e.target.value)}
+          />
+        </label>
+      </div>
       <textarea
         required
         rows={3}
@@ -220,10 +264,18 @@ function CommentForm({ sectionId, threads }) {
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
-      {error && <p className="sc-error">{error}</p>}
+      {error && (
+        <p className="sc-error" role="alert">
+          {error}
+        </p>
+      )}
       <div className="sc-form-foot">
         {!member && <span className="sc-hint">Posting as a guest</span>}
-        <button type="submit" className="sc-submit" disabled={busy || !body.trim() || (!member && !guest.name.trim())}>
+        <button
+          type="submit"
+          className="sc-submit"
+          disabled={busy || !body.trim() || (!member && (!guest.name.trim() || !guest.email.trim()))}
+        >
           {busy ? "Posting…" : "Post"}
         </button>
       </div>

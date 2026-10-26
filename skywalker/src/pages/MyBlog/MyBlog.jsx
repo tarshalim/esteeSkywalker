@@ -9,6 +9,7 @@ import { useAuth } from "../../lib/auth";
 import { useVibes } from "../../lib/vibes";
 import { useAsync } from "../../hooks/useAsync";
 import { useTrailScroll } from "../../hooks/useTrailScroll";
+import { useHorizontalRide } from "../../hooks/useHorizontalRide";
 import TrailBackdrop from "../../components/BlogTrail/TrailBackdrop";
 import TrailPath from "../../components/BlogTrail/TrailPath";
 import TrailSignpost from "../../components/BlogTrail/TrailSignpost";
@@ -184,6 +185,8 @@ export default function MyBlog() {
 
   const [trip, setTrip] = useState(null);
   const tripRef = useRef(null);
+  // Sideways swipes, shift+wheel, horizontal drags and ←/→ ride the same scroll as the wheel.
+  useHorizontalRide(stageRef, { scrollPerPx: SCROLL_PER_TRAIL_PX, enabled: !trip, reduceMotion });
   // Stable so memoised signposts don't re-render when the rider's state changes.
   const openBlog = useCallback(
     (blog, pinEl) => {
@@ -260,7 +263,7 @@ export default function MyBlog() {
     >
       <motion.div
         ref={stageRef}
-        className="sticky top-0 h-[100dvh] w-full overflow-hidden bg-sky-200"
+        className="sticky top-0 h-[100dvh] w-full touch-pan-y touch-pinch-zoom overflow-hidden bg-sky-200"
         style={{ transformOrigin: trip ? `${trip.originX}px ${trip.originY}px` : "50% 50%" }}
         animate={trip ? { scale: ZOOM_SCALE, filter: "blur(2px)" } : { scale: 1, filter: "blur(0px)" }}
         transition={{ duration: 0.9, ease: [0.7, 0, 0.3, 1] }}
@@ -351,7 +354,7 @@ export default function MyBlog() {
           style={{ opacity: hintOpacity }}
           className="pointer-events-none absolute bottom-12 left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-900/70 px-3 py-1 text-xs font-medium text-white"
         >
-          Scroll or use the arrows to ride
+          Scroll or swipe sideways to ride
         </motion.p>
 
         <TrailControls progress={progress} scrollProgress={scrollProgress} stops={stops} onSeek={seek} />

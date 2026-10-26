@@ -9,8 +9,10 @@ import {
   ArrowUpNarrowWide,
   Earth,
   LayoutGrid,
+  Plus,
   X,
 } from "lucide-react";
+import { useAuth } from "../../lib/auth";
 import { formatBlogDate } from "../../lib/dateFilters";
 import JourneyPortal from "../JourneyPortal/JourneyPortal";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
@@ -44,6 +46,9 @@ export default function BlogFeed({
   tabsTop = 0,
   autoLoad = true,
 }) {
+  const { user, canEdit } = useAuth();
+  // Same rule as TopNav's "Create Blog": signed-out visitors see it and get sent to log in.
+  const canCreate = !user || canEdit;
   const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [activeYear, setActiveYear] = useState(ALL_YEARS);
   const [sortOrder, setSortOrder] = useState("newest");
@@ -96,7 +101,17 @@ export default function BlogFeed({
   const visible = filtered.slice(0, visibleCount);
 
   return (
-    <div className="blog-feed">
+    <section className="blog-feed" aria-labelledby="blog-feed-title">
+      <header className="blog-feed-header section-heading-row">
+        <h2 id="blog-feed-title">My Blogs</h2>
+        {canCreate && (
+          <Link to="/blogs/new" className="section-create">
+            <Plus size={14} aria-hidden="true" />
+            Create New Blog
+          </Link>
+        )}
+      </header>
+
       <div className="blog-feed-tabs glass-panel" style={{ top: tabsTop }}>
         <div className="blog-feed-tab-group" role="tablist" aria-label="Filter stories by continent">
           {tabs.map((tab) => {
@@ -205,6 +220,6 @@ export default function BlogFeed({
       <div className="blog-feed-footer">
         <JourneyPortal storyCount={published.length} />
       </div>
-    </div>
+    </section>
   );
 }

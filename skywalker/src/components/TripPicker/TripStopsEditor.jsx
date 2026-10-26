@@ -90,7 +90,7 @@ function StopPlaceInput({ value, onChange, onPick, label, autoFocus = false }) {
         <ul
           id={listId}
           role="listbox"
-          className="glass-panel absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-xl p-1 shadow-lg"
+          className="glass-panel absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-(--radius-field) p-1 shadow-lg"
           style={{ background: "var(--bg-panel-strong)" }}
         >
           {suggestions.map((place) => (
@@ -98,7 +98,7 @@ function StopPlaceInput({ value, onChange, onPick, label, autoFocus = false }) {
               {/* mousedown, not click: the input's blur would unmount the list first. */}
               <button
                 type="button"
-                className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-black/5"
+                className="flex w-full items-start gap-2 rounded-[calc(var(--radius-field)-0.25rem)] px-2 py-1.5 text-left text-sm hover:bg-black/5"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   setIsFocused(false);
@@ -132,7 +132,8 @@ function StopPlaceInput({ value, onChange, onPick, label, autoFocus = false }) {
  *
  * `compact` (the new-trip wizard, the boarding pass's "Add stop") shows just
  * the place search and dates: picking a place fills in the rest.
- * `startWithNewStop` appends a blank row on mount and focuses it.
+ * `startWithNewStop` appends a blank row on mount and focuses it — or, with
+ * `newStop` (a spot clicked on the globe), a row already placed there.
  *
  * @param {{
  *   value: import("../../types/hierarchy").TripStop[],
@@ -142,9 +143,19 @@ function StopPlaceInput({ value, onChange, onPick, label, autoFocus = false }) {
  *   seed?: ?{ title: string, lat: number, lng: number },  // the trip's home pin, for the first stop
  *   compact?: boolean,
  *   startWithNewStop?: boolean,
+ *   newStop?: ?{ lat: number, lng: number, locationName?: string },
  * }} props
  */
-export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, seed = null, compact = false, startWithNewStop = false }) {
+export default function TripStopsEditor({
+  value,
+  onChange,
+  tripStart,
+  tripEnd,
+  seed = null,
+  compact = false,
+  startWithNewStop = false,
+  newStop = null,
+}) {
   const features = useCountriesGeoJson();
   const countryOptions = useCountryOptions(features);
   // The row "Add stop" just made, whose place search takes focus.
@@ -158,19 +169,30 @@ export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, s
     onChange(next);
   };
 
-  const add = () => {
+  const seedsFirstStop = value.length === 0 && seed && stopHasCoords(seed);
+
+  // The first stop starts where the trip's pin is.
+  const seedRow = () => {
     const row = blankStop(value, tripStart, tripEnd);
-    // The first stop starts where the trip's pin is.
-    if (value.length === 0 && seed && stopHasCoords(seed)) {
-      // Before the country polygons load, the pin's own country tag stands in.
-      const pinTags = seed.countryCode
-        ? { countryCode: seed.countryCode, country: seed.countryName || seed.countryCode, continent: continentOf(seed.countryCode, features) }
-        : {};
-      Object.assign(row, { locationName: seed.title, lat: seed.lat, lng: seed.lng }, pinTags, tagsForPoint(seed.lat, seed.lng, features));
-    } else {
-      setAddedId(row.id);
-    }
+    // Before the country polygons load, the pin's own country tag stands in.
+    const pinTags = seed.countryCode
+      ? { countryCode: seed.countryCode, country: seed.countryName || seed.countryCode, continent: continentOf(seed.countryCode, features) }
+      : {};
+    return Object.assign(row, { locationName: seed.title, lat: seed.lat, lng: seed.lng }, pinTags, tagsForPoint(seed.lat, seed.lng, features));
+  };
+
+  const add = () => {
+    if (seedsFirstStop) return onChange([seedRow()]);
+    const row = blankStop(value, tripStart, tripEnd);
+    setAddedId(row.id);
     onChange([...value, row]);
+  };
+
+  // A spot picked on the globe, after the pin's own stop on a trip that has none yet.
+  const addPlaced = ({ lat, lng, locationName = "" }) => {
+    const before = seedsFirstStop ? [seedRow()] : value;
+    const row = Object.assign(blankStop(before, tripStart, tripEnd), { locationName, lat, lng }, tagsForPoint(lat, lng, features));
+    onChange([...before, row]);
   };
 
   // Once per mount (the ref outlives StrictMode's effect replay).
@@ -178,7 +200,8 @@ export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, s
   useEffect(() => {
     if (!startWithNewStop || startedRef.current) return;
     startedRef.current = true;
-    add();
+    if (newStop && stopHasCoords(newStop)) addPlaced(newStop);
+    else add();
   });
 
   const pickPlace = (id, place) =>

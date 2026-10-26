@@ -282,6 +282,14 @@
   opacity: 0.5;
   cursor: default;
 }
+/* Spam honeypot: off-screen rather than display:none, which some bots skip. */
+.sc-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
 .sc-error {
   margin: 0;
   font-size: 0.78rem;

@@ -62,7 +62,9 @@
   margin: 0;
   padding: 4px;
   list-style: none;
-  border-radius: 14px;
+  /* Under a pill a pill-round list would pinch its rows, so it takes the
+     card radius (as the nav search does) with rows nested 4px inside. */
+  border-radius: var(--radius-card);
   background: var(--bg-panel-strong);
   max-height: 280px;
   overflow-y: auto;
@@ -73,7 +75,7 @@
   width: 100%;
   padding: 8px 10px;
   border: none;
-  border-radius: 10px;
+  border-radius: calc(var(--radius-card) - 4px);
   background: transparent;
   color: var(--text);
   text-align: left;

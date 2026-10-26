@@ -10,7 +10,10 @@ export default function TextElementContent({ element, editing, actions }) {
         editing={editing}
         actions={actions}
         placeholder="Tap twice to write…"
-        className="w-full h-full overflow-hidden px-1"
+        // Not clipped: a box sized a hair short (or a font that wraps differently
+        // on the reader's device) shows its last line whole instead of half-cut.
+        className="w-full h-full px-1"
+        autoGrow
       />
     );
   }

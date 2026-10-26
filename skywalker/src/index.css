@@ -184,17 +184,43 @@ select,
   }
 }
 
+/* A fieldset defaults to `min-inline-size: min-content`, so it grows to its
+   widest child's native size (a date input's, say) and drags the form past
+   the dialog's edge. Preflight doesn't reset it. */
+fieldset {
+  min-width: 0;
+}
+
 /* iOS Safari sizes date inputs to their formatted value and ignores
    `width: 100%`, so in a two-column row they push past the cell (and the
    form) to the right. Let them shrink, and keep the value left-aligned. */
 input[type="date"],
 input[type="time"],
+input[type="month"],
+input[type="week"],
 input[type="datetime-local"] {
   min-width: 0;
   max-width: 100%;
 }
-input[type="date"]::-webkit-date-and-time-value {
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="month"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value {
   text-align: left;
+  /* An empty value would otherwise collapse the field once appearance is reset. */
+  min-height: 1.5em;
+}
+/* iOS only: the native date control keeps its intrinsic width (and so still
+   overflows) until its platform appearance is dropped. */
+@supports (-webkit-touch-callout: none) {
+  input[type="date"],
+  input[type="time"],
+  input[type="month"],
+  input[type="week"],
+  input[type="datetime-local"] {
+    -webkit-appearance: none;
+    appearance: none;
+  }
 }
 
 /* Visually small controls (close ✕, flags, progress dots) keep their look but
@@ -226,6 +252,46 @@ input[type="date"]::-webkit-date-and-time-value {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 8px 32px var(--shadow-color);
+}
+
+/* Homepage section headings ("My Trips", "My Blogs") with a create action beside them. */
+.section-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.85rem;
+}
+.section-create {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 32px;
+  padding: 0 0.85rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px var(--shadow-color);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.section-create:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.section-create:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .section-create {
+    min-height: 40px;
+  }
 }
 
 .glass-scrollbar::-webkit-scrollbar {

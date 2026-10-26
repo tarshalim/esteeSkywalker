@@ -4,6 +4,18 @@
   padding-bottom: 4rem;
 }
 
+/* Matches .trip-stories-header h2 so the two homepage sections read alike. */
+.blog-feed-header {
+  margin-bottom: 1rem;
+}
+.blog-feed-header h2 {
+  margin: 0;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+
 .blog-feed-tabs {
   position: sticky;
   z-index: var(--z-raised);
@@ -220,7 +232,11 @@
 .blog-card-excerpt {
   margin: 0;
   font-size: 0.9rem;
+  line-height: 1.5;
   color: var(--text-muted);
+  /* overflow:hidden drops a flex item's min-height to 0; without this the
+     column can squeeze the clamp box and slice its last line. */
+  flex-shrink: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;

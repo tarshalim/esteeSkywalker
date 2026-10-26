@@ -27,7 +27,7 @@ export default function TourBanner() {
           </span>
           <div className="tour-banner-text">
             <strong>New here?</strong>
-            <span>Take a one-minute tour of your blog journey, the scrapbook editor and the globe.</span>
+            <span>Take a quick tour of your blog journey, the scrapbook editor, your trips and the globe.</span>
           </div>
           <div className="tour-banner-actions">
             <button type="button" className="tour-btn tour-btn--primary" onClick={start}>

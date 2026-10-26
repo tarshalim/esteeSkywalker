@@ -69,7 +69,7 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl p-5 text-white"
+        className="w-full max-w-md max-h-full overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl p-5 text-white"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">

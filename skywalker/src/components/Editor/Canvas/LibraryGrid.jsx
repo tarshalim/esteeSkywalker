@@ -4,7 +4,8 @@ import { LIBRARY_DRAG_TYPE } from "../../../lib/scrapbookLibrary";
 
 const PREVIEW = 58;
 
-function Preview({ element }) {
+/** A library item's element, scaled down to a square thumbnail. */
+export function Preview({ element }) {
   const Content = CONTENT_BY_KIND[element.kind];
   const scale = Math.min(PREVIEW / element.width, PREVIEW / element.height) * 0.9;
   return (

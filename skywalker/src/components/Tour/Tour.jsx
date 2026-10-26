@@ -14,6 +14,9 @@ import "./Tour.css";
  * is current (see useTour().preview). No matching target — say the create signpost for
  * a read-only account — falls back to a centered card.
  */
+const showPinPreview = () => window.dispatchEvent(new CustomEvent("tour:pin-preview", { detail: true }));
+const hidePinPreview = () => window.dispatchEvent(new CustomEvent("tour:pin-preview", { detail: false }));
+
 const ALL_STEPS = [
   {
     route: "/blogs",
@@ -80,8 +83,14 @@ const ALL_STEPS = [
     route: "/blogs",
     targets: ['[data-tour="journey-controls"]'],
     title: "Explore Your Journey",
-    body: "Scroll, drag the slider, or use the ‹ › arrows to explore your stories.",
+    body: "Scroll, swipe sideways, drag the slider, or use the ‹ › arrows to explore your stories. Open one to read it—readers can leave comments on any section.",
     editNote: "Click your avatar in the top-right corner to update your profile picture and display settings.",
+  },
+  {
+    route: "/blogs",
+    targets: ['[data-tour="nav-search"]', '[data-tour="nav-search-button"]'],
+    title: "Search Anywhere",
+    body: "The search bar follows the page you're on: signposts and stories on your journey, photos in the gallery, and pins, places and trips on the globe. Pick a result to jump straight to it.",
   },
   {
     route: "/blogs",
@@ -89,6 +98,15 @@ const ALL_STEPS = [
     title: "Browse Your Gallery",
     body: "Find every photo and video in one place, including those from your stories. Filter by continent, country, or year.",
     editNote: "Upload new photos anytime.",
+  },
+  {
+    // Hidden for read-only accounts until a trip exists, so they get the centered card.
+    route: "/",
+    targets: ['[data-tour="trips"]'],
+    scrollTo: '[data-tour="trips"]',
+    title: "Your Trips",
+    body: "Each trip is a boarding pass with its stops and travel companions. Hover one (or tap its stories count) to fan out its stories, and filter trips by continent or country.",
+    editNote: "Create New Trip takes you to the globe to pin where it begins.",
   },
   {
     route: "/",
@@ -122,16 +140,28 @@ const ALL_STEPS = [
     body: "Drop the pin right where you are, using your browser's location.",
   },
   {
-    // GlobeExplorer opens a preview of the naming dialog for this step and
+    // GlobeExplorer opens a preview of the naming dialog for these steps and
     // closes it on the way out.
     route: "/",
     requiresEdit: true,
+    group: "pin",
     targets: ['[data-tour="pin-name"]'],
     scrollTo: '[data-tour="globe"]',
-    onEnter: () => window.dispatchEvent(new CustomEvent("tour:pin-preview", { detail: true })),
-    onExit: () => window.dispatchEvent(new CustomEvent("tour:pin-preview", { detail: false })),
+    onEnter: showPinPreview,
+    onExit: hidePinPreview,
     title: "Create Your Pin",
     body: "However you drop it, you'll name your pin and add an optional note, then save. From the pin, write a new story or attach ones you've already published.",
+  },
+  {
+    route: "/",
+    requiresEdit: true,
+    group: "pin",
+    targets: ['[data-tour="pin-trip"]', '[data-tour="pin-name"]'],
+    scrollTo: '[data-tour="globe"]',
+    onEnter: showPinPreview,
+    onExit: hidePinPreview,
+    title: "Plan a Trip",
+    body: "Tick Start a trip here to turn the pin into a trip: give it a name, dates and companions, then add its stops. While a trip's pin is open, click anywhere on the globe to add another stop there.",
   },
 ];
 

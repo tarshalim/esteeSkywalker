@@ -92,6 +92,137 @@ function createDroppedPinElement(d) {
   return el;
 }
 
+// --- Scrapbook pin sprites -------------------------------------------------
+// Markers are flat 2D drawings (a thumbtack for photo clusters, a sticker-edged
+// location badge for places and trip stops) painted onto a canvas and shown as
+// camera-facing sprites. Their tip sits on the coordinate (sprite center at the
+// bottom edge) and they keep a constant on-screen size at any zoom.
+const PIN_W = 48;
+const PIN_H = 64;
+const PIN_RES = 4; // canvas pixels per design unit, so pins stay crisp on HiDPI
+const PIN_PAPER = "#fffaf0";
+
+// Mix a hex color toward white (amt > 0) or black (amt < 0).
+function shadeHex(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const target = amt > 0 ? 255 : 0;
+  const mix = (c) => Math.round(c + (target - c) * Math.abs(amt));
+  return `rgb(${mix(n >> 16)}, ${mix((n >> 8) & 255)}, ${mix(n & 255)})`;
+}
+
+function drawGroundShadow(ctx) {
+  ctx.fillStyle = "rgba(40, 24, 8, 0.28)";
+  ctx.beginPath();
+  ctx.ellipse(24, 61.5, 7, 2.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Classic thumbtack: glossy round head on a short collar and a steel needle.
+function drawThumbtack(ctx, color) {
+  drawGroundShadow(ctx);
+  const needle = ctx.createLinearGradient(22, 0, 26, 0);
+  needle.addColorStop(0, "#8a8f98");
+  needle.addColorStop(0.5, "#eef1f5");
+  needle.addColorStop(1, "#6b7079");
+  ctx.fillStyle = needle;
+  ctx.beginPath();
+  ctx.moveTo(22.6, 36);
+  ctx.lineTo(25.4, 36);
+  ctx.lineTo(24, 62);
+  ctx.closePath();
+  ctx.fill();
+
+  // Collar, then the domed head, both with a paper-white sticker edge.
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = PIN_PAPER;
+  ctx.fillStyle = shadeHex(color, -0.3);
+  ctx.beginPath();
+  ctx.roundRect(17, 27, 14, 10, 3);
+  ctx.stroke();
+  ctx.fill();
+
+  const head = ctx.createRadialGradient(19, 13, 2, 24, 18, 16);
+  head.addColorStop(0, shadeHex(color, 0.45));
+  head.addColorStop(0.55, color);
+  head.addColorStop(1, shadeHex(color, -0.35));
+  ctx.fillStyle = head;
+  ctx.beginPath();
+  ctx.arc(24, 18, 14.5, 0, Math.PI * 2);
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+  ctx.beginPath();
+  ctx.ellipse(19, 12, 4.5, 2.8, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Map-pin badge: a teardrop with a sticker edge and a paper "eye" that holds
+// either a dot or a short glyph (a trip stop's order number).
+function drawBadge(ctx, color, glyph) {
+  drawGroundShadow(ctx);
+  ctx.beginPath();
+  ctx.arc(24, 22, 18, Math.PI * 0.82, Math.PI * 2.18);
+  ctx.quadraticCurveTo(33, 44, 24, 61);
+  ctx.quadraticCurveTo(15, 44, 24 - 18 * Math.cos(Math.PI * 0.18), 22 + 18 * Math.sin(Math.PI * 0.18));
+  ctx.closePath();
+  const body = ctx.createLinearGradient(0, 4, 0, 60);
+  body.addColorStop(0, shadeHex(color, 0.18));
+  body.addColorStop(0.6, color);
+  body.addColorStop(1, shadeHex(color, -0.3));
+  ctx.fillStyle = body;
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = PIN_PAPER;
+  ctx.stroke();
+  ctx.fill();
+
+  ctx.fillStyle = PIN_PAPER;
+  ctx.beginPath();
+  ctx.arc(24, 22, glyph ? 9.5 : 7, 0, Math.PI * 2);
+  ctx.fill();
+  if (glyph) {
+    ctx.fillStyle = shadeHex(color, -0.25);
+    ctx.font = `800 ${glyph.length > 1 ? 11 : 13}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(glyph, 24, 22.5);
+  } else {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(24, 22, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+  ctx.beginPath();
+  ctx.ellipse(15.5, 13, 4, 2.4, -0.7, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// One canvas per look, shared by every pin wearing it. three-globe disposes a
+// marker's texture when it removes the marker; three re-uploads a disposed
+// texture on its next use, so the cache stays valid.
+const pinTextures = new Map();
+function pinTexture(shape, color, glyph = "") {
+  const key = `${shape}|${color}|${glyph}`;
+  let texture = pinTextures.get(key);
+  if (!texture) {
+    const canvas = document.createElement("canvas");
+    canvas.width = PIN_W * PIN_RES;
+    canvas.height = PIN_H * PIN_RES;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(PIN_RES, PIN_RES);
+    if (shape === "tack") drawThumbtack(ctx, color);
+    else drawBadge(ctx, color, glyph);
+    texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    pinTextures.set(key, texture);
+  }
+  return texture;
+}
+
 const ZOOM_DEBOUNCE_MS = 150;
 const DEFAULT_VIEW = { lat: 15, lng: 95, altitude: 2.1 };
 // Fly-to framing when the target doesn't carry its own altitude.
@@ -147,7 +278,14 @@ const stopPlace = (stop) => [stop.locationName, stop.country].filter((part, i, a
  * onStopClick with that StopPin; `selectedStopId` highlights one.
  *
  * `ref` exposes coordsAtClientPoint(clientX, clientY) -> {lat,lng} | null, used
- * by the draggable pin to resolve where it was released.
+ * by the draggable pin to resolve where it was released, and
+ * clientPointOf(lat, lng) -> {x, y, visible} | null, the reverse, for
+ * anchoring overlays to a spot on the globe (`visible` is false once the spot
+ * has turned to the far side).
+ *
+ * `onSurfaceClick` ({lat, lng}), when given, takes over clicks on the globe's
+ * surface (sea or land, not markers) outside pin placement — GlobeExplorer's
+ * "Add stop here?" prompt. Country selection is off while it's set.
  *
  * `flyToTarget` ({lat, lng, altitude?}) flies the camera along the great
  * circle (slerp); a new object re-flies even to the same spot. `lockRotation`
@@ -169,8 +307,8 @@ export default function PhotoGlobe({
   showGrid = false,
   showAtmosphere = true,
   autoRotate = true,
-  // Pin/label/ring sizes are in degrees of arc, so a thumbnail globe (the
-  // settings preview) scales them up to stay legible.
+  // Arc/label/ring sizes are in degrees of arc, so a thumbnail globe (the
+  // settings preview) scales them up to stay legible. Pins are screen-sized.
   markerScale = 1,
   initialView = DEFAULT_VIEW,
   isPlacingPin,
@@ -188,6 +326,7 @@ export default function PhotoGlobe({
   onPinHover,
   onCustomPinClick,
   onStopClick = null,
+  onSurfaceClick = null,
   onPinDropAt,
 }) {
   const globeEl = useRef();
@@ -307,7 +446,7 @@ export default function PhotoGlobe({
   const photoPins = useMemo(() => clusterPhotosByLocation(photos), [photos]);
 
   // Photo pins (clustered photos) and custom/story pins share one
-  // react-globe.gl points layer, tagged by `kind` so click/hover/color/label
+  // react-globe.gl objects layer (pin sprites), tagged by `kind` so click/hover/color/label
   // logic can dispatch to the right handler and dataset.
   const journeyArcs = useMemo(
     () =>
@@ -448,17 +587,49 @@ export default function PhotoGlobe({
     [palette]
   );
 
-  const pointRadius = useCallback(
+  // Pin height in CSS pixels; busier spots get slightly bigger pins.
+  const pinHeight = useCallback(
     (d) =>
-      markerScale *
-      (d.kind === "photo"
-        ? Math.min(0.15 + d.photos.length * 0.03, 0.45)
+      d.kind === "photo"
+        ? 30 + Math.min(d.photos.length, 8)
         : d.kind === "stop"
-        ? Math.min(0.2 + d.posts.length * 0.03, 0.38)
+        ? 34 + Math.min(d.posts.length, 4)
         : isStoryPin(d)
-        ? Math.min(0.26 + d.posts.length * 0.03, 0.42)
-        : 0.22),
-    [markerScale]
+        ? 38 + Math.min(d.posts.length, 6)
+        : 32,
+    []
+  );
+
+  // Sprites drawn with sizeAttenuation off take their scale as a fraction of
+  // the view's height at unit depth, so convert from pixels via the camera FOV.
+  // Small stages (the settings thumbnail) shrink pins a little, but they're
+  // screen-sized already, so markerScale doesn't apply.
+  const pinObject = useCallback(
+    (d) => {
+      const selected =
+        d.kind === "stop"
+          ? d.id === selectedStopId
+          : d.kind === "custom"
+          ? d.id === selectedCustomPinId && !selectedStopId
+          : d.id === selectedLocationId;
+      const glyph = d.kind === "stop" && d.stopCount > 1 ? String(d.order) : "";
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: pinTexture(d.kind === "photo" ? "tack" : "badge", pointColor(d), glyph),
+          sizeAttenuation: false,
+          depthWrite: false,
+        })
+      );
+      sprite.center.set(0.5, 0);
+      const fov = globeEl.current?.camera().fov ?? 50;
+      const stageScale = Math.min(Math.max(size.height / 640, 0.7), 1);
+      const h = ((pinHeight(d) * (selected ? 1.2 : 1) * stageScale) / size.height) * 2 * Math.tan((fov * Math.PI) / 360);
+      sprite.scale.set((h * PIN_W) / PIN_H, h, 1);
+      // Selected pins draw over their neighbours.
+      sprite.renderOrder = selected ? 2 : 1;
+      return sprite;
+    },
+    [pointColor, pinHeight, selectedLocationId, selectedCustomPinId, selectedStopId, size.height]
   );
 
   // User-entered text is injected as HTML here, so it must be escaped.
@@ -579,6 +750,18 @@ export default function PhotoGlobe({
         const rect = wrapper.getBoundingClientRect();
         return globeEl.current.toGlobeCoords(clientX - rect.left, clientY - rect.top) ?? null;
       },
+      clientPointOf(lat, lng) {
+        const globe = globeEl.current;
+        const wrapper = wrapperRef.current;
+        if (!globe || !wrapper) return null;
+        const rect = wrapper.getBoundingClientRect();
+        const { x, y } = globe.getScreenCoords(lat, lng, 0);
+        // A surface point faces a camera at C exactly when P·C > R².
+        const p = globe.getCoords(lat, lng, 0);
+        const c = globe.camera().position;
+        const radius = globe.getGlobeRadius();
+        return { x: rect.left + x, y: rect.top + y, visible: p.x * c.x + p.y * c.y + p.z * c.z > radius * radius };
+      },
     }),
     []
   );
@@ -586,8 +769,9 @@ export default function PhotoGlobe({
   const handleGlobeClick = useCallback(
     (coords) => {
       if (isPlacingPin) onPinDropAt({ lat: coords.lat, lng: coords.lng });
+      else onSurfaceClick?.({ lat: coords.lat, lng: coords.lng });
     },
-    [isPlacingPin, onPinDropAt]
+    [isPlacingPin, onPinDropAt, onSurfaceClick]
   );
 
   // Country polygons cover every landmass and swallow the globe click, so in
@@ -598,12 +782,16 @@ export default function PhotoGlobe({
         if (coords) onPinDropAt({ lat: coords.lat, lng: coords.lng });
         return;
       }
+      if (onSurfaceClick) {
+        if (coords) onSurfaceClick({ lat: coords.lat, lng: coords.lng });
+        return;
+      }
       const iso2 = feature.properties.ISO_A2;
       if (!visitedCountryCodes.has(iso2)) return;
       const isDeselecting = iso2 === selectedCountryCode;
       onCountryClick(isDeselecting ? null : iso2, isDeselecting ? null : feature.properties.NAME);
     },
-    [isPlacingPin, onPinDropAt, visitedCountryCodes, selectedCountryCode, onCountryClick]
+    [isPlacingPin, onPinDropAt, onSurfaceClick, visitedCountryCodes, selectedCountryCode, onCountryClick]
   );
 
   const handlePointClickOrPlace = useCallback(
@@ -651,15 +839,15 @@ export default function PhotoGlobe({
             iso2 && visitedCountryCodes.has(iso2) ? { code: iso2, name: feature.properties.NAME } : null
           );
         }}
-        pointsData={combinedPins}
-        pointLat="lat"
-        pointLng="lng"
-        pointColor={pointColor}
-        pointRadius={pointRadius}
-        pointAltitude={0.012}
-        pointLabel={pointLabel}
-        onPointClick={handlePointClickOrPlace}
-        onPointHover={handlePointHover}
+        objectsData={combinedPins}
+        objectLat="lat"
+        objectLng="lng"
+        objectAltitude={0.01}
+        objectFacesSurface={false}
+        objectThreeObject={pinObject}
+        objectLabel={pointLabel}
+        onObjectClick={handlePointClickOrPlace}
+        onObjectHover={handlePointHover}
         arcsData={journeyArcs}
         arcStartLat={arcStartLat}
         arcStartLng={arcStartLng}

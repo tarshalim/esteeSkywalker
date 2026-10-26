@@ -8,7 +8,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-field);
   padding: 8px 14px;
   border: 2px solid var(--border);
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
@@ -62,8 +62,8 @@
   left: 0;
   right: 0;
   z-index: 20;
-  border-radius: 16px;
-  overflow: hidden;
+  /* Same corners as the input row; overflow clips the row hovers to them. */
+  border-radius: var(--radius-field);
   max-height: 260px;
   overflow-y: auto;
   background: var(--bg-panel-strong);

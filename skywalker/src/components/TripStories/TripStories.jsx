@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, LoaderCircle, Pencil, Plane, Plus, Scissors, Trash2 } from "lucide-react";
 import TripDialog from "../TripPicker/TripDialog";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
-import { realCover } from "../../lib/media";
+import { collectMedia, realCover } from "../../lib/media";
 import { deleteTrip, getTrips, saveTrip } from "../../lib/tripStore";
 import { getPins } from "../../lib/pinStore";
 import { getPhotos } from "../../lib/photoStore";
@@ -51,20 +51,24 @@ function slipVariants(i, n, reduceMotion) {
 }
 
 /**
- * "My Stories" on the homepage: one envelope per trip. Its published posts sit
+ * "My Trips" on the homepage: one envelope per trip. Its published posts sit
  * tucked behind it as paper slips with a coloured tab peeking out, and fan up
  * out of the envelope on hover (or via the stories count on touch). The
  * envelope opens the trip (its gallery); each slip opens its post. Editors get
  * inline edit/delete.
  *
- * @param {{ blogs: Array }} props - every post (the homepage already loads them)
+ * @param {{ blogs: Array, onCreateTrip?: ?function(): void }} props - every post
+ *   (the homepage already loads them); `onCreateTrip` starts the new-trip flow
+ *   from the "Create New Trip" button beside the heading.
  */
-export default function TripStories({ blogs }) {
-  const { canEdit } = useAuth();
+export default function TripStories({ blogs, onCreateTrip = null }) {
+  const { user, canEdit } = useAuth();
+  // Same rule as TopNav's "Create Blog": signed-out visitors see it and get sent to log in.
+  const canCreate = Boolean(onCreateTrip) && (!user || canEdit);
   const { data: trips, setData: setTrips, loading } = useAsync(getTrips, [], []);
   const { data: pins, setData: setPins } = useAsync(getPins, [], []);
   const { data: photos, setData: setPhotos } = useAsync(getPhotos, [], []);
-  // { trip, addStop } while the trip dialog is open: the full edit form, or just its itinerary.
+  // The trip whose edit dialog is open. Its stops aren't editable here — only on the 3D globe.
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   // Continent -> country filter: { continent, country } keys from groupTripsByRegion, null = all.
@@ -82,11 +86,13 @@ export default function TripStories({ blogs }) {
   const pinTitles = useMemo(() => new Map(pins.map((p) => [p.id, p.title])), [pins]);
   const pinsById = useMemo(() => new Map(pins.map((p) => [p.id, p])), [pins]);
 
+  // Gallery uploads plus the photos inside the trip's published posts (covers,
+  // canvas images) — most trips' photos only ever live in their posts.
   const photoCounts = useMemo(() => {
     const map = new Map();
-    for (const p of photos) if (p.tripId) map.set(p.tripId, (map.get(p.tripId) ?? 0) + 1);
+    for (const p of collectMedia(photos, blogs)) if (p.tripId) map.set(p.tripId, (map.get(p.tripId) ?? 0) + 1);
     return map;
-  }, [photos]);
+  }, [photos, blogs]);
 
   const postsByTrip = useMemo(() => {
     const map = new Map();
@@ -136,7 +142,7 @@ export default function TripStories({ blogs }) {
 
   const handleSave = useCallback(
     async (draft) => {
-      const saved = await saveTrip({ ...editing.trip, ...draft });
+      const saved = await saveTrip({ ...editing, ...draft });
       setTrips((prev) => prev.map((t) => (t.id === saved.id ? saved : t)));
       setEditing(null);
     },
@@ -161,14 +167,25 @@ export default function TripStories({ blogs }) {
     [postsByTrip, setTrips]
   );
 
-  if (loading || trips.length === 0) return null;
+  // With no trips yet, only someone who can start one gets the (empty) section.
+  if (loading || (trips.length === 0 && !canCreate)) return null;
 
   return (
-    <section className="trip-stories" aria-labelledby="trip-stories-title">
+    <section className="trip-stories" aria-labelledby="trip-stories-title" data-tour="trips">
       <header className="trip-stories-header">
-        <h2 id="trip-stories-title">My Stories</h2>
+        <div className="section-heading-row">
+          <h2 id="trip-stories-title">My Trips</h2>
+          {canCreate && (
+            <button type="button" className="section-create" onClick={onCreateTrip}>
+              <Plus size={14} aria-hidden="true" />
+              Create New Trip
+            </button>
+          )}
+        </div>
         <p>
-          {trips.length} {trips.length === 1 ? "trip" : "trips"} — hover a boarding pass (or tap its stories count) to peek at its stories
+          {trips.length > 0
+            ? `${plural(trips.length, "trip")} — hover a boarding pass (or tap its stories count) to peek at its stories`
+            : "No trips yet — pin a place on the globe to start your first one."}
         </p>
       </header>
 
@@ -220,8 +237,7 @@ export default function TripStories({ blogs }) {
             destination={destinationOf(trip)}
             canEdit={canEdit}
             deleting={deletingId === trip.id}
-            onEdit={() => setEditing({ trip, addStop: false })}
-            onAddStop={() => setEditing({ trip, addStop: true })}
+            onEdit={() => setEditing(trip)}
             onDelete={() => handleDelete(trip)}
           />
         ))}
@@ -230,10 +246,10 @@ export default function TripStories({ blogs }) {
       <AnimatePresence>
         {editing && (
           <TripDialog
-            trip={editing.trip}
-            addStop={editing.addStop}
-            locationTitle={destinationOf(editing.trip) || "this location"}
-            home={pins.find((p) => p.id === editing.trip.locationId) ?? null}
+            trip={editing}
+            itinerary={false}
+            locationTitle={destinationOf(editing) || "this location"}
+            home={pins.find((p) => p.id === editing.locationId) ?? null}
             onSave={handleSave}
             onCancel={() => setEditing(null)}
           />
@@ -289,9 +305,10 @@ function Barcode({ seed }) {
 
 /**
  * The pass's itinerary: each stop on a dotted timeline with its dates, and —
- * for editors — an always-there "Add stop" to extend the route.
+ * for editors — an always-there "Add blogs" that starts a post in this trip.
+ * Stops themselves are only added on the 3D globe.
  */
-function PassItinerary({ stops, tripTitle, onAddStop }) {
+function PassItinerary({ stops, tripTitle, addBlogHref }) {
   const shown = stops.slice(0, MAX_PASS_STOPS);
   const hidden = stops.length - shown.length;
   return (
@@ -313,17 +330,17 @@ function PassItinerary({ stops, tripTitle, onAddStop }) {
       ) : (
         <p className="trip-pass-stops-empty">No stops yet</p>
       )}
-      {onAddStop && (
-        <button type="button" className="trip-pass-add-stop" onClick={onAddStop} aria-label={`Add a stop to ${tripTitle}`}>
+      {addBlogHref && (
+        <Link to={addBlogHref} className="trip-pass-add-blog" aria-label={`Add a blog to ${tripTitle}`}>
           <Plus size={12} aria-hidden="true" />
-          Add stop
-        </button>
+          Add blogs
+        </Link>
       )}
     </div>
   );
 }
 
-function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting, onEdit, onAddStop, onDelete }) {
+function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting, onEdit, onDelete }) {
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -340,6 +357,8 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
   const to = stops.at(-1)?.locationName || destination || "Somewhere";
   const via = stops.length > 2 ? plural(stops.length - 2, "stop") : null;
   const tripHref = `/gallery?trip=${encodeURIComponent(trip.id)}`;
+  // The editor starts inside this trip (and at its pin) from `trip` alone.
+  const addBlogHref = `/blogs/new?trip=${encodeURIComponent(trip.id)}`;
   const slipsId = `trip-slips-${trip.id}`;
 
   // While open, a click/tap outside the envelope or Esc tucks the slips back in.
@@ -478,7 +497,7 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                   </span>
                 </div>
 
-                {(stops.length > 0 || canEdit) && <PassItinerary stops={stops} tripTitle={trip.title} onAddStop={canEdit ? onAddStop : null} />}
+                {(stops.length > 0 || canEdit) && <PassItinerary stops={stops} tripTitle={trip.title} addBlogHref={canEdit ? addBlogHref : null} />}
               </div>
             </div>
 

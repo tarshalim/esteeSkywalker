@@ -210,7 +210,9 @@
 .trip-env-slip-title {
   font-size: 0.85rem;
   font-weight: 700;
-  line-height: 1.25;
+  /* Room for descenders: the clamp's overflow:hidden cuts at the line box. */
+  line-height: 1.4;
+  flex-shrink: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -462,9 +464,10 @@
   color: var(--text-muted);
 }
 
-/* Persistent route editing; sits above the stretched link. */
-.trip-pass-add-stop {
+/* Starts a post in this trip; sits above the stretched link. */
+.trip-pass-add-blog {
   position: relative;
+  text-decoration: none;
   z-index: 2;
   display: inline-flex;
   align-items: center;
@@ -482,11 +485,11 @@
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
 }
-.trip-pass-add-stop:hover {
+.trip-pass-add-blog:hover {
   background: color-mix(in srgb, var(--yellow) 22%, transparent);
   border-color: var(--border-strong);
 }
-.trip-pass-add-stop:focus-visible {
+.trip-pass-add-blog:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
@@ -596,7 +599,7 @@
   margin: -0.3rem 0 0;
   font-size: 1.05rem;
   font-weight: 750;
-  line-height: 1.25;
+  line-height: 1.4;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -664,8 +667,54 @@
     width: 36px;
     height: 36px;
   }
-  .trip-pass-add-stop {
+  .trip-pass-add-blog {
     min-height: 36px;
+  }
+
+  /* Compact pass: tighter type and spacing, capped height with the body scrolling inside. */
+  .trip-env-front {
+    --stub: 5.25rem;
+  }
+  /* On the columns, not the grid: an auto grid row would just overflow a capped container. */
+  .trip-pass-main,
+  .trip-pass-stub {
+    max-height: 65vh;
+    max-height: 65dvh;
+  }
+  .trip-pass-header {
+    flex-shrink: 0;
+    padding: 0.35rem 0.75rem;
+  }
+  .trip-pass-body {
+    min-height: 0;
+    gap: 0.6rem;
+    padding: 0.55rem 0.75rem 0.4rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .trip-pass-thumb,
+  .trip-pass-body .trip-pass-thumb {
+    width: 44px;
+    height: 44px;
+  }
+  .trip-pass-fields {
+    gap: 0.3rem;
+  }
+  .trip-env-title {
+    font-size: 0.95rem;
+  }
+  .trip-pass-barcode {
+    flex-shrink: 0;
+    height: 18px;
+    margin: auto 0.75rem 0.5rem;
+  }
+  .trip-pass-stub {
+    gap: 0.4rem;
+    padding: 0.6rem 0.35rem 0.55rem;
+    overflow-y: auto;
+  }
+  .trip-pass-count {
+    font-size: 1rem;
   }
 }
 
@@ -675,7 +724,7 @@
   .trip-pass-thumb,
   .trip-pass-toggle,
   .trip-pass-toggle-icon,
-  .trip-pass-add-stop,
+  .trip-pass-add-blog,
   .trip-env-slip {
     transition: none;
   }

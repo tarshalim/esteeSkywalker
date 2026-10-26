@@ -142,7 +142,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   border: 1px solid var(--border);
   width: 200px;
 }
@@ -156,7 +156,7 @@
 }
 
 .filter-bar-range-popover input {
-  border-radius: 8px;
+  border-radius: var(--radius-field);
   border: 1px solid var(--border);
   background: var(--bg-elevated);
   color: var(--text);

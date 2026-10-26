@@ -24,11 +24,12 @@ import "./PinNamePopover.css";
  *   an existing pin close enough to be the same place; offered instead of a
  *   duplicate so its stories stay together.
  * @param {?function(): void} onUseExisting
+ * @param {boolean} startTrip - opens with "Start a trip here" already ticked.
  */
-export default function PinNamePopover({ coords, placeName = null, nearbyPin = null, onConfirm, onCancel, onUseExisting }) {
+export default function PinNamePopover({ coords, placeName = null, nearbyPin = null, startTrip = false, onConfirm, onCancel, onUseExisting }) {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
-  const [withTrip, setWithTrip] = useState(false);
+  const [withTrip, setWithTrip] = useState(startTrip);
   const resolved = usePlaceName(placeName ? null : coords);
   // Saving mid-lookup still stores the local fallback (country / ocean).
   const place = placeName ?? resolved.name;
@@ -104,7 +105,7 @@ export default function PinNamePopover({ coords, placeName = null, nearbyPin = n
           aria-label="Note"
           rows={3}
         />
-        <label className="pin-name-popover-trip-toggle">
+        <label className="pin-name-popover-trip-toggle" data-tour="pin-trip">
           <input type="checkbox" checked={withTrip} onChange={(e) => setWithTrip(e.target.checked)} />
           Start a trip here
         </label>

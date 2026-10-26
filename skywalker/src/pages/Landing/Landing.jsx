@@ -95,6 +95,14 @@ export default function Landing() {
 
   const handleClearGlobeFilter = useCallback(() => setClearSignal((n) => n + 1), []);
 
+  // A trip lives at a pin, so "Create New Trip" heads down to the globe and
+  // starts pin-drop mode there; naming the pin opens the new-trip wizard.
+  const [newTripSignal, setNewTripSignal] = useState(0);
+  const handleCreateTrip = useCallback(() => {
+    scrollToGlobe();
+    setNewTripSignal((n) => n + 1);
+  }, [scrollToGlobe]);
+
   return (
     <div className="landing-page" ref={setScrollRoot}>
       <section
@@ -105,7 +113,7 @@ export default function Landing() {
       >
         <HeroCarousel title="The next horizon is calling" titleId="landing-feed-title" />
 
-        <TripStories blogs={blogs} />
+        <TripStories blogs={blogs} onCreateTrip={handleCreateTrip} />
 
         <BlogFeed
           blogs={blogs}
@@ -123,6 +131,7 @@ export default function Landing() {
           showGallery={false}
           onFilterChange={setGlobeFilter}
           clearSignal={clearSignal}
+          newTripSignal={newTripSignal}
           searchActive={Boolean(inGlobe)}
         />
       </section>

@@ -249,7 +249,7 @@
   margin: 0;
   padding: 4px;
   list-style: none;
-  border-radius: 12px;
+  border-radius: var(--radius-field);
   background: var(--bg-panel-strong);
 }
 .editor-location-results button {
@@ -259,7 +259,7 @@
   width: 100%;
   padding: 8px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: calc(var(--radius-field) - 4px);
   background: transparent;
   color: var(--text);
   text-align: left;
