@@ -1,4 +1,4 @@
-import { supabase, MEDIA_BUCKET } from "./supabase";
+import { supabase, MEDIA_BUCKET, unwrap } from "./supabase";
 
 export function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -72,4 +72,26 @@ export async function deleteMediaFiles(paths) {
   if (!supabase || paths.length === 0) return;
   const { error } = await supabase.storage.from(MEDIA_BUCKET).remove(paths);
   if (error) console.warn("Couldn't delete media files", paths, error);
+}
+
+// Every table whose `data` can reference an upload.
+const MEDIA_TABLES = ["blogs", "templates", "gallery_items", "locations", "trips"];
+
+/**
+ * Deletes the uploads a just-deleted record referenced. Templates copy a
+ * post's cover/canvas URLs, and gallery photos, pins or trips can point at
+ * the same upload, so only files nothing else references are removed.
+ * Failures are logged, not thrown.
+ */
+export async function deleteOrphanedMedia(value, label) {
+  const paths = collectMediaPaths(value);
+  if (!supabase || paths.size === 0) return;
+  try {
+    const results = await Promise.all(MEDIA_TABLES.map((t) => supabase.from(t).select("data")));
+    const stillUsed = new Set();
+    for (const rows of results.map(unwrap)) for (const row of rows) collectMediaPaths(row.data, stillUsed);
+    await deleteMediaFiles([...paths].filter((p) => !stillUsed.has(p)));
+  } catch (err) {
+    console.warn(`Couldn't clean up media for deleted ${label}`, err);
+  }
 }

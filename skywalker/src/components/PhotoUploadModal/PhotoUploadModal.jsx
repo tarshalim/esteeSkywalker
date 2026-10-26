@@ -124,8 +124,7 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
       .sort((a, b) => a.distanceKm - b.distanceKm);
   }, [pins, coords]);
 
-  const tripOptions = useMemo(() => trips.filter((t) => t.locationId === pinChoice), [trips, pinChoice]);
-  const selectedTrip = tripOptions.find((t) => t.id === tripChoice) ?? null;
+  const selectedTrip = trips.find((t) => t.id === tripChoice) ?? null;
   const tripPosts = useMemo(
     () => (selectedTrip ? blogs.filter((b) => b.tripId === selectedTrip.id) : []),
     [blogs, selectedTrip]
@@ -141,7 +140,12 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
   const chooseTrip = (value) => {
     setTripChoice(value);
     setBlogChoice("");
-    const trip = tripOptions.find((t) => t.id === value);
+    const trip = trips.find((t) => t.id === value);
+    // A trip lives at one location, so a trip from elsewhere takes the photo there.
+    if (trip && trip.locationId !== pinChoice) {
+      setPinChoice(trip.locationId);
+      setPinTouched(true);
+    }
     // Photos belong to their trip's dates; an undated (EXIF-less) photo lands on its first day.
     if (trip && !isWithinTrip(trip, date)) setDate(trip.startDate);
     if (value === NEW_TRIP && !tripDraft.title) setTripDraft(emptyTripDraft(date));
@@ -472,7 +476,8 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
 
           {pinChoice && (
             <TripSelect
-              trips={isNewLocation ? [] : tripOptions}
+              trips={trips}
+              locationId={isNewLocation ? null : pinChoice}
               value={tripChoice}
               onChange={chooseTrip}
               draft={tripDraft}

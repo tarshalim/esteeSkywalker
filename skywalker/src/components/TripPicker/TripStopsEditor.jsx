@@ -1,7 +1,7 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, MapPinned, Plus, Search, Trash2 } from "lucide-react";
 import { searchPlaces } from "../../lib/geocode";
-import { stopHasCoords } from "../../lib/hierarchy";
+import { blankStop, stopHasCoords } from "../../lib/hierarchy";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { CONTINENTS, COUNTRY_TO_CONTINENT, SMALL_COUNTRY_CENTERS, countryCodeToFlagEmoji } from "../../utils/countries";
 import { continentForCountryCode, findCountryForPoint, formatCoords } from "../../utils/geo";
@@ -10,9 +10,6 @@ import { FIELD_INPUT, FIELD_LABEL, fieldInputStyle, fieldLabelStyle as labelStyl
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_MIN_CHARS = 2;
-
-let rowSeq = 0;
-const newRowId = () => `new-${Date.now().toString(36)}-${rowSeq++}`;
 
 /** Every country A–Z: the geojson's polygons plus the microstates it lacks. */
 function useCountryOptions(features) {
@@ -51,7 +48,7 @@ function tagsForPoint(lat, lng, features) {
  * The stop's place name, doubling as a place search: picking a result fills
  * in its coordinates (and, through `onPick`, its country and continent).
  */
-function StopPlaceInput({ value, onChange, onPick, label }) {
+function StopPlaceInput({ value, onChange, onPick, label, autoFocus = false }) {
   const listId = useId();
   const [isFocused, setIsFocused] = useState(false);
   const [results, setResults] = useState({ query: "", items: [] });
@@ -87,6 +84,7 @@ function StopPlaceInput({ value, onChange, onPick, label }) {
         onKeyDown={(e) => e.key === "Escape" && setIsFocused(false)}
         aria-autocomplete="list"
         aria-label={label}
+        autoFocus={autoFocus}
       />
       {suggestions.length > 0 && (
         <ul
@@ -132,17 +130,25 @@ function StopPlaceInput({ value, onChange, onPick, label }) {
  * stops that start the same day (tripStore re-sorts by date on save).
  * Coordinates stay text while typing; tripStore turns them into numbers.
  *
+ * `compact` (the new-trip wizard, the boarding pass's "Add stop") shows just
+ * the place search and dates: picking a place fills in the rest.
+ * `startWithNewStop` appends a blank row on mount and focuses it.
+ *
  * @param {{
  *   value: import("../../types/hierarchy").TripStop[],
  *   onChange: (next: import("../../types/hierarchy").TripStop[]) => void,
  *   tripStart: string,
  *   tripEnd: string,
  *   seed?: ?{ title: string, lat: number, lng: number },  // the trip's home pin, for the first stop
+ *   compact?: boolean,
+ *   startWithNewStop?: boolean,
  * }} props
  */
-export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, seed = null }) {
+export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, seed = null, compact = false, startWithNewStop = false }) {
   const features = useCountriesGeoJson();
   const countryOptions = useCountryOptions(features);
+  // The row "Add stop" just made, whose place search takes focus.
+  const [addedId, setAddedId] = useState(null);
 
   const update = (id, patch) => onChange(value.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   const remove = (id) => onChange(value.filter((row) => row.id !== id));
@@ -153,26 +159,27 @@ export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, s
   };
 
   const add = () => {
-    const last = value.at(-1);
-    const startDate = last?.endDate && last.endDate <= tripEnd ? last.endDate : tripStart;
-    const row = {
-      id: newRowId(),
-      locationName: "",
-      country: "",
-      countryCode: "",
-      continent: "",
-      lat: "",
-      lng: "",
-      startDate,
-      endDate: startDate,
-      sequenceOrder: value.length,
-    };
+    const row = blankStop(value, tripStart, tripEnd);
     // The first stop starts where the trip's pin is.
-    if (!last && seed && stopHasCoords(seed)) {
-      Object.assign(row, { locationName: seed.title, lat: seed.lat, lng: seed.lng }, tagsForPoint(seed.lat, seed.lng, features));
+    if (value.length === 0 && seed && stopHasCoords(seed)) {
+      // Before the country polygons load, the pin's own country tag stands in.
+      const pinTags = seed.countryCode
+        ? { countryCode: seed.countryCode, country: seed.countryName || seed.countryCode, continent: continentOf(seed.countryCode, features) }
+        : {};
+      Object.assign(row, { locationName: seed.title, lat: seed.lat, lng: seed.lng }, pinTags, tagsForPoint(seed.lat, seed.lng, features));
+    } else {
+      setAddedId(row.id);
     }
     onChange([...value, row]);
   };
+
+  // Once per mount (the ref outlives StrictMode's effect replay).
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (!startWithNewStop || startedRef.current) return;
+    startedRef.current = true;
+    add();
+  });
 
   const pickPlace = (id, place) =>
     update(id, { locationName: place.label, lat: place.lat, lng: place.lng, ...tagsForPoint(place.lat, place.lng, features) });
@@ -214,7 +221,11 @@ export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, s
               </span>
               <span className="min-w-0 flex-1 truncate text-xs font-semibold" style={labelStyle}>
                 {row.countryCode && `${countryCodeToFlagEmoji(row.countryCode)} `}
-                {placed ? formatCoords(placed.lat, placed.lng) : "Not on the globe yet"}
+                {placed
+                  ? (compact && row.country) || formatCoords(placed.lat, placed.lng)
+                  : compact
+                    ? "Pick a suggestion to pin it on the globe"
+                    : "Not on the globe yet"}
               </span>
               <button
                 type="button"
@@ -252,93 +263,74 @@ export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, s
               onChange={(locationName) => update(row.id, { locationName })}
               onPick={(place) => pickPlace(row.id, place)}
               label={`Stop ${n} place`}
+              autoFocus={row.id === addedId}
             />
 
-            <div className="grid grid-cols-2 gap-2 @lg:grid-cols-4">
-              <label className={FIELD_LABEL} style={labelStyle}>
-                Country
-                <Select value={row.countryCode} onChange={(e) => pickCountry(row.id, e.target.value)}>
-                  <option value="">—</option>
-                  {/* A stop saved with a country this list lacks keeps it selectable. */}
-                  {row.countryCode && !countryOptions.some((c) => c.code === row.countryCode) && (
-                    <option value={row.countryCode}>{row.country || row.countryCode}</option>
-                  )}
-                  {countryOptions.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label className={FIELD_LABEL} style={labelStyle}>
-                Continent
-                <Select value={row.continent} onChange={(e) => update(row.id, { continent: e.target.value })}>
-                  <option value="">—</option>
-                  {CONTINENTS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              <label className={FIELD_LABEL} style={labelStyle}>
-                From
-                <input
-                  type="date"
-                  className={FIELD_INPUT}
-                  style={fieldInputStyle}
-                  min={tripStart}
-                  max={row.endDate || tripEnd}
-                  value={row.startDate}
-                  onChange={(e) => {
-                    const startDate = e.target.value;
-                    update(row.id, { startDate, ...(row.endDate && row.endDate < startDate && { endDate: startDate }) });
-                  }}
-                />
-              </label>
-              <label className={FIELD_LABEL} style={labelStyle}>
-                To
-                <input
-                  type="date"
-                  className={FIELD_INPUT}
-                  style={fieldInputStyle}
-                  min={row.startDate || tripStart}
-                  max={tripEnd}
-                  value={row.endDate}
-                  onChange={(e) => update(row.id, { endDate: e.target.value })}
-                />
-              </label>
-              <label className={FIELD_LABEL} style={labelStyle}>
-                Latitude
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min={-90}
-                  max={90}
-                  className={FIELD_INPUT}
-                  style={fieldInputStyle}
-                  placeholder="−13.53"
-                  value={row.lat ?? ""}
-                  onChange={(e) => setCoord(row, "lat", e.target.value)}
-                />
-              </label>
-              <label className={FIELD_LABEL} style={labelStyle}>
-                Longitude
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="any"
-                  min={-180}
-                  max={180}
-                  className={FIELD_INPUT}
-                  style={fieldInputStyle}
-                  placeholder="−71.97"
-                  value={row.lng ?? ""}
-                  onChange={(e) => setCoord(row, "lng", e.target.value)}
-                />
-              </label>
-            </div>
+            {compact ? (
+              <div className="grid grid-cols-2 gap-2">
+                <StopDateInputs row={row} tripStart={tripStart} tripEnd={tripEnd} update={update} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 @lg:grid-cols-4">
+                <label className={FIELD_LABEL} style={labelStyle}>
+                  Country
+                  <Select value={row.countryCode} onChange={(e) => pickCountry(row.id, e.target.value)}>
+                    <option value="">—</option>
+                    {/* A stop saved with a country this list lacks keeps it selectable. */}
+                    {row.countryCode && !countryOptions.some((c) => c.code === row.countryCode) && (
+                      <option value={row.countryCode}>{row.country || row.countryCode}</option>
+                    )}
+                    {countryOptions.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className={FIELD_LABEL} style={labelStyle}>
+                  Continent
+                  <Select value={row.continent} onChange={(e) => update(row.id, { continent: e.target.value })}>
+                    <option value="">—</option>
+                    {CONTINENTS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <StopDateInputs row={row} tripStart={tripStart} tripEnd={tripEnd} update={update} />
+                <label className={FIELD_LABEL} style={labelStyle}>
+                  Latitude
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min={-90}
+                    max={90}
+                    className={FIELD_INPUT}
+                    style={fieldInputStyle}
+                    placeholder="−13.53"
+                    value={row.lat ?? ""}
+                    onChange={(e) => setCoord(row, "lat", e.target.value)}
+                  />
+                </label>
+                <label className={FIELD_LABEL} style={labelStyle}>
+                  Longitude
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min={-180}
+                    max={180}
+                    className={FIELD_INPUT}
+                    style={fieldInputStyle}
+                    placeholder="−71.97"
+                    value={row.lng ?? ""}
+                    onChange={(e) => setCoord(row, "lng", e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
           </div>
         );
       })}
@@ -350,8 +342,43 @@ export default function TripStopsEditor({ value, onChange, tripStart, tripEnd, s
         style={{ borderColor: "var(--border-strong, var(--border))", color: "var(--text-strong, var(--text))" }}
       >
         <Plus size={14} aria-hidden="true" />
-        Add stop
+        {value.length > 0 ? "Add another stop" : "Add stop"}
       </button>
     </fieldset>
+  );
+}
+
+/** A stop's From / To pickers, held inside the trip's dates. */
+function StopDateInputs({ row, tripStart, tripEnd, update }) {
+  return (
+    <>
+      <label className={FIELD_LABEL} style={labelStyle}>
+        From
+        <input
+          type="date"
+          className={FIELD_INPUT}
+          style={fieldInputStyle}
+          min={tripStart}
+          max={row.endDate || tripEnd}
+          value={row.startDate}
+          onChange={(e) => {
+            const startDate = e.target.value;
+            update(row.id, { startDate, ...(row.endDate && row.endDate < startDate && { endDate: startDate }) });
+          }}
+        />
+      </label>
+      <label className={FIELD_LABEL} style={labelStyle}>
+        To
+        <input
+          type="date"
+          className={FIELD_INPUT}
+          style={fieldInputStyle}
+          min={row.startDate || tripStart}
+          max={tripEnd}
+          value={row.endDate}
+          onChange={(e) => update(row.id, { endDate: e.target.value })}
+        />
+      </label>
+    </>
   );
 }

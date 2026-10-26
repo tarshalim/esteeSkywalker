@@ -1,27 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ChevronDown, LoaderCircle, Pencil, Plane, Scissors, Trash2 } from "lucide-react";
+import { ChevronDown, LoaderCircle, Pencil, Plane, Plus, Scissors, Trash2 } from "lucide-react";
 import TripDialog from "../TripPicker/TripDialog";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 import { realCover } from "../../lib/media";
 import { deleteTrip, getTrips, saveTrip } from "../../lib/tripStore";
 import { getPins } from "../../lib/pinStore";
 import { getPhotos } from "../../lib/photoStore";
-import { allCompanions } from "../../lib/hierarchy";
+import { allCompanions, groupTripsByRegion, routeLabel, sortStops, tripRegions } from "../../lib/hierarchy";
 import { useDataChanges } from "../../lib/liveSync";
 import { useAuth } from "../../lib/auth";
 import { useAsync } from "../../hooks/useAsync";
+import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { formatBlogDate, formatDateRange } from "../../utils/dateFilters";
+import { continentForCountryCode } from "../../utils/geo";
+import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../utils/countries";
 import { findArt } from "../../data/scrapbookArt";
 import "./TripStories.css";
 
 /** At most this many post slips fan out of an envelope. */
 const MAX_SLIPS = 3;
+/** At most this many stops are listed on a pass; the rest fold into "+N more". */
+const MAX_PASS_STOPS = 4;
 /** Where each slip's tab peeks out along the envelope's top edge (% of width). */
 const TAB_LEFT = ["12%", "42%", "70%"];
 /** Travel sticker that marks each slip's tab: airplane, passport, globe. */
 const TAB_ART = ["travel3-09", "travel3-04", "travel3-02"].map(findArt);
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 const postTime = (b) => new Date(b.postDate ?? b.startDate ?? b.date ?? 0).getTime();
 
@@ -57,8 +64,12 @@ export default function TripStories({ blogs }) {
   const { data: trips, setData: setTrips, loading } = useAsync(getTrips, [], []);
   const { data: pins, setData: setPins } = useAsync(getPins, [], []);
   const { data: photos, setData: setPhotos } = useAsync(getPhotos, [], []);
+  // { trip, addStop } while the trip dialog is open: the full edit form, or just its itinerary.
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  // Continent -> country filter: { continent, country } keys from groupTripsByRegion, null = all.
+  const [region, setRegion] = useState({ continent: null, country: null });
+  const countryFeatures = useCountriesGeoJson();
 
   useDataChanges(["trips", "trip_companions", "trip_stops", "locations"], () => {
     getTrips().then(setTrips, console.error);
@@ -69,6 +80,7 @@ export default function TripStories({ blogs }) {
   });
 
   const pinTitles = useMemo(() => new Map(pins.map((p) => [p.id, p.title])), [pins]);
+  const pinsById = useMemo(() => new Map(pins.map((p) => [p.id, p])), [pins]);
 
   const photoCounts = useMemo(() => {
     const map = new Map();
@@ -95,9 +107,36 @@ export default function TripStories({ blogs }) {
     [pinTitles, postsByTrip]
   );
 
+  // Where each trip went: its stops' countries, else its posts' and its pin's.
+  const regionGroups = useMemo(() => {
+    const regionsOf = (trip) => {
+      const pin = pinsById.get(trip.locationId);
+      const fallback = (postsByTrip.get(trip.id) ?? []).map((b) => ({
+        continent: b.continent,
+        country: b.countryName,
+        countryCode: b.countryCode,
+      }));
+      if (pin?.countryCode) {
+        fallback.push({
+          continent: continentForCountryCode(pin.countryCode, countryFeatures, COUNTRY_TO_CONTINENT),
+          country: pin.countryName || pin.countryCode,
+          countryCode: pin.countryCode,
+        });
+      }
+      return tripRegions(trip, fallback);
+    };
+    return groupTripsByRegion(trips, regionsOf);
+  }, [trips, pinsById, postsByTrip, countryFeatures]);
+
+  // A pick that no longer exists (trip deleted/edited) falls back to "all".
+  const activeContinent = regionGroups.find((g) => g.continent === region.continent) ?? null;
+  const activeCountry = activeContinent?.countries.find((c) => (c.countryCode || c.country) === region.country) ?? null;
+  const visibleTrips = activeCountry?.trips ?? activeContinent?.trips ?? trips;
+  const showRegionFilter = regionGroups.length > 1 || regionGroups.some((g) => g.countries.length > 1);
+
   const handleSave = useCallback(
     async (draft) => {
-      const saved = await saveTrip({ ...editing, ...draft });
+      const saved = await saveTrip({ ...editing.trip, ...draft });
       setTrips((prev) => prev.map((t) => (t.id === saved.id ? saved : t)));
       setEditing(null);
     },
@@ -133,8 +172,46 @@ export default function TripStories({ blogs }) {
         </p>
       </header>
 
+      {showRegionFilter && (
+        <nav className="trip-regions" aria-label="Browse trips by continent and country">
+          <div className="trip-regions-row" role="group" aria-label="Continent">
+            <RegionChip active={!activeContinent} count={trips.length} onClick={() => setRegion({ continent: null, country: null })}>
+              All
+            </RegionChip>
+            {regionGroups.map((g) => (
+              <RegionChip
+                key={g.continent || "unknown"}
+                active={activeContinent === g}
+                count={g.trips.length}
+                onClick={() => setRegion({ continent: g.continent, country: null })}
+              >
+                {g.continent || "Somewhere"}
+              </RegionChip>
+            ))}
+          </div>
+          {activeContinent && activeContinent.countries.length > 0 && (
+            <div className="trip-regions-row trip-regions-row--countries" role="group" aria-label={`Countries in ${activeContinent.continent || "this group"}`}>
+              <RegionChip active={!activeCountry} count={activeContinent.trips.length} onClick={() => setRegion((r) => ({ ...r, country: null }))}>
+                All of {activeContinent.continent || "these"}
+              </RegionChip>
+              {activeContinent.countries.map((c) => (
+                <RegionChip
+                  key={c.countryCode || c.country}
+                  active={activeCountry === c}
+                  count={c.trips.length}
+                  onClick={() => setRegion((r) => ({ ...r, country: c.countryCode || c.country }))}
+                >
+                  {c.countryCode && <span aria-hidden="true">{countryCodeToFlagEmoji(c.countryCode)} </span>}
+                  {c.country}
+                </RegionChip>
+              ))}
+            </div>
+          )}
+        </nav>
+      )}
+
       <div className="trip-stories-grid">
-        {trips.map((trip) => (
+        {visibleTrips.map((trip) => (
           <TripEnvelope
             key={trip.id}
             trip={trip}
@@ -143,7 +220,8 @@ export default function TripStories({ blogs }) {
             destination={destinationOf(trip)}
             canEdit={canEdit}
             deleting={deletingId === trip.id}
-            onEdit={() => setEditing(trip)}
+            onEdit={() => setEditing({ trip, addStop: false })}
+            onAddStop={() => setEditing({ trip, addStop: true })}
             onDelete={() => handleDelete(trip)}
           />
         ))}
@@ -152,15 +230,25 @@ export default function TripStories({ blogs }) {
       <AnimatePresence>
         {editing && (
           <TripDialog
-            trip={editing}
-            locationTitle={destinationOf(editing) || "this location"}
-            home={pins.find((p) => p.id === editing.locationId) ?? null}
+            trip={editing.trip}
+            addStop={editing.addStop}
+            locationTitle={destinationOf(editing.trip) || "this location"}
+            home={pins.find((p) => p.id === editing.trip.locationId) ?? null}
             onSave={handleSave}
             onCancel={() => setEditing(null)}
           />
         )}
       </AnimatePresence>
     </section>
+  );
+}
+
+function RegionChip({ active, count, onClick, children }) {
+  return (
+    <button type="button" className={`trip-region-chip${active ? " is-active" : ""}`} aria-pressed={active} onClick={onClick}>
+      <span>{children}</span>
+      <span className="trip-region-chip-count">{count}</span>
+    </button>
   );
 }
 
@@ -199,15 +287,58 @@ function Barcode({ seed }) {
   );
 }
 
-function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting, onEdit, onDelete }) {
+/**
+ * The pass's itinerary: each stop on a dotted timeline with its dates, and —
+ * for editors — an always-there "Add stop" to extend the route.
+ */
+function PassItinerary({ stops, tripTitle, onAddStop }) {
+  const shown = stops.slice(0, MAX_PASS_STOPS);
+  const hidden = stops.length - shown.length;
+  return (
+    <div className="trip-pass-itinerary">
+      <span className="trip-pass-label">Itinerary</span>
+      {stops.length > 0 ? (
+        <ol className="trip-pass-stops">
+          {shown.map((stop) => (
+            <li key={stop.id} className="trip-pass-stop">
+              <span className="trip-pass-stop-name">
+                {stop.countryCode && <span aria-hidden="true">{countryCodeToFlagEmoji(stop.countryCode)} </span>}
+                {stop.locationName}
+              </span>
+              <span className="trip-pass-stop-date">{formatDateRange(stop.startDate, stop.endDate, "short")}</span>
+            </li>
+          ))}
+          {hidden > 0 && <li className="trip-pass-stop trip-pass-stop--more">+{plural(hidden, "more stop")}</li>}
+        </ol>
+      ) : (
+        <p className="trip-pass-stops-empty">No stops yet</p>
+      )}
+      {onAddStop && (
+        <button type="button" className="trip-pass-add-stop" onClick={onAddStop} aria-label={`Add a stop to ${tripTitle}`}>
+          <Plus size={12} aria-hidden="true" />
+          Add stop
+        </button>
+      )}
+    </div>
+  );
+}
+
+function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting, onEdit, onAddStop, onDelete }) {
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const slips = posts.slice(0, MAX_SLIPS);
-  const cover = posts.map((p) => realCover(p.coverImage)).find(Boolean);
+  // The trip's own cover, else its newest post's.
+  const cover = trip.coverImage || posts.map((p) => realCover(p.coverImage)).find(Boolean);
   const companions = allCompanions(trip);
   // Whoever published the trip's posts; stamped onto each post as `authorName` server-side.
   const passengerName = [...new Set(posts.map((p) => p.authorName).filter(Boolean))].join(", ");
+  // A multi-stop trip reads first stop -> last stop; otherwise home -> its destination.
+  const stops = sortStops(trip.stops ?? []);
+  const route = routeLabel(trip);
+  const from = stops.length > 1 ? stops[0].locationName : "Home";
+  const to = stops.at(-1)?.locationName || destination || "Somewhere";
+  const via = stops.length > 2 ? plural(stops.length - 2, "stop") : null;
   const tripHref = `/gallery?trip=${encodeURIComponent(trip.id)}`;
   const slipsId = `trip-slips-${trip.id}`;
 
@@ -322,17 +453,17 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                   </Link>
                 </h3>
 
-                <div className="trip-pass-route">
+                <div className="trip-pass-route" title={route || undefined}>
                   <span className="trip-pass-field">
                     <span className="trip-pass-label">From</span>
-                    <span className="trip-pass-value">Home</span>
+                    <span className="trip-pass-value">{from}</span>
                   </span>
                   <span className="trip-pass-flight" aria-hidden="true">
                     <Plane size={12} />
                   </span>
                   <span className="trip-pass-field">
-                    <span className="trip-pass-label">To</span>
-                    <span className="trip-pass-value">{destination || "Somewhere"}</span>
+                    <span className="trip-pass-label">{via ? `To · via ${via}` : "To"}</span>
+                    <span className="trip-pass-value">{to}</span>
                   </span>
                 </div>
 
@@ -346,6 +477,8 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                     <span className="trip-pass-value">{companions.length > 0 ? companions.join(", ") : "Solo"}</span>
                   </span>
                 </div>
+
+                {(stops.length > 0 || canEdit) && <PassItinerary stops={stops} tripTitle={trip.title} onAddStop={canEdit ? onAddStop : null} />}
               </div>
             </div>
 

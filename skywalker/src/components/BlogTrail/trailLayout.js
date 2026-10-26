@@ -20,7 +20,13 @@ const LAST_POST_PCT = 86;
 /** Where on screen the camera tries to keep the rider (fraction of viewport width). */
 export const CAMERA_LEAD = 0.35;
 
-/** Signposts are spaced at even percentage intervals between the first and last slots. */
+/** The create post takes a shorter slot than a story, so it hugs the first signpost. */
+export const CREATE_SLOT_SPAN = 0.6;
+
+/**
+ * Signposts are spaced at even percentage intervals between the first and last slots.
+ * `index` and `count` may be fractional (see CREATE_SLOT_SPAN).
+ */
 export function signpostPercent(index, count) {
   if (count <= 1) return 40;
   return FIRST_POST_PCT + (index / (count - 1)) * (LAST_POST_PCT - FIRST_POST_PCT);

@@ -1,6 +1,7 @@
-import { useId } from "react";
-import { Plus, Trash2, Users } from "lucide-react";
+import { useId, useRef, useState } from "react";
+import { ImagePlus, LoaderCircle, Plus, Trash2, Users, X } from "lucide-react";
 import { parseNames } from "../../lib/hierarchy";
+import { fileToUrl } from "../../lib/files";
 import { FIELD_INPUT, FIELD_LABEL, fieldInputStyle, fieldLabelStyle as labelStyle } from "./fieldStyles";
 import TripStopsEditor from "./TripStopsEditor";
 
@@ -104,8 +105,97 @@ export function CompanionIntervalsEditor({ value, onChange, tripStart, tripEnd }
 }
 
 /**
+ * The trip's cover photo for its boarding pass: click or drop an image to
+ * upload it. Without one the pass borrows a post's cover.
+ *
+ * @param {{ value: string, onChange: (url: string) => void }} props
+ */
+export function TripCoverField({ value, onChange }) {
+  const inputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const upload = async (file) => {
+    if (!file?.type.startsWith("image/")) return;
+    setUploading(true);
+    setError(null);
+    try {
+      onChange(await fileToUrl(file));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className={FIELD_LABEL} style={labelStyle}>
+      <span>Cover image</span>
+      <div className="relative">
+        <button
+          type="button"
+          disabled={uploading}
+          aria-label={value ? "Change cover image" : "Add a cover image"}
+          aria-busy={uploading}
+          className="relative flex h-32 w-full items-center justify-center overflow-hidden rounded-(--radius-field) border-2 border-dashed outline-none focus-visible:border-[var(--blue)]"
+          style={{ borderColor: "var(--border)", background: "var(--bg-elevated)", color: "var(--text-muted)" }}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            upload(e.dataTransfer.files?.[0]);
+          }}
+        >
+          {value ? (
+            <img src={value} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            <span className="flex flex-col items-center gap-1 text-xs font-semibold">
+              <ImagePlus size={20} aria-hidden="true" />
+              Click or drop a photo
+            </span>
+          )}
+          {uploading && (
+            <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
+              <LoaderCircle size={20} className="animate-spin" aria-hidden="true" />
+            </span>
+          )}
+        </button>
+        {value && !uploading && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="absolute right-1.5 top-1.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/70"
+            aria-label="Remove cover image"
+            title="Remove"
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            upload(e.target.files?.[0]);
+            e.target.value = ""; // so re-picking the same file fires onChange again
+          }}
+        />
+      </div>
+      {error && (
+        <span role="alert" className="font-semibold text-red-600">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
  * The trip form: name, start/end dates, an optional note, companion
  * intervals and — with `itinerary` — the multi-location stop builder.
+ * `cover` adds the cover image picker; `companions={false}` leaves the
+ * companion intervals out (the new-trip wizard asks for them later).
  * Controlled — `draft` is a TripDraft.
  *
  * @param {{
@@ -113,11 +203,22 @@ export function CompanionIntervalsEditor({ value, onChange, tripStart, tripEnd }
  *   onChange: (next: import("../../types/hierarchy").TripDraft) => void,
  *   error?: ?string,
  *   autoFocus?: boolean,
+ *   cover?: boolean,
+ *   companions?: boolean,
  *   itinerary?: boolean,
  *   home?: ?{ title: string, lat: number, lng: number },  // the trip's pin, seeds the first stop
  * }} props
  */
-export default function TripFields({ draft, onChange, error = null, autoFocus = false, itinerary = false, home = null }) {
+export default function TripFields({
+  draft,
+  onChange,
+  error = null,
+  autoFocus = false,
+  cover = false,
+  companions = true,
+  itinerary = false,
+  home = null,
+}) {
   const errorId = useId();
   const set = (key) => (e) => {
     const value = e.target.value;
@@ -142,6 +243,7 @@ export default function TripFields({ draft, onChange, error = null, autoFocus = 
           aria-describedby={error ? errorId : undefined}
         />
       </label>
+      {cover && <TripCoverField value={draft.coverImage ?? ""} onChange={(coverImage) => onChange({ ...draft, coverImage })} />}
       <div className="grid grid-cols-2 gap-2">
         <label className={FIELD_LABEL} style={labelStyle}>
           Start date
@@ -159,12 +261,14 @@ export default function TripFields({ draft, onChange, error = null, autoFocus = 
           />
         </label>
       </div>
-      <CompanionIntervalsEditor
-        value={draft.companions}
-        onChange={(companions) => onChange({ ...draft, companions })}
-        tripStart={draft.startDate}
-        tripEnd={draft.endDate}
-      />
+      {companions && (
+        <CompanionIntervalsEditor
+          value={draft.companions}
+          onChange={(next) => onChange({ ...draft, companions: next })}
+          tripStart={draft.startDate}
+          tripEnd={draft.endDate}
+        />
+      )}
       {itinerary && (
         <TripStopsEditor
           value={draft.stops ?? []}

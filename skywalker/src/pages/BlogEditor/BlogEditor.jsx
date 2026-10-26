@@ -29,9 +29,10 @@ import LocationField from "./LocationField";
 import { cityFromPlaceName, reverseGeocode, searchPlaces } from "../../lib/geocode";
 import { autoPinFor, createPin, getPinById, getPins } from "../../lib/pinStore";
 import { getTripById, getTrips, saveTrip } from "../../lib/tripStore";
-import { NEW_TRIP, companionsForPost, emptyTripDraft, isWithinTrip, validateTrip } from "../../lib/hierarchy";
+import { NEW_TRIP, companionsForPost, emptyTripDraft, isWithinTrip, sortStops, stopHasCoords, validateTrip } from "../../lib/hierarchy";
 import { formatDateRange } from "../../utils/dateFilters";
 import TripSelect from "../../components/TripPicker/TripSelect";
+import Select from "../../components/Select/Select";
 import { useDataChanges } from "../../lib/liveSync";
 import { deleteBlogAudio, getBlogMusic } from "../../lib/music";
 import "./BlogEditor.css";
@@ -61,6 +62,7 @@ export default function BlogEditor() {
   const [trips, setTrips] = useState([]);
   const [tripsLoaded, setTripsLoaded] = useState(false);
   const [tripId, setTripId] = useState("");
+  const [stopId, setStopId] = useState(""); // "" = anywhere on the trip
   const [tripDraft, setTripDraft] = useState(() => emptyTripDraft());
   // A location pick fills an empty Country once the country outlines are in.
   const countryFromCoordsRef = useRef(false);
@@ -192,6 +194,7 @@ export default function BlogEditor() {
           setCoords(hasCoords(blog.location) ? { lat: blog.location.lat, lng: blog.location.lng } : null);
           setPinChoice(blog.pinId ?? "auto");
           setTripId(blog.tripId ?? "");
+          setStopId(blog.stopId ?? "");
           setCountry(blog.countryCode ? { code: blog.countryCode, name: blog.countryName || blog.countryCode } : null);
           setStartDate(blog.startDate || blog.postDate || blog.date || todayISO());
           setStartDateTouched(true);
@@ -221,7 +224,7 @@ export default function BlogEditor() {
         .catch((err) => console.error("Failed to load template", err));
     }
     // "New story" from a globe pin's quick card: start at that pin, and in
-    // that trip when it came from one (a trip implies its pin).
+    // that trip (at that stop) when it came from one (a trip implies its pin).
     const startAtPin = (pinId) =>
       getPinById(pinId)
         .then((pin) => {
@@ -235,13 +238,20 @@ export default function BlogEditor() {
         .catch((err) => console.error("Failed to load pin", err));
     const pinId = searchParams.get("pin");
     const tripParam = searchParams.get("trip");
-    if (pinId) startAtPin(pinId);
+    const stopParam = searchParams.get("stop");
+    const pinLoaded = pinId ? startAtPin(pinId) : null;
     if (tripParam) {
       getTripById(tripParam)
-        .then((trip) => {
+        .then(async (trip) => {
           if (!trip) return;
           applyTrip(trip);
-          if (!pinId) startAtPin(trip.locationId);
+          // The stop's own spot and dates win over the pin's, so it goes last.
+          await (pinLoaded ?? startAtPin(trip.locationId));
+          const stop = trip.stops.find((s) => s.id === stopParam);
+          if (stop) {
+            setStopId(stop.id);
+            applyStop(trip, stop);
+          }
         })
         .catch((err) => console.error("Failed to load trip", err));
     }
@@ -284,24 +294,30 @@ export default function BlogEditor() {
   // The pin a save would file under: the chosen one, the nearest ("auto"),
   // "new", or null when there's no exact spot / the post isn't pinned.
   const resolvedPinId = !coords || pinChoice === "none" ? null : pinChoice === "auto" ? autoPinFor(pins, coords) : pinChoice;
-  // A trip lives at one location: only that location's trips are offered,
-  // and a trip left behind by moving the post elsewhere no longer applies
-  // (kept as-is until both lists have loaded, so a slow load can't drop it).
-  const tripOptions = trips.filter((t) => t.locationId === resolvedPinId);
+  // A trip lives at one location. Every trip is offered (this location's
+  // first) and picking one files the post under its pin; a trip left behind
+  // by moving the post elsewhere no longer applies (kept as-is until both
+  // lists have loaded, so a slow load can't drop it).
+  const tripHere = (t) => t.id === tripId && t.locationId === resolvedPinId;
   const effectiveTripId =
-    !pinsLoaded || !tripsLoaded || tripId === "" || (resolvedPinId && tripId === NEW_TRIP) || tripOptions.some((t) => t.id === tripId)
+    !pinsLoaded || !tripsLoaded || tripId === "" || (resolvedPinId && tripId === NEW_TRIP) || trips.some(tripHere)
       ? tripId
       : "";
-  const selectedTrip = tripOptions.find((t) => t.id === effectiveTripId) ?? null;
+  const selectedTrip = trips.find((t) => t.id === effectiveTripId) ?? null;
   const tripDisabledReason = !coords
     ? "Pick an exact location first"
     : pinChoice === "none"
     ? "Pin the story on the globe to add it to a trip"
     : null;
+  // Where on the trip the story happens: one of its stops, or anywhere.
+  const tripStops = selectedTrip ? sortStops(selectedTrip.stops ?? []) : [];
+  const effectiveStopId = !tripsLoaded || tripStops.some((s) => s.id === stopId) ? stopId : "";
 
   // Picking a trip hands its dates to the story; the writer can narrow them to a day or a stretch.
   function applyTrip(trip) {
     setTripId(trip.id);
+    setStopId("");
+    if (trip.locationId !== resolvedPinId) setPinChoice(trip.locationId);
     setStartDate(trip.startDate);
     setStartDateTouched(true);
     const isRange = trip.endDate !== trip.startDate;
@@ -309,8 +325,31 @@ export default function BlogEditor() {
     setEndDate(isRange ? trip.endDate : "");
   }
 
+  // A stop narrows the story to that leg: its dates and, when it's placed,
+  // its spot — still filed under the trip's pin so the trip stays attached.
+  const handleStopChange = (value) => {
+    setStopId(value);
+    const stop = tripStops.find((s) => s.id === value);
+    if (stop) applyStop(selectedTrip, stop);
+  };
+  function applyStop(trip, stop) {
+    setStartDate(stop.startDate);
+    setStartDateTouched(true);
+    const isRange = stop.endDate !== stop.startDate;
+    setIsDateRange(isRange);
+    setEndDate(isRange ? stop.endDate : "");
+    if (stopHasCoords(stop)) {
+      setCoords({ lat: stop.lat, lng: stop.lng });
+      setPlaceLabel([stop.locationName, stop.country].filter(Boolean).join(", ") || null);
+      setLocationName(stop.locationName);
+      setPinChoice(trip.locationId);
+    }
+    if (stop.countryCode) setCountry({ code: stop.countryCode, name: stop.country || stop.countryCode });
+    setCity((prev) => prev || stop.locationName);
+  }
+
   const handleTripChange = (value) => {
-    const trip = tripOptions.find((t) => t.id === value);
+    const trip = trips.find((t) => t.id === value);
     if (trip) return applyTrip(trip);
     setTripId(value);
     // A new trip starts from the story's own dates.
@@ -328,6 +367,7 @@ export default function BlogEditor() {
       pin,
       trip,
       trip === NEW_TRIP && tripDraft,
+      effectiveStopId,
       country?.code,
       startDate,
       isDateRange && endDate,
@@ -567,7 +607,9 @@ export default function BlogEditor() {
       // Same for a trip it just created.
       const savedTripId = await resolveTripId(pinId);
       setTripId(savedTripId ?? "");
-      const saved = await upsertBlog({ ...buildPayload(nextStatus), pinId, tripId: savedTripId });
+      // A stop only means something inside the trip it belongs to.
+      const savedStopId = savedTripId && savedTripId === effectiveTripId ? effectiveStopId || null : null;
+      const saved = await upsertBlog({ ...buildPayload(nextStatus), pinId, tripId: savedTripId, stopId: savedStopId });
       loadedIdRef.current = saved.id;
       setBlogId(saved.id);
       setStatus(saved.status);
@@ -835,7 +877,8 @@ export default function BlogEditor() {
 
         <div className="editor-trip-field">
           <TripSelect
-            trips={tripOptions}
+            trips={trips}
+            locationId={resolvedPinId}
             value={effectiveTripId}
             onChange={handleTripChange}
             draft={tripDraft}
@@ -848,6 +891,19 @@ export default function BlogEditor() {
             <span className="editor-field-error" role="alert">
               {tripError}
             </span>
+          )}
+          {tripStops.length > 0 && !tripDisabledReason && (
+            <label className="editor-trip-stop">
+              <span className="editor-metadata-label">Where on the trip</span>
+              <Select variant="field" value={effectiveStopId} onChange={(e) => handleStopChange(e.target.value)}>
+                <option value="">Anywhere on the trip</option>
+                {tripStops.map((stop, i) => (
+                  <option key={stop.id} value={stop.id}>
+                    {i + 1}. {[stop.locationName, stop.country].filter(Boolean).join(", ")} · {formatDateRange(stop.startDate, stop.endDate)}
+                  </option>
+                ))}
+              </Select>
+            </label>
           )}
           {storyCompanions.length > 0 && (
             <p className="editor-trip-companions">With {storyCompanions.join(", ")} on these dates</p>

@@ -3,8 +3,6 @@ import { createPortal } from "react-dom";
 import { ChevronRight, MapPin } from "lucide-react";
 import { usePlaceName } from "../../hooks/usePlaceName";
 import { formatCoords, isWaterName } from "../../utils/geo";
-import { emptyTripDraft, validateTrip } from "../../lib/hierarchy";
-import TripFields from "../TripPicker/TripFields";
 import "./PinNamePopover.css";
 
 /**
@@ -19,8 +17,9 @@ import "./PinNamePopover.css";
  * @param {{lat:number,lng:number}} coords
  * @param {?string} placeName - already-known name (drag HUD / search pick);
  *   when absent it's resolved here.
- * @param {function({title:string,note:string,placeName:?string,trip:?import("../../types/hierarchy").TripDraft})} onConfirm -
- *   `trip` is set when "Start a trip here" was filled in (step 2 of the cascade).
+ * @param {function({title:string,note:string,placeName:?string,startTrip:boolean})} onConfirm -
+ *   `startTrip` when "Start a trip here" was ticked: the caller opens the
+ *   new-trip wizard on the saved pin (step 2 of the cascade).
  * @param {?(import("../../lib/pinStore").StoryPin & {distanceKm:number})} nearbyPin -
  *   an existing pin close enough to be the same place; offered instead of a
  *   duplicate so its stories stay together.
@@ -30,8 +29,6 @@ export default function PinNamePopover({ coords, placeName = null, nearbyPin = n
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [withTrip, setWithTrip] = useState(false);
-  const [tripDraft, setTripDraft] = useState(() => emptyTripDraft());
-  const [tripError, setTripError] = useState(null);
   const resolved = usePlaceName(placeName ? null : coords);
   // Saving mid-lookup still stores the local fallback (country / ocean).
   const place = placeName ?? resolved.name;
@@ -43,9 +40,7 @@ export default function PinNamePopover({ coords, placeName = null, nearbyPin = n
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) return;
-    const invalid = withTrip ? validateTrip(tripDraft) : null;
-    if (invalid) return setTripError(invalid);
-    onConfirm({ title: title.trim(), note: note.trim(), placeName: place, trip: withTrip ? tripDraft : null });
+    onConfirm({ title: title.trim(), note: note.trim(), placeName: place, startTrip: withTrip });
   };
 
   return createPortal(
@@ -113,24 +108,13 @@ export default function PinNamePopover({ coords, placeName = null, nearbyPin = n
           <input type="checkbox" checked={withTrip} onChange={(e) => setWithTrip(e.target.checked)} />
           Start a trip here
         </label>
-        {withTrip && (
-          <div className="pin-name-popover-trip">
-            <TripFields
-              draft={tripDraft}
-              onChange={(next) => {
-                setTripDraft(next);
-                setTripError(null);
-              }}
-              error={tripError}
-            />
-          </div>
-        )}
+        {withTrip && <p className="pin-name-popover-trip-hint">Next: name the trip, then add its stops along the way.</p>}
         <div className="pin-name-popover-actions">
           <button type="button" className="pin-name-popover-cancel" onClick={onCancel}>
             Cancel
           </button>
           <button type="submit" className="pin-name-popover-save">
-            Save pin
+            {withTrip ? "Save pin & plan trip" : "Save pin"}
           </button>
         </div>
       </form>

@@ -16,12 +16,15 @@ const mutedStyle = { color: "var(--text-muted)" };
 
 /**
  * Step 2 of the cascade (Location -> Trip -> content): two side-by-side
- * cards — pick one of the location's trips, or start a new one inline.
- * Picking an existing trip shows its dates and companions, which the content
- * then inherits.
+ * cards — pick an existing trip, or start a new one inline. The chosen
+ * location's trips are listed first; picking one from elsewhere is the
+ * caller's cue to move the content to that trip's location. Picking an
+ * existing trip shows its dates and companions, which the content then
+ * inherits.
  *
  * @param {{
- *   trips: import("../../types/hierarchy").Trip[],   // already narrowed to the chosen location
+ *   trips: import("../../types/hierarchy").Trip[],   // all of the user's trips
+ *   locationId?: ?string,                            // the chosen location, whose trips come first
  *   value: string,                                   // "" (no trip) | trip id | NEW_TRIP
  *   onChange: (value: string) => void,
  *   draft: import("../../types/hierarchy").TripDraft, // the new trip, when value === NEW_TRIP
@@ -32,8 +35,15 @@ const mutedStyle = { color: "var(--text-muted)" };
  *   label?: string,
  * }} props
  */
+const tripOption = (trip) => (
+  <option key={trip.id} value={trip.id}>
+    {tripLabel(trip)}
+  </option>
+);
+
 export default function TripSelect({
   trips,
+  locationId = null,
   value,
   onChange,
   draft,
@@ -47,6 +57,12 @@ export default function TripSelect({
   const creating = value === NEW_TRIP && !disabled;
   const selected = trips.find((t) => t.id === value) ?? null;
   const companions = selected ? allCompanions(selected) : [];
+  const here = locationId ? trips.filter((t) => t.locationId === locationId) : [];
+  const elsewhere = trips.filter((t) => !here.includes(t));
+  const countHint =
+    trips.length === 0
+      ? "No trips yet"
+      : `${trips.length} trip${trips.length === 1 ? "" : "s"}` + (here.length > 0 ? ` · ${here.length} here` : "");
 
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-2">
@@ -69,11 +85,14 @@ export default function TripSelect({
             onChange={(e) => onChange(e.target.value)}
           >
             <option value="">{noneLabel}</option>
-            {trips.map((trip) => (
-              <option key={trip.id} value={trip.id}>
-                {tripLabel(trip)}
-              </option>
-            ))}
+            {here.length > 0 && elsewhere.length > 0 ? (
+              <>
+                <optgroup label="At this location">{here.map(tripOption)}</optgroup>
+                <optgroup label="Other trips">{elsewhere.map(tripOption)}</optgroup>
+              </>
+            ) : (
+              trips.map(tripOption)
+            )}
           </Select>
           {selected ? (
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={mutedStyle}>
@@ -90,7 +109,7 @@ export default function TripSelect({
             </p>
           ) : (
             <p className="text-xs" style={mutedStyle}>
-              {trips.length > 0 ? `${trips.length} trip${trips.length === 1 ? "" : "s"} here` : "No trips here yet"}
+              {countHint}
             </p>
           )}
         </div>

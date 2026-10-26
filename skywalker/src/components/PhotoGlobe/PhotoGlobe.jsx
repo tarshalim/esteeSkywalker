@@ -3,7 +3,7 @@ import * as THREE from "three";
 import Globe from "react-globe.gl";
 import { angularDistanceDeg, clusterPhotosByLocation, escapeHtml, slerpLatLng } from "../../utils/geo";
 import { formatDateRange } from "../../utils/dateFilters";
-import { journeyLegs, sortStops, stopHasCoords } from "../../lib/hierarchy";
+import { journeyLegs, stopPinsOf } from "../../lib/hierarchy";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { createIdyllicTexture, createYellowBlueGlobeDataUrl, enhanceTexture } from "../../utils/proceduralGlobeTexture";
 import { useTheme } from "../../lib/theme";
@@ -141,9 +141,10 @@ const stopPlace = (stop) => [stop.locationName, stop.country].filter((part, i, a
  * `customPins` may carry `posts` (pinStore.buildStoryPins); `blogs` only
  * marks countries as visited — posts are drawn through their pins.
  *
- * `journeys` ([{ trip, pinId }]) draws each multi-stop trip as animated arcs
- * from stop to stop, with a small dot per stop; clicking either opens the
- * trip's pin (onCustomPinClick).
+ * `journeys` ([{ trip, pinId }]) draws a pin per placed stop of each trip
+ * (hierarchy.stopPinsOf) and, for multi-stop trips, animated arcs from stop
+ * to stop. Clicking a stop pin, or an arc (its leg's start), calls
+ * onStopClick with that StopPin; `selectedStopId` highlights one.
  *
  * `ref` exposes coordsAtClientPoint(clientX, clientY) -> {lat,lng} | null, used
  * by the draggable pin to resolve where it was released.
@@ -162,6 +163,7 @@ export default function PhotoGlobe({
   selectedCountryCode,
   selectedLocationId,
   selectedCustomPinId,
+  selectedStopId = null,
   labelMode,
   showBorders = true,
   showGrid = false,
@@ -185,6 +187,7 @@ export default function PhotoGlobe({
   onPinClick,
   onPinHover,
   onCustomPinClick,
+  onStopClick = null,
   onPinDropAt,
 }) {
   const globeEl = useRef();
@@ -309,18 +312,13 @@ export default function PhotoGlobe({
   const journeyArcs = useMemo(
     () =>
       journeys.flatMap(({ trip, pinId }) =>
-        journeyLegs(trip).map((leg) => ({ ...leg, id: `${trip.id}:${leg.index}`, pinId, tripTitle: trip.title }))
+        journeyLegs(trip).map((leg) => ({ ...leg, id: `${trip.id}:${leg.index}`, tripId: trip.id, pinId, tripTitle: trip.title }))
       ),
     [journeys]
   );
-  // Every placed stop of those trips, as a small dot in the points layer.
+  // Every placed stop of those trips is a pin of its own.
   const stopPoints = useMemo(
-    () =>
-      journeys.flatMap(({ trip, pinId }) =>
-        sortStops(trip.stops)
-          .filter(stopHasCoords)
-          .map((stop, i) => ({ ...stop, id: `stop:${trip.id}:${stop.id}`, kind: "stop", pinId, tripTitle: trip.title, order: i + 1 }))
-      ),
+    () => journeys.flatMap(({ trip, pinId }) => stopPinsOf(trip, pinId).map((pin) => ({ ...pin, kind: "stop" }))),
     [journeys]
   );
 
@@ -434,14 +432,14 @@ export default function PhotoGlobe({
 
   const pointColor = useCallback(
     (d) => {
-      if (d.kind === "stop") return palette.stopPin;
+      if (d.kind === "stop") return d.id === selectedStopId ? palette.customPinSelected : palette.stopPin;
       if (d.kind === "custom") {
-        if (d.id === selectedCustomPinId) return palette.customPinSelected;
+        if (d.id === selectedCustomPinId && !selectedStopId) return palette.customPinSelected;
         return isStoryPin(d) ? palette.blogPin : palette.customPin;
       }
       return d.id === selectedLocationId ? palette.pinSelected : palette.pinColor;
     },
-    [selectedLocationId, selectedCustomPinId, palette]
+    [selectedLocationId, selectedCustomPinId, selectedStopId, palette]
   );
 
   // Pulsing halo under every photo pin so markers read at globe scale.
@@ -456,7 +454,7 @@ export default function PhotoGlobe({
       (d.kind === "photo"
         ? Math.min(0.15 + d.photos.length * 0.03, 0.45)
         : d.kind === "stop"
-        ? 0.12
+        ? Math.min(0.2 + d.posts.length * 0.03, 0.38)
         : isStoryPin(d)
         ? Math.min(0.26 + d.posts.length * 0.03, 0.42)
         : 0.22),
@@ -466,9 +464,10 @@ export default function PhotoGlobe({
   // User-entered text is injected as HTML here, so it must be escaped.
   const pointLabel = useCallback((d) => {
     if (d.kind === "stop") {
-      return `<div class="globe-tooltip"><strong>${d.order}. ${escapeHtml(stopPlace(d))}</strong><br/>${escapeHtml(
+      const count = d.posts.length;
+      return `<div class="globe-tooltip"><strong>${d.stopCount > 1 ? `${d.order}. ` : ""}${escapeHtml(stopPlace(d))}</strong><br/>${escapeHtml(
         formatDateRange(d.startDate, d.endDate)
-      )}<br/>${escapeHtml(d.tripTitle)}</div>`;
+      )}<br/>${escapeHtml(d.tripTitle)}${count > 0 ? ` · ${count} stor${count === 1 ? "y" : "ies"}` : ""}</div>`;
     }
     if (isStoryPin(d)) {
       const count = d.posts.length;
@@ -486,32 +485,36 @@ export default function PhotoGlobe({
     }</div>`;
   }, []);
 
-  // A journey's stops and arcs open the pin its trip belongs to.
-  const openJourneyPin = useCallback(
-    (pinId) => {
-      const pin = customPins.find((p) => p.id === pinId);
-      if (pin) onCustomPinClick(pin.id === selectedCustomPinId ? null : { ...pin, kind: "custom" });
-    },
-    [customPins, onCustomPinClick, selectedCustomPinId]
+  const openStop = useCallback(
+    (stopPin) => stopPin && onStopClick?.(stopPin.id === selectedStopId ? null : stopPin),
+    [onStopClick, selectedStopId]
   );
 
   const handlePointClick = useCallback(
     (d) => {
       if (d.kind === "stop") {
-        openJourneyPin(d.pinId);
+        openStop(d);
       } else if (d.kind === "custom") {
         onCustomPinClick(d.id === selectedCustomPinId ? null : d);
       } else {
         onPinClick(d.id === selectedLocationId ? null : d);
       }
     },
-    [openJourneyPin, onCustomPinClick, onPinClick, selectedCustomPinId, selectedLocationId]
+    [openStop, onCustomPinClick, onPinClick, selectedCustomPinId, selectedLocationId]
   );
 
-  // Arcs of the selected pin's trips stand out; with nothing selected, all do.
+  // Arcs of the selected stop's trip (else the selected pin's trips) stand
+  // out; with nothing selected, all do.
+  const selectedStopTripId = useMemo(
+    () => stopPoints.find((p) => p.id === selectedStopId)?.tripId ?? null,
+    [stopPoints, selectedStopId]
+  );
   const arcColor = useCallback(
-    (d) => (!selectedCustomPinId || d.pinId === selectedCustomPinId ? [palette.arcFrom, palette.arcTo] : palette.arcDim),
-    [selectedCustomPinId, palette]
+    (d) => {
+      const lit = selectedStopTripId ? d.tripId === selectedStopTripId : !selectedCustomPinId || d.pinId === selectedCustomPinId;
+      return lit ? [palette.arcFrom, palette.arcTo] : palette.arcDim;
+    },
+    [selectedStopTripId, selectedCustomPinId, palette]
   );
 
   const arcLabel = useCallback(
@@ -524,9 +527,9 @@ export default function PhotoGlobe({
 
   const handleArcClick = useCallback(
     (d) => {
-      if (!isPlacingPin) openJourneyPin(d.pinId);
+      if (!isPlacingPin) openStop(stopPoints.find((p) => p.id === `stop:${d.tripId}:${d.from.id}`));
     },
-    [isPlacingPin, openJourneyPin]
+    [isPlacingPin, openStop, stopPoints]
   );
 
   // The dashes travel along each leg, start to end; still for reduced motion.

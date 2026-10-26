@@ -1,18 +1,18 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { ChevronRight, FilePlus2, ImagePlus, Link2, LoaderCircle, Luggage, MapPin, Pencil, Unlink, Users, X } from "lucide-react";
+import { ChevronRight, FilePlus2, ImagePlus, Link2, LoaderCircle, Luggage, MapPin, Pencil, Route, Unlink, Users, X } from "lucide-react";
 import { formatBlogDate, formatDateRange } from "../../utils/dateFilters";
 import { formatWeather } from "../../lib/weather";
 import { formatCoords } from "../../utils/geo";
 import { realCover } from "../../lib/media";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
-import { allCompanions } from "../../lib/hierarchy";
+import { allCompanions, routeLabel, stopForPost } from "../../lib/hierarchy";
 
 const MAX_COVERS = 6;
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-function PostRow({ post, canDetach, busy, onOpenPost, onDetach }) {
+function PostRow({ post, stop = null, canDetach, busy, onOpenPost, onDetach }) {
   const weather = formatWeather(post.weather);
   return (
     <li className="group flex items-stretch gap-1">
@@ -38,6 +38,12 @@ function PostRow({ post, canDetach, busy, onOpenPost, onDetach }) {
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
             <span>{formatBlogDate(post)}</span>
+            {stop && (
+              <span className="inline-flex items-center gap-0.5">
+                <MapPin size={11} aria-hidden="true" />
+                {stop.locationName}
+              </span>
+            )}
             {weather && (
               <span className="rounded-full px-2 py-px" style={{ background: "color-mix(in srgb, var(--accent) 14%, transparent)" }}>
                 {weather}
@@ -69,11 +75,22 @@ function PostRow({ post, canDetach, busy, onOpenPost, onDetach }) {
 const SMALL_ACTION =
   "inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold transition hover:bg-black/5 disabled:opacity-40";
 
-/** One trip under the location: its dates, who came, its stories and photo count. */
-function TripSection({ trip, canEdit, busy, rowProps, onNewStory, onAddPhotos, onEditTrip }) {
+/**
+ * One trip under the location: its dates, who came, its stories and photo
+ * count. With `focusStop` (one of its stops) that stop's stories come first
+ * and "Story" starts one there.
+ */
+function TripSection({ trip, focusStop = null, canEdit, busy, rowProps, onNewStory, onAddPhotos, onEditTrip }) {
   const companions = allCompanions(trip);
+  const route = trip.stops?.length > 1 ? routeLabel(trip) : "";
+  const atStop = new Set(focusStop?.posts.map((p) => p.id));
+  const posts = focusStop ? [...trip.posts].sort((a, b) => atStop.has(b.id) - atStop.has(a.id)) : trip.posts;
   return (
-    <section className="rounded-2xl border p-2" style={{ borderColor: "var(--glass-border)" }} aria-label={trip.title}>
+    <section
+      className="rounded-2xl border p-2"
+      style={{ borderColor: focusStop ? "var(--border-strong)" : "var(--glass-border)" }}
+      aria-label={trip.title}
+    >
       <header className="flex items-start gap-2 px-1 pt-1">
         <Luggage size={16} className="mt-0.5 shrink-0" aria-hidden="true" style={{ color: "var(--text-muted)" }} />
         <div className="min-w-0 flex-1">
@@ -81,6 +98,12 @@ function TripSection({ trip, canEdit, busy, rowProps, onNewStory, onAddPhotos, o
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
             {formatDateRange(trip.startDate, trip.endDate)} · {plural(trip.posts.length, "story", "stories")} · {plural(trip.photos.length, "photo")}
           </p>
+          {route && (
+            <p className="mt-0.5 flex items-center gap-1 truncate text-xs" style={{ color: "var(--text-muted)" }} title={route}>
+              <Route size={12} className="shrink-0" aria-hidden="true" />
+              <span className="truncate">{route}</span>
+            </p>
+          )}
           {companions.length > 0 && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-xs" style={{ color: "var(--text-muted)" }}>
               <Users size={12} aria-hidden="true" />
@@ -101,16 +124,21 @@ function TripSection({ trip, canEdit, busy, rowProps, onNewStory, onAddPhotos, o
           </button>
         )}
       </header>
-      {trip.posts.length > 0 && (
+      {focusStop && focusStop.posts.length === 0 && (
+        <p className="px-1 pt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          No stories at {focusStop.locationName} yet.
+        </p>
+      )}
+      {posts.length > 0 && (
         <ul className="mt-1 flex flex-col gap-1">
-          {trip.posts.map((post) => (
-            <PostRow key={post.id} post={post} {...rowProps} />
+          {posts.map((post) => (
+            <PostRow key={post.id} post={post} stop={stopForPost(post, trip)} {...rowProps} />
           ))}
         </ul>
       )}
       {canEdit && (
         <div className="mt-1 flex gap-1.5 px-1 pb-1">
-          <button type="button" onClick={() => onNewStory(trip)} disabled={Boolean(busy)} className={SMALL_ACTION} style={{ borderColor: "var(--border)" }}>
+          <button type="button" onClick={() => onNewStory(trip, focusStop)} disabled={Boolean(busy)} className={SMALL_ACTION} style={{ borderColor: "var(--border)" }}>
             <FilePlus2 size={13} aria-hidden="true" />
             Story
           </button>
@@ -132,17 +160,22 @@ function TripSection({ trip, canEdit, busy, rowProps, onNewStory, onAddPhotos, o
  * story or upload photos (inside a trip or not), and attach existing posts.
  * A card on the right of the globe on desktop, a bottom sheet on phones.
  *
+ * Opened from a trip stop's pin (`focusStop`), it is headed by that stop and
+ * leads with its trip; the location's other trips and stories follow.
+ *
  * @param {import("../../lib/pinStore").StoryPin} pin
+ * @param {?import("../../types/hierarchy").StopPin} focusStop
  * @param {boolean} canEdit
  * @param {?string} busy - label of an action in flight ("Attaching…"), disables actions
  * @param {function(import("../../lib/pinStore").BlogPost): void} onOpenPost
- * @param {function(?import("../../types/hierarchy").Trip): void} onNewStory - in that trip, or none
+ * @param {function(?import("../../types/hierarchy").Trip, ?import("../../types/hierarchy").StopPin): void} onNewStory - in that trip (at that stop), or none
  * @param {function(?import("../../types/hierarchy").Trip): void} onAddPhotos - into that trip, or none
  * @param {function(): void} onNewTrip
  * @param {function(import("../../types/hierarchy").TripNode): void} onEditTrip
  */
 export default function PinQuickCard({
   pin,
+  focusStop = null,
   canEdit,
   busy = null,
   onClose,
@@ -160,24 +193,39 @@ export default function PinQuickCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const { posts, trips = [], photos = [] } = pin;
+  const { posts, photos = [] } = pin;
+  // The focused stop's trip leads.
+  const trips = focusStop
+    ? [...(pin.trips ?? [])].sort((a, b) => (b.id === focusStop.tripId) - (a.id === focusStop.tripId))
+    : pin.trips ?? [];
   const tripIds = new Set(trips.map((t) => t.id));
   const loosePosts = posts.filter((p) => !tripIds.has(p.tripId));
   const covers = [
+    ...(focusStop?.posts ?? []).map((p) => realCover(p.coverImage)).filter(Boolean),
     ...posts.map((p) => realCover(p.coverImage)).filter(Boolean),
     ...photos.filter((p) => p.type !== "video").map((p) => p.thumbUrl || p.url),
   ]
     .filter(Boolean)
+    .filter((src, i, all) => all.indexOf(src) === i)
     .slice(0, MAX_COVERS);
-  const subtitle = pin.placeName && pin.placeName !== pin.title ? pin.placeName : formatCoords(pin.lat, pin.lng);
+  const title = focusStop ? focusStop.locationName : pin.title;
+  const subtitle = focusStop
+    ? [focusStop.stopCount > 1 && `Stop ${focusStop.order} of ${focusStop.stopCount}`, formatDateRange(focusStop.startDate, focusStop.endDate)]
+        .filter(Boolean)
+        .join(" · ")
+    : pin.placeName && pin.placeName !== pin.title
+    ? pin.placeName
+    : formatCoords(pin.lat, pin.lng);
   const titleId = `pin-card-${pin.id}`;
-  const counts = [
-    trips.length > 0 && plural(trips.length, "trip"),
-    plural(posts.length, "story", "stories"),
-    photos.length > 0 && plural(photos.length, "photo"),
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const counts = focusStop
+    ? plural(focusStop.posts.length, "story", "stories")
+    : [
+        trips.length > 0 && plural(trips.length, "trip"),
+        plural(posts.length, "story", "stories"),
+        photos.length > 0 && plural(photos.length, "photo"),
+      ]
+        .filter(Boolean)
+        .join(" · ");
   const rowProps = { canDetach: canEdit && !pin.virtual, busy, onOpenPost, onDetach };
 
   return (
@@ -196,7 +244,7 @@ export default function PinQuickCard({
         <MapPin className="red-pin-icon mt-0.5 shrink-0" size={26} strokeWidth={2} aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="truncate text-lg font-bold leading-tight">
-            {pin.title}
+            {title}
           </h2>
           <p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
             {subtitle} · {counts}
@@ -236,6 +284,7 @@ export default function PinQuickCard({
           <TripSection
             key={trip.id}
             trip={trip}
+            focusStop={focusStop?.tripId === trip.id ? focusStop : null}
             canEdit={canEdit}
             busy={busy}
             rowProps={rowProps}

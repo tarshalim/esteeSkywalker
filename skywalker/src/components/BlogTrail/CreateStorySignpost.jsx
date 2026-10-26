@@ -14,7 +14,7 @@ export default function CreateStorySignpost({ leftPct, isFirstStory, onCreate })
   return (
     <div
       data-tour="create-story"
-      className="absolute flex -translate-x-1/2 flex-col items-center"
+      className="pointer-events-auto absolute flex -translate-x-1/2 flex-col items-center"
       style={{ left: `${leftPct}%`, bottom: `${SIGNPOST_BASE_PCT}%` }}
     >
       <div className="relative mb-3 animate-pin-float rounded-xl bg-white px-3 py-2 text-center text-sm font-bold text-slate-900 shadow-lg will-change-transform motion-reduce:animate-none dark:bg-slate-900 dark:text-white">

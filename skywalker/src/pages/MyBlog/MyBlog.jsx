@@ -16,7 +16,7 @@ import CreateStorySignpost from "../../components/BlogTrail/CreateStorySignpost"
 import TrailCyclist from "../../components/BlogTrail/TrailCyclist";
 import TrailControls from "../../components/BlogTrail/TrailControls";
 import ExpeditionTransition from "../../components/BlogTrail/ExpeditionTransition";
-import { riderProgressAt, signpostPercent, worldWidthFor } from "../../components/BlogTrail/trailLayout";
+import { CREATE_SLOT_SPAN, riderProgressAt, signpostPercent, worldWidthFor } from "../../components/BlogTrail/trailLayout";
 import BlogFilterBar from "../../components/BlogFilterBar/BlogFilterBar";
 import {
   EMPTY_FILTERS,
@@ -114,21 +114,22 @@ export default function MyBlog() {
     tripsById.get(filters.trip)?.title ?? ""
   );
 
-  const slotCount = blogs.length + (canCreate ? 1 : 0);
+  const createSpan = canCreate ? CREATE_SLOT_SPAN : 0;
+  const slotCount = blogs.length + createSpan;
   const worldWidth = worldWidthFor(slotCount, viewportWidth);
 
   // Every stop on the trail (the create post first), with its slot and the scroll progress that reaches it.
   const stops = useMemo(() => {
-    const offset = canCreate ? 1 : 0;
     const toStop = (id, slot, blog) => {
       const pct = signpostPercent(slot, slotCount);
       return { id, blog, pct, progress: riderProgressAt((worldWidth * pct) / 100, worldWidth, viewportWidth) };
     };
     return [
       ...(canCreate ? [toStop(CREATE_STOP_ID, 0, null)] : []),
-      ...blogs.map((blog, i) => toStop(blog.id, i + offset, blog)),
+      ...blogs.map((blog, i) => toStop(blog.id, i + createSpan, blog)),
     ];
-  }, [blogs, canCreate, slotCount, worldWidth, viewportWidth]);
+  }, [blogs, canCreate, createSpan, slotCount, worldWidth, viewportWidth]);
+  const createStop = stops.find((s) => s.id === CREATE_STOP_ID);
 
   const { scrollProgress, progress, riderX, cameraX, riderScreenX, isMoving, direction } = useTrailScroll(
     sectionRef,
@@ -272,7 +273,7 @@ export default function MyBlog() {
         >
           <TrailPath />
           {stops.map(({ id, blog, pct }, i) =>
-            blog ? (
+            blog && (
               <TrailSignpost
                 key={id}
                 blog={blog}
@@ -283,18 +284,25 @@ export default function MyBlog() {
                 onOpen={openBlog}
                 onToggleFavorite={canEdit ? toggleFavorite : undefined}
               />
-            ) : (
-              <CreateStorySignpost
-                key={id}
-                leftPct={pct}
-                isFirstStory={!loading && allBlogs.length === 0}
-                onCreate={() => navigate("/blogs/new")}
-              />
             )
           )}
         </motion.div>
 
         <TrailCyclist x={riderScreenX} isMoving={isMoving} direction={direction} />
+
+        {/* The create post rides its own camera-tracked layer so it stays in front of the rider (z-30) at the trailhead. */}
+        {createStop && (
+          <motion.div
+            className="pointer-events-none absolute inset-y-0 left-0 z-35 will-change-transform"
+            style={{ x: cameraX, width: worldWidth }}
+          >
+            <CreateStorySignpost
+              leftPct={createStop.pct}
+              isFirstStory={!loading && allBlogs.length === 0}
+              onCreate={() => navigate("/blogs/new")}
+            />
+          </motion.div>
+        )}
 
         <header
           data-tour="journey-header"

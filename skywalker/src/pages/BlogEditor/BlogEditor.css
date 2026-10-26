@@ -976,6 +976,12 @@
   max-width: 40rem;
   margin-bottom: 1.5rem;
 }
+.editor-trip-stop {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 24rem;
+}
 .editor-trip-companions {
   margin: 0;
   font-size: var(--editor-text-sm, 0.85rem);

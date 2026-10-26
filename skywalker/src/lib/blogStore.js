@@ -2,7 +2,7 @@ import { delay, readJSON, writeJSON, makeId } from "./storage";
 import { supabase, unwrap, fromRows } from "./supabase";
 import { createCollection } from "./collection";
 import { deleteBlogAudio, getBlogMusic } from "./music";
-import { collectMediaPaths, deleteMediaFiles } from "./files";
+import { deleteOrphanedMedia } from "./files";
 import { notifyDataChanged } from "./liveSync";
 import { hasCoords } from "../utils/geo";
 import { findBuiltInTemplate, normalizeTemplate } from "./templates";
@@ -141,21 +141,6 @@ export async function upsertBlog(blog) {
   return saveBlog(created, blogs);
 }
 
-// Templates copy a post's cover/canvas URLs, and gallery photos or pins can
-// point at the same upload, so only files nothing else references are removed.
-async function deleteOrphanedMedia(blog) {
-  const paths = collectMediaPaths(blog);
-  if (paths.size === 0) return;
-  try {
-    const results = await Promise.all(["blogs", "templates", "gallery_items", "locations"].map((t) => supabase.from(t).select("data")));
-    const stillUsed = new Set();
-    for (const rows of results.map(unwrap)) for (const row of rows) collectMediaPaths(row.data, stillUsed);
-    await deleteMediaFiles([...paths].filter((p) => !stillUsed.has(p)));
-  } catch (err) {
-    console.warn("Couldn't clean up media for deleted post", blog.id, err);
-  }
-}
-
 export async function deleteBlog(id) {
   if (supabase) {
     const blog = await getBlogById(id);
@@ -164,7 +149,7 @@ export async function deleteBlog(id) {
     if (deleted.length === 0) throw new Error("This post may already be gone, or you don't have permission to delete it.");
     // The post is gone either way; leftover files are only logged.
     notifyDataChanged("blogs");
-    await Promise.all([deleteBlogAudio(getBlogMusic(blog)?.storagePath), deleteOrphanedMedia(blog)]);
+    await Promise.all([deleteBlogAudio(getBlogMusic(blog)?.storagePath), deleteOrphanedMedia(blog, `post ${blog.id}`)]);
     return true;
   }
   const blogs = await loadBlogs();
@@ -213,7 +198,8 @@ export async function setBlogsPin(blogIds, pin) {
         ? { name: blog.location?.name || pin.placeName || pin.title, lat: pin.lat, lng: pin.lng }
         : undefined;
     const tripId = pin && blog.pinId === pin.id ? blog.tripId ?? null : null;
-    saved.push(await upsertBlog({ id, pinId: pin?.id ?? null, tripId, ...(location && { location }) }));
+    const stopId = tripId ? blog.stopId ?? null : null;
+    saved.push(await upsertBlog({ id, pinId: pin?.id ?? null, tripId, stopId, ...(location && { location }) }));
   }
   return saved;
 }

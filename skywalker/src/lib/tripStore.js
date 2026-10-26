@@ -1,6 +1,7 @@
 import { delay, readJSON, writeJSON, makeId } from "./storage";
 import { supabase, unwrap } from "./supabase";
 import { notifyDataChanged } from "./liveSync";
+import { deleteOrphanedMedia } from "./files";
 import { sortStops, validateTrip } from "./hierarchy";
 
 // Trips API: Supabase `trips` + `trip_companions` + `trip_stops` when
@@ -122,6 +123,7 @@ export async function saveTrip(input) {
     id: input.id || makeId("trip"),
     locationId: input.locationId,
     title: (input.title ?? "").trim(),
+    coverImage: input.coverImage ?? "",
     startDate: input.startDate,
     endDate: input.endDate || input.startDate,
     note: input.note ?? "",
@@ -155,8 +157,10 @@ export async function saveTrip(input) {
  */
 export async function deleteTrip(id) {
   if (supabase) {
-    const deleted = unwrap(await supabase.from("trips").delete().eq("id", id).select("id"));
+    const deleted = unwrap(await supabase.from("trips").delete().eq("id", id).select("data"));
     if (deleted.length === 0) throw new Error("This trip may already be gone, or you don't have permission to delete it.");
+    // Its cover upload; the trip is gone either way, leftover files are only logged.
+    await deleteOrphanedMedia(deleted[0].data, `trip ${id}`);
   } else {
     writeJSON(TRIPS_KEY, readJSON(TRIPS_KEY, []).filter((t) => t.id !== id));
     for (const key of ["skywalker.blogs.v1", "skywalker.photos.v1"]) {

@@ -12,10 +12,10 @@ import AttachStoriesDialog from "../PinQuickCard/AttachStoriesDialog";
 import TripDialog from "../TripPicker/TripDialog";
 import { getPhotos } from "../../lib/photoStore";
 import { deleteTrip, getTrips, saveTrip } from "../../lib/tripStore";
-import { allCompanions, tripContinents, tripCountries } from "../../lib/hierarchy";
+import { allCompanions, stopHasCoords, stopPinsOf, tripContinents, tripCountries } from "../../lib/hierarchy";
 import { getBlogs, setBlogsPin } from "../../lib/blogStore";
 import * as pinStore from "../../lib/pinStore";
-import { buildStoryPins, materializePin, pinsNear } from "../../lib/pinStore";
+import { buildStoryPins, isShownByStop, materializePin, pinsNear } from "../../lib/pinStore";
 import { useDataChanges } from "../../lib/liveSync";
 import { isPointInView, clusterPhotosByLocation, hasCoords } from "../../utils/geo";
 import { useAuth } from "../../lib/auth";
@@ -33,8 +33,9 @@ const SHEET_LAT_OFFSET_DEG = 3;
 
 const reportLoadError = (what) => (err) => console.error(`Failed to load ${what}`, err);
 
-/** "pin=…&trip=…" for the editor/gallery deep links that start inside a location (and trip). */
-const hierarchyQuery = (pin, trip) => new URLSearchParams({ pin: pin.id, ...(trip && { trip: trip.id }) }).toString();
+/** "pin=…&trip=…&stop=…" for the editor/gallery deep links that start inside a location (and trip, and stop). */
+const hierarchyQuery = (pin, trip, stop = null) =>
+  new URLSearchParams({ pin: pin.id, ...(trip && { trip: trip.id }), ...(trip && stop && { stop: stop.stopId }) }).toString();
 
 /**
  * State-owning container for the interactive globe experience — rendered
@@ -74,6 +75,8 @@ export default function GlobeExplorer({
   const [selectedCountry, setSelectedCountry] = useState(null); // { code, name } | null
   const [selectedLocationId, setSelectedLocationId] = useState(null);
   const [selectedCustomPinId, setSelectedCustomPinId] = useState(null);
+  // A trip stop's pin: opens its location's card (selectedCustomPinId), focused on the stop.
+  const [selectedStopId, setSelectedStopId] = useState(null);
   const [hoveredCountry, setHoveredCountry] = useState(null); // { code, name } | null
   const [hoveredLocationId, setHoveredLocationId] = useState(null);
 
@@ -137,6 +140,14 @@ export default function GlobeExplorer({
     () => storyPins.find((p) => p.id === selectedCustomPinId) ?? null,
     [storyPins, selectedCustomPinId]
   );
+  // Resolved through the open card, so a stop that's gone (or a closed card) selects nothing.
+  const selectedStop = useMemo(
+    () =>
+      (selectedStopId &&
+        selectedStoryPin?.trips.flatMap((trip) => stopPinsOf(trip, selectedStoryPin.id)).find((s) => s.id === selectedStopId)) ||
+      null,
+    [selectedStoryPin, selectedStopId]
+  );
   const pinTitles = useMemo(() => new Map(customPins.map((p) => [p.id, p.title])), [customPins]);
 
   // The navbar search drives this globe, hiding pins that don't match.
@@ -163,11 +174,13 @@ export default function GlobeExplorer({
         : storyPins,
     [storyPins, pinQuery]
   );
-  // Multi-stop trips at the visible pins, drawn as journey arcs.
+  // Trips at the visible pins: each placed stop is a pin, multi-stop routes get arcs.
   const visibleJourneys = useMemo(
-    () => visibleCustomPins.flatMap((pin) => pin.trips.filter((t) => t.stops?.length > 1).map((trip) => ({ trip, pinId: pin.id }))),
+    () => visibleCustomPins.flatMap((pin) => pin.trips.filter((t) => t.stops?.length > 0).map((trip) => ({ trip, pinId: pin.id }))),
     [visibleCustomPins]
   );
+  // A location whose trip already stops on that spot is drawn by the stop pin.
+  const globeLocationPins = useMemo(() => visibleCustomPins.filter((p) => !isShownByStop(p)), [visibleCustomPins]);
   const visibleBlogs = useMemo(
     () =>
       pinQuery
@@ -259,12 +272,14 @@ export default function GlobeExplorer({
   const handleCountryClick = useCallback((code, name) => {
     setSelectedLocationId(null);
     setSelectedCustomPinId(null);
+    setSelectedStopId(null);
     setSelectedCountry((prev) => (prev?.code === code ? null : code ? { code, name } : null));
   }, []);
 
   const handlePinClick = useCallback((pin) => {
     setSelectedCountry(null);
     setSelectedCustomPinId(null);
+    setSelectedStopId(null);
     setSelectedLocationId((prev) => (prev === pin?.id ? null : pin?.id ?? null));
   }, []);
 
@@ -279,6 +294,7 @@ export default function GlobeExplorer({
       setSelectedCountry(null);
       setSelectedLocationId(null);
       setSelectedCustomPinId(pin?.id ?? null);
+      setSelectedStopId(null);
       if (pin) flyToPin(pin);
     },
     [flyToPin]
@@ -287,10 +303,20 @@ export default function GlobeExplorer({
   // PhotoGlobe already passes null when the selected pin is clicked again.
   const handleCustomPinClick = selectStoryPin;
 
+  // A stop pin opens its trip's location card, focused on that stop.
+  const handleStopClick = useCallback(
+    (stopPin) => {
+      selectStoryPin(stopPin ? { id: stopPin.pinId, lat: stopPin.lat, lng: stopPin.lng } : null);
+      setSelectedStopId(stopPin?.id ?? null);
+    },
+    [selectStoryPin]
+  );
+
   const handleClearFilter = useCallback(() => {
     setSelectedCountry(null);
     setSelectedLocationId(null);
     setSelectedCustomPinId(null);
+    setSelectedStopId(null);
   }, []);
 
   useEffect(() => {
@@ -356,6 +382,7 @@ export default function GlobeExplorer({
       setSelectedCountry(null);
       setSelectedLocationId(null);
       setSelectedCustomPinId(result.id);
+      setSelectedStopId(null);
     } else if (result.kind === "trip") {
       // A trip opens its location's quick card.
       const hub = storyPins.find((p) => p.id === result.pinId);
@@ -446,24 +473,16 @@ export default function GlobeExplorer({
   // Step 1 of the cascade from the globe: the location, optionally with its
   // first trip (PinNamePopover's "Start a trip here").
   const handleCreatePin = useCallback(
-    async ({ title, note, placeName, trip = null }) => {
+    async ({ title, note, placeName, startTrip = false }) => {
       if (!pendingPin) return;
       try {
         const pin = await pinStore.createPin({ lat: pendingPin.lat, lng: pendingPin.lng, title, note, placeName });
         setCustomPins((prev) => [...prev, pin]);
-        if (trip) {
-          try {
-            const saved = await saveTrip({ ...trip, locationId: pin.id });
-            setTrips((prev) => [saved, ...prev]);
-          } catch (err) {
-            // The pin is saved; the trip can be added again from its card.
-            console.error(err);
-            window.alert(`Pin saved, but the trip couldn't be: ${err.message}`);
-          }
-        }
         setPendingPin(null);
-        // Straight into its quick card: write a story here or attach some.
+        // Straight into its quick card: write a story here or attach some —
+        // or, for "Start a trip here", the new-trip wizard over it.
         selectStoryPin(pin);
+        if (startTrip) setTripDialog({ trip: null });
       } catch (err) {
         console.error(err);
         window.alert(`Couldn't save pin: ${err.message}`);
@@ -495,14 +514,17 @@ export default function GlobeExplorer({
   }, []);
 
   const handleOpenPost = useCallback((post) => navigate(`/blogs/${post.id}`), [navigate]);
-  const handleCloseCard = useCallback(() => setSelectedCustomPinId(null), []);
+  const handleCloseCard = useCallback(() => {
+    setSelectedCustomPinId(null);
+    setSelectedStopId(null);
+  }, []);
 
-  // Step 3 of the cascade: content at this location, inside `trip` when given.
+  // Step 3 of the cascade: content at this location, inside `trip` (and at `stop`) when given.
   const handleNewStory = useCallback(
-    (trip = null) =>
+    (trip = null, stop = null) =>
       runCardAction("Opening…", async () => {
         const pin = await materializePin(selectedStoryPin, setBlogsPin);
-        navigate(`/blogs/new?${hierarchyQuery(pin, trip)}`);
+        navigate(`/blogs/new?${hierarchyQuery(pin, trip, stop)}`);
       }),
     [runCardAction, selectedStoryPin, navigate]
   );
@@ -524,8 +546,11 @@ export default function GlobeExplorer({
       setTrips((prev) => [saved, ...prev.filter((t) => t.id !== saved.id)]);
       setSelectedCustomPinId(pin.id);
       setTripDialog(null);
+      // "Save & View on Globe": the new route's pins and arcs are drawn from
+      // `trips` straight away; fly to where the journey begins.
+      if (!tripDialog?.trip) flyToPin(saved.stops.find(stopHasCoords) ?? pin);
     },
-    [selectedStoryPin, tripDialog]
+    [selectedStoryPin, tripDialog, flyToPin]
   );
 
   const handleDeleteTrip = useCallback(async () => {
@@ -576,12 +601,13 @@ export default function GlobeExplorer({
           <PhotoGlobe
             ref={globeRef}
             photos={visiblePhotos}
-            customPins={visibleCustomPins}
+            customPins={globeLocationPins}
             journeys={visibleJourneys}
             blogs={visibleBlogs}
             selectedCountryCode={selectedCountry?.code ?? null}
             selectedLocationId={selectedLocationId}
             selectedCustomPinId={selectedCustomPinId}
+            selectedStopId={selectedStop?.id ?? null}
             labelMode={prefs.labelMode}
             showBorders={prefs.showBorders}
             showGrid={prefs.showGrid}
@@ -596,6 +622,7 @@ export default function GlobeExplorer({
             onPinClick={handlePinClick}
             onPinHover={handlePinHover}
             onCustomPinClick={handleCustomPinClick}
+            onStopClick={handleStopClick}
             onPinDropAt={handlePinDropAt}
           />
         </ErrorBoundary>
@@ -604,6 +631,7 @@ export default function GlobeExplorer({
             <PinQuickCard
               key={selectedStoryPin.id}
               pin={selectedStoryPin}
+              focusStop={selectedStop}
               canEdit={canEdit}
               busy={cardBusy}
               onClose={handleCloseCard}

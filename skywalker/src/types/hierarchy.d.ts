@@ -1,5 +1,12 @@
 /**
- * The travel data hierarchy: Location -> Trip -> (BlogPost, GalleryItem).
+ * The travel data hierarchy: Location -> Trip -> TripStop, with BlogPost and
+ * GalleryItem as optional attachments of a trip (and, for posts, a stop).
+ *
+ * On the globe, each placed TripStop is a pin (StopPin): a 1-stop trip is one
+ * pin, a many-stop trip a route of pins joined by animated arcs. A Location
+ * is the trip's home in the schema and still draws its own pin, unless one of
+ * its trips' stops already stands on that spot. Blogs never create pins; a
+ * trip or stop may have zero, one or many of them.
  *
  * The app is plain JS; these interfaces document the shapes the stores read
  * and write and are referenced from JSDoc, e.g.
@@ -74,6 +81,8 @@ export interface Trip {
   id: string;
   locationId: Location["id"];
   title: string;
+  /** Uploaded cover for its boarding pass; trips without one borrow a post's cover. Kept in `data`. */
+  coverImage?: string;
   startDate: ISODate;
   endDate: ISODate;
   note?: string;
@@ -91,6 +100,8 @@ export interface BlogPost {
   /** The Location this post is filed under (column `blogs.location_id`). Derived from the trip when there is one. */
   pinId: Location["id"] | null;
   tripId: Trip["id"] | null;
+  /** Which of the trip's stops the post is set at (kept in `data`); null = anywhere on the trip. */
+  stopId?: TripStop["id"] | null;
   location: { name: string; lat?: number; lng?: number };
   countryCode: string;
   countryName: string;
@@ -152,6 +163,25 @@ export interface TripNode extends Trip {
   photos: GalleryItem[];
 }
 
+/**
+ * A placed stop as a globe pin (hierarchy.stopPinsOf). Clicking it opens its
+ * trip's location card, focused on this stop.
+ */
+export interface StopPin extends TripStop {
+  /** `stop:<tripId>:<stopId>`, unique across trips. */
+  id: string;
+  stopId: TripStop["id"];
+  tripId: Trip["id"];
+  /** The trip's home Location. */
+  pinId: Location["id"];
+  tripTitle: string;
+  /** 1-based position on the route, among placed stops. */
+  order: number;
+  stopCount: number;
+  /** Posts set at this stop (possibly none). */
+  posts: BlogPost[];
+}
+
 /** A location with everything under it joined on — what a globe pin renders. */
 export interface LocationNode extends Location {
   trips: TripNode[];
@@ -167,6 +197,7 @@ export interface LocationNode extends Location {
 /** Draft state of the trip form while creating/editing. */
 export interface TripDraft {
   title: string;
+  coverImage: string;
   startDate: ISODate;
   endDate: ISODate;
   note: string;

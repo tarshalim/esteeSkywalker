@@ -87,6 +87,19 @@ export function autoPinFor(candidates, point) {
   return pinsNear(candidates, point)[0]?.id ?? "new";
 }
 
+/**
+ * Whether a location's own pin is redundant on the globe: one of its trips
+ * has a placed stop on (within PIN_MERGE_RADIUS_KM of) that spot, so the stop
+ * pin stands for it and opens the same card.
+ * @param {StoryPin} storyPin
+ */
+export function isShownByStop(storyPin) {
+  if (storyPin.virtual || !hasCoords(storyPin)) return false;
+  return storyPin.trips.some((trip) =>
+    (trip.stops ?? []).some((stop) => hasCoords(stop) && distanceKm(stop, storyPin) <= PIN_MERGE_RADIUS_KM)
+  );
+}
+
 const byNewestTrip = (a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? "");
 
 /**
