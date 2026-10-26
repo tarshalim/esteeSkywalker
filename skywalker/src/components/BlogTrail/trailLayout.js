@@ -27,9 +27,19 @@ export const CREATE_SLOT_SPAN = 0.6;
  * Signposts are spaced at even percentage intervals between the first and last slots.
  * `index` and `count` may be fractional (see CREATE_SLOT_SPAN).
  */
-export function signpostPercent(index, count) {
+export function signpostPercent(index, count, firstPct = FIRST_POST_PCT) {
   if (count <= 1) return 40;
-  return FIRST_POST_PCT + (index / (count - 1)) * (LAST_POST_PCT - FIRST_POST_PCT);
+  return firstPct + (index / (count - 1)) * (LAST_POST_PCT - firstPct);
+}
+
+/**
+ * The create post stands just ahead of (right of) the rider's starting spot, so the rider
+ * doesn't hide it at the trailhead. Mirrors the sprite width in CyclistSprite.css.
+ */
+export function createPostPercent(worldWidth, viewportWidth) {
+  const riderHalfWidth = Math.min(Math.max(160, viewportWidth * 0.18), 260) / 2;
+  const x = viewportWidth * RIDER_INSET + riderHalfWidth + 60;
+  return Math.max(FIRST_POST_PCT, (x / worldWidth) * 100);
 }
 
 /** Each post gets roughly 45% of a screen of trail, never less than one screen in total. */
