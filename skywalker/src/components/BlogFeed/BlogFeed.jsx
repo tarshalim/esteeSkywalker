@@ -11,7 +11,7 @@ import {
   LayoutGrid,
   X,
 } from "lucide-react";
-import { formatBlogDate } from "../../utils/dateFilters";
+import { formatBlogDate } from "../../lib/dateFilters";
 import JourneyPortal from "../JourneyPortal/JourneyPortal";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 import Select from "../Select/Select";

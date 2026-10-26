@@ -24,7 +24,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useTheme } from "../../lib/theme";
-import { GLOBE_HASH, GLOBE_PATH } from "../../utils/routes";
+import { GLOBE_HASH, GLOBE_PATH } from "../../lib/routes";
 import { ROLE_LABELS, useAuth } from "../../lib/auth";
 import { useTour } from "../../lib/tour";
 import { useSearch } from "../../lib/search";

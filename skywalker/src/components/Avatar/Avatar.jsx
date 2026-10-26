@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DEFAULT_AVATAR, avatarFor } from "../../lib/avatars";
 
 /**
- * Round profile picture from public/assets/user-icons. Falls back to the
+ * Round profile picture from public/avatars. Falls back to the
  * default icon if the chosen file fails to load (renamed/removed asset).
  *
  * @param {{ user?: object | null, src?: string, size?: number, className?: string }} props

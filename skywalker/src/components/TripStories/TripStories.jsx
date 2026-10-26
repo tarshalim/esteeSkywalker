@@ -13,9 +13,9 @@ import { useDataChanges } from "../../lib/liveSync";
 import { useAuth } from "../../lib/auth";
 import { useAsync } from "../../hooks/useAsync";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { formatBlogDate, formatDateRange } from "../../utils/dateFilters";
-import { continentForCountryCode } from "../../utils/geo";
-import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../utils/countries";
+import { formatBlogDate, formatDateRange } from "../../lib/dateFilters";
+import { continentForCountryCode } from "../../lib/geo";
+import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../lib/countries";
 import { findArt } from "../../data/scrapbookArt";
 import "./TripStories.css";
 

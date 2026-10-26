@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { Check, Search, X } from "lucide-react";
-import { matchesQuery } from "../../utils/search";
-import { formatBlogDate } from "../../utils/dateFilters";
+import { matchesQuery } from "../../lib/textMatch";
+import { formatBlogDate } from "../../lib/dateFilters";
 import { realCover } from "../../lib/media";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 

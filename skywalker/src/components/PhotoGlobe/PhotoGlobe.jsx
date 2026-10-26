@@ -1,11 +1,11 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import Globe from "react-globe.gl";
-import { angularDistanceDeg, clusterPhotosByLocation, escapeHtml, slerpLatLng } from "../../utils/geo";
-import { formatDateRange } from "../../utils/dateFilters";
+import { angularDistanceDeg, clusterPhotosByLocation, escapeHtml, slerpLatLng } from "../../lib/geo";
+import { formatDateRange } from "../../lib/dateFilters";
 import { journeyLegs, stopPinsOf } from "../../lib/hierarchy";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { createIdyllicTexture, createYellowBlueGlobeDataUrl, enhanceTexture } from "../../utils/proceduralGlobeTexture";
+import { createIdyllicTexture, createYellowBlueGlobeDataUrl, enhanceTexture } from "../../lib/proceduralGlobeTexture";
 import { useTheme } from "../../lib/theme";
 import "./PhotoGlobe.css";
 

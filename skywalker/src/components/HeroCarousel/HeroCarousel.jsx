@@ -7,10 +7,10 @@ const BASE = import.meta.env.BASE_URL;
 // The same three riders under four different skies — crossfading keeps the
 // silhouettes still while the light changes behind them.
 const FRAMES = [
-  { src: `${BASE}assets/sil-pictureframe.png`, alt: "Three cyclists silhouetted at the water's edge under a soft golden sky" },
-  { src: `${BASE}assets/sil-pictureframe02.png`, alt: "Three cyclists silhouetted at the water's edge, second sky" },
-  { src: `${BASE}assets/sil-pictureframe03.png`, alt: "Three cyclists silhouetted at the water's edge under a fiery sunset" },
-  { src: `${BASE}assets/sil-pictureframe04.png`, alt: "Three cyclists silhouetted at the water's edge, fourth sky" },
+  { src: `${BASE}frames/sil-pictureframe.png`, alt: "Three cyclists silhouetted at the water's edge under a soft golden sky" },
+  { src: `${BASE}frames/sil-pictureframe02.png`, alt: "Three cyclists silhouetted at the water's edge, second sky" },
+  { src: `${BASE}frames/sil-pictureframe03.png`, alt: "Three cyclists silhouetted at the water's edge under a fiery sunset" },
+  { src: `${BASE}frames/sil-pictureframe04.png`, alt: "Three cyclists silhouetted at the water's edge, fourth sky" },
 ];
 
 const AUTOPLAY_MS = 6000;

@@ -9,8 +9,8 @@ import TourBanner from "../../components/Tour/TourBanner";
 import HeroCarousel from "../../components/HeroCarousel/HeroCarousel";
 import { getBlogs } from "../../lib/blogStore";
 import { useAsync } from "../../hooks/useAsync";
-import { hasCoords } from "../../utils/geo";
-import { GLOBE_HASH } from "../../utils/routes";
+import { hasCoords } from "../../lib/geo";
+import { GLOBE_HASH } from "../../lib/routes";
 import "./Landing.css";
 
 export default function Landing() {

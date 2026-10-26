@@ -23,11 +23,11 @@ import FilterBar from "../../components/FilterBar/FilterBar";
 import MediaView from "../../components/MediaView/MediaView";
 import PhotoLightbox from "../../components/PhotoLightbox/PhotoLightbox";
 import PhotoUploadModal from "../../components/PhotoUploadModal/PhotoUploadModal";
-import { countryCodeToFlagEmoji } from "../../utils/countries";
-import { formatDate } from "../../utils/dateFilters";
+import { countryCodeToFlagEmoji } from "../../lib/countries";
+import { formatDate } from "../../lib/dateFilters";
 import { useAuth } from "../../lib/auth";
 import { usePageSearch, useSearch } from "../../lib/search";
-import { matchesQuery } from "../../utils/search";
+import { matchesQuery } from "../../lib/textMatch";
 import "./Gallery.css";
 
 // Module-level so useFilteredItems' memos aren't invalidated every render.

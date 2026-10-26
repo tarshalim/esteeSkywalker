@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { countryCodeToFlagEmoji } from "../../utils/countries";
+import { countryCodeToFlagEmoji } from "../../lib/countries";
 import "./CountrySelect.css";
 
 const MAX_RESULTS = 8;

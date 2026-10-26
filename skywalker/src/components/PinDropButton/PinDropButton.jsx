@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MapPin } from "lucide-react";
 import { usePlaceName } from "../../hooks/usePlaceName";
-import { formatCoords } from "../../utils/geo";
+import { formatCoords } from "../../lib/geo";
 import "./PinDropButton.css";
 
 // Movement (px) before a press counts as a drag rather than a tap.

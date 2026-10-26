@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Lottie from "lottie-react";
-import animationData from "../../animations/Mum.json";
+import animationData from "../../assets/animations/Mum.json";
 import "./CyclistSprite.css";
 
 /** Pedaling sprite that speeds up/slows down with scroll activity and flips with direction. */

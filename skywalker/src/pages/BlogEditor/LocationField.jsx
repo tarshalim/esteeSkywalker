@@ -3,7 +3,7 @@ import { AnimatePresence } from "framer-motion";
 import { Globe2, LoaderCircle, LocateFixed, MapPin, Search, X } from "lucide-react";
 import { reverseGeocode, searchPlaces } from "../../lib/geocode";
 import { autoPinFor, distanceKm, pinsNear } from "../../lib/pinStore";
-import { formatCoords } from "../../utils/geo";
+import { formatCoords } from "../../lib/geo";
 import Select from "../../components/Select/Select";
 import GlobePickerModal from "./GlobePickerModal";
 

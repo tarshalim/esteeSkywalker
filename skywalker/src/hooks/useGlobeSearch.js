@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCountriesGeoJson } from "./useCountriesGeoJson";
 import { searchPlaces } from "../lib/geocode";
-import { getFeatureCentroid } from "../utils/geo";
+import { getFeatureCentroid } from "../lib/geo";
 import { allCompanions } from "../lib/hierarchy";
-import { formatDateRange } from "../utils/dateFilters";
+import { formatDateRange } from "../lib/dateFilters";
 
 const MAX_RESULTS = 8;
 // Places come from a network geocoder, so wait for a typing pause.

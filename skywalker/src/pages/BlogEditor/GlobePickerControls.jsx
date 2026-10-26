@@ -3,8 +3,8 @@ import { Crosshair, Hand, LoaderCircle, Search, X } from "lucide-react";
 import Select from "../../components/Select/Select";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { searchPlaces } from "../../lib/geocode";
-import { countryCodeToFlagEmoji, SMALL_COUNTRY_CENTERS } from "../../utils/countries";
-import { featureView } from "../../utils/geo";
+import { countryCodeToFlagEmoji, SMALL_COUNTRY_CENTERS } from "../../lib/countries";
+import { featureView } from "../../lib/geo";
 import "./GlobePicker.css";
 
 const SEARCH_DEBOUNCE_MS = 300;

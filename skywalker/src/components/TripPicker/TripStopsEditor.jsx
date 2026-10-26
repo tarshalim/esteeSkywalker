@@ -3,8 +3,8 @@ import { ArrowDown, ArrowUp, MapPinned, Plus, Search, Trash2 } from "lucide-reac
 import { searchPlaces } from "../../lib/geocode";
 import { blankStop, stopHasCoords } from "../../lib/hierarchy";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { CONTINENTS, COUNTRY_TO_CONTINENT, SMALL_COUNTRY_CENTERS, countryCodeToFlagEmoji } from "../../utils/countries";
-import { continentForCountryCode, findCountryForPoint, formatCoords } from "../../utils/geo";
+import { CONTINENTS, COUNTRY_TO_CONTINENT, SMALL_COUNTRY_CENTERS, countryCodeToFlagEmoji } from "../../lib/countries";
+import { continentForCountryCode, findCountryForPoint, formatCoords } from "../../lib/geo";
 import Select from "../Select/Select";
 import { FIELD_INPUT, FIELD_LABEL, fieldInputStyle, fieldLabelStyle as labelStyle } from "./fieldStyles";
 

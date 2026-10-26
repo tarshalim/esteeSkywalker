@@ -8,10 +8,10 @@ import BackgroundAudioPlayer from "../BackgroundAudioPlayer/BackgroundAudioPlaye
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 import { realCover } from "../../lib/media";
 import { importCanvasLayout } from "../../lib/canvasLayout";
-import { countryCodeToFlagEmoji } from "../../utils/countries";
-import { formatBlogDate } from "../../utils/dateFilters";
-import { hasCoords } from "../../utils/geo";
-import { GLOBE_HASH } from "../../utils/routes";
+import { countryCodeToFlagEmoji } from "../../lib/countries";
+import { formatBlogDate } from "../../lib/dateFilters";
+import { hasCoords } from "../../lib/geo";
+import { GLOBE_HASH } from "../../lib/routes";
 import { useAuth } from "../../lib/auth";
 import SectionThread from "../SectionComments/SectionThread";
 import { useSectionThreads } from "../SectionComments/useSectionThreads";

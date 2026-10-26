@@ -4,7 +4,7 @@ import { createCollection } from "./collection";
 import { deleteBlogAudio, getBlogMusic } from "./music";
 import { deleteOrphanedMedia } from "./files";
 import { notifyDataChanged } from "./liveSync";
-import { hasCoords } from "../utils/geo";
+import { hasCoords } from "./geo";
 import { findBuiltInTemplate, normalizeTemplate } from "./templates";
 
 // Blogs/templates API: Supabase `blogs`/`templates` tables when configured,

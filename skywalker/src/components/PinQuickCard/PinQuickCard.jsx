@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { ChevronRight, FilePlus2, ImagePlus, Link2, LoaderCircle, Luggage, MapPin, Pencil, Route, Unlink, Users, X } from "lucide-react";
-import { formatBlogDate, formatDateRange } from "../../utils/dateFilters";
+import { formatBlogDate, formatDateRange } from "../../lib/dateFilters";
 import { formatWeather } from "../../lib/weather";
-import { formatCoords } from "../../utils/geo";
+import { formatCoords } from "../../lib/geo";
 import { realCover } from "../../lib/media";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
 import { allCompanions, routeLabel, stopForPost } from "../../lib/hierarchy";

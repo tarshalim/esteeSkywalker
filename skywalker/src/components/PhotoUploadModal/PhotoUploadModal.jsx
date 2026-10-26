@@ -6,12 +6,12 @@ import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata, formatFileSize } from "../../lib/exif";
 import { cityFromPlaceName, reverseGeocode } from "../../lib/geocode";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { findCountryForPoint, continentForCountryCode, centroidForCountryCode } from "../../utils/geo";
-import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../utils/countries";
+import { findCountryForPoint, continentForCountryCode, centroidForCountryCode } from "../../lib/geo";
+import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../lib/countries";
 import { createPin, distanceKm, pinsNear } from "../../lib/pinStore";
 import { saveTrip } from "../../lib/tripStore";
 import { NEW_TRIP, emptyTripDraft, isWithinTrip, parseTags, tripCovering, validateTrip } from "../../lib/hierarchy";
-import { formatDate, formatDateRange } from "../../utils/dateFilters";
+import { formatDate, formatDateRange } from "../../lib/dateFilters";
 import CountrySelect from "../CountrySelect/CountrySelect";
 import MediaView from "../MediaView/MediaView";
 import TripSelect from "../TripPicker/TripSelect";
@@ -55,7 +55,7 @@ function AutoFillHint({ value, auto, source, onClear, onRestore }) {
 /**
  * "+ Add Media" flow for the Gallery: picks (or drops) a file, extracts EXIF
  * date/time, GPS and camera client-side (src/lib/exif.js), resolves GPS to a
- * country via point-in-polygon against countries.geojson (src/utils/geo.js)
+ * country via point-in-polygon against countries.geojson (src/lib/geo.js)
  * and to a "City, Country" name via Photon (src/lib/geocode.js), and falls
  * back to manual Country/Date input when EXIF/GPS is missing or absent.
  *

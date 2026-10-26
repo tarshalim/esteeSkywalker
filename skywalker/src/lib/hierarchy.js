@@ -1,4 +1,4 @@
-import { formatDateRange } from "../utils/dateFilters";
+import { formatDateRange } from "./dateFilters";
 
 // Pure helpers for the Location -> Trip -> (posts, gallery items) hierarchy.
 // No store imports, so filters, pickers and search can all share them.

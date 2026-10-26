@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCountriesGeoJson } from "./useCountriesGeoJson";
 import { cachedPlaceName, reverseGeocode } from "../lib/geocode";
-import { countryContainingPoint, formatCoords, oceanForPoint } from "../utils/geo";
+import { countryContainingPoint, formatCoords, oceanForPoint } from "../lib/geo";
 
 // While a pin is being dragged, only ask the network once the pointer rests;
 // the local country lookup covers the frames in between.

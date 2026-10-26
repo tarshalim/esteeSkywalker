@@ -1,4 +1,4 @@
-// Pre-rendered profile pictures in public/assets/user-icons/. Files in public/
+// Pre-rendered profile pictures in public/avatars/. Files in public/
 // can't be globbed at build time, so add new PNGs to this list too.
 const AVATAR_FILES = ["female-user.png", "male-user.png", "unknown-user.png"];
 
@@ -7,7 +7,7 @@ const AVATAR_FILES = ["female-user.png", "male-user.png", "unknown-user.png"];
 /** @type {Avatar[]} */
 export const AVATARS = AVATAR_FILES.map((file) => ({
   id: file.replace(/\.png$/, ""),
-  src: `/assets/user-icons/${file}`,
+  src: `/avatars/${file}`,
   label: file.replace(/\.png$/, "").replace(/-/g, " "),
 }));
 

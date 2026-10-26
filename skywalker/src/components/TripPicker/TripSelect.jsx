@@ -1,6 +1,6 @@
 import { CalendarRange, Luggage, Plus, Users } from "lucide-react";
 import { NEW_TRIP, allCompanions, tripLabel } from "../../lib/hierarchy";
-import { formatDateRange } from "../../utils/dateFilters";
+import { formatDateRange } from "../../lib/dateFilters";
 import TripFields from "./TripFields";
 import Select from "../Select/Select";
 

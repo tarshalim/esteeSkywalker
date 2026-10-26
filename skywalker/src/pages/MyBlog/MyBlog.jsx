@@ -29,7 +29,7 @@ import {
 } from "../../lib/blogTaxonomy";
 import { formatWeather } from "../../lib/weather";
 import { usePageSearch, useSearch } from "../../lib/search";
-import { matchesQuery } from "../../utils/search";
+import { matchesQuery } from "../../lib/textMatch";
 
 /** Vertical scroll distance per px of horizontal trail — lower rides faster. */
 const SCROLL_PER_TRAIL_PX = 0.9;

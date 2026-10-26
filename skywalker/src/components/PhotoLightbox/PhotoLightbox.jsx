@@ -2,8 +2,8 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import MediaView from "../MediaView/MediaView";
-import { countryCodeToFlagEmoji } from "../../utils/countries";
-import { formatDate } from "../../utils/dateFilters";
+import { countryCodeToFlagEmoji } from "../../lib/countries";
+import { formatDate } from "../../lib/dateFilters";
 import "./PhotoLightbox.css";
 
 /**

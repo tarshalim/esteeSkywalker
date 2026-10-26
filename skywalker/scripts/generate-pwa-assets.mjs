@@ -4,7 +4,7 @@
 import sharp from "sharp";
 import { mkdir } from "node:fs/promises";
 
-const LOGO = "public/Group 118.png";
+const LOGO = "art/brand/logo.png";
 const OUT = "public/pwa";
 
 // Keep in sync with --bg in src/index.css (light / dark).

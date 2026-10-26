@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight, MapPin } from "lucide-react";
 import { usePlaceName } from "../../hooks/usePlaceName";
-import { formatCoords, isWaterName } from "../../utils/geo";
+import { formatCoords, isWaterName } from "../../lib/geo";
 import "./PinNamePopover.css";
 
 /**

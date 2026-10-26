@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Earth, LoaderCircle, Trash2, X } from "lucide-react";
 import { draftFromTrip, emptyTripDraft, validateTrip, validateTripBasics } from "../../lib/hierarchy";
-import { formatDateRange } from "../../utils/dateFilters";
+import { formatDateRange } from "../../lib/dateFilters";
 import TripFields, { CompanionIntervalsEditor } from "./TripFields";
 import TripStopsEditor from "./TripStopsEditor";
 

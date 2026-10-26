@@ -17,7 +17,7 @@ import { TourProvider } from "./lib/tour";
 import { SearchProvider } from "./lib/search";
 import Tour from "./components/Tour/Tour";
 import FlashToast from "./components/FlashToast/FlashToast";
-import { GLOBE_PATH } from "./utils/routes";
+import { GLOBE_PATH } from "./lib/routes";
 
 // The editor gets its own dedicated header (title/cover/save actions), so the
 // floating global nav would just compete with it for the same screen space.

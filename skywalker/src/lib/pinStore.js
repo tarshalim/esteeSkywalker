@@ -1,7 +1,7 @@
 import { makeId } from "./storage";
 import { createCollection } from "./collection";
 import { notifyDataChanged } from "./liveSync";
-import { angularDistanceDeg, hasCoords } from "../utils/geo";
+import { angularDistanceDeg, hasCoords } from "./geo";
 
 // Locations API: Supabase `locations` table when configured, otherwise a
 // localStorage mock. Every function returns a Promise so callers

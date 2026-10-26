@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { CalendarRange, ChevronDown, Globe, SlidersHorizontal, X } from "lucide-react";
-import { countryCodeToFlagEmoji } from "../../utils/countries";
+import { countryCodeToFlagEmoji } from "../../lib/countries";
 import "./FilterBar.css";
 
 /**

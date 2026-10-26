@@ -1,5 +1,5 @@
 import { realCover } from "./media";
-import { formatDate, formatDateRange } from "../utils/dateFilters";
+import { formatDate, formatDateRange } from "./dateFilters";
 import { companionsForPost } from "./hierarchy";
 
 // Travel-story categories. Stored on the blog object itself (the `blogs.data`

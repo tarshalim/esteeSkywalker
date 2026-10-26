@@ -5,7 +5,7 @@
 //   1. drops each sheet's background layer (and any credit line),
 //   2. rasterises the rest at high resolution,
 //   3. finds the separate pieces (alpha islands, with nearby bits merged),
-//   4. writes each one as a trimmed WebP to public/assets/scrapbook/<sheet>/,
+//   4. writes each one as a trimmed WebP to public/scrapbook/<sheet>/,
 //   5. renders a few whole sheets as page backdrops for templates,
 // and records everything in src/data/scrapbookArt.json for the editor.
 // Re-run with `npm run scrapbook-art` after adding or changing a sheet; labels
@@ -14,7 +14,7 @@ import sharp from "sharp";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 const SRC = "art/sheets";
-const OUT = "public/assets/scrapbook";
+const OUT = "public/scrapbook";
 const MANIFEST = "src/data/scrapbookArt.json";
 const RASTER = 3000; // long side of the working raster
 const PIECE_MAX = 640; // long side of each shipped piece

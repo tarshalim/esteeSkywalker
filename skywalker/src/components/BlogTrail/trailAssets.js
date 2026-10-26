@@ -1,5 +1,6 @@
-// Landscapes ship as pre-rasterised WebP (2400px wide): the source SVGs alongside them are
+// Landscapes ship as pre-rasterised WebP (2400px wide): their source SVGs are
 // 65–400 KB of gradients that the browser would otherwise re-rasterise while panning/fading.
+// Those sources live in art/journey/landscapes/ and are not shipped.
 import landscape01 from "../../assets/journey/landscapes/landscape_01.webp";
 import landscape02 from "../../assets/journey/landscapes/landscape_02.webp";
 import landscape03 from "../../assets/journey/landscapes/landscape_03.webp";
