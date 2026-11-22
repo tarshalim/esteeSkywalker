@@ -17,6 +17,7 @@ import { formatBlogDate, formatDateRange } from "../../lib/dateFilters";
 import { continentForCountryCode } from "../../lib/geo";
 import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../lib/countries";
 import { findArt } from "../../data/scrapbookArt";
+import { errorMessage } from "../../lib/errors";
 import "./TripStories.css";
 
 /** At most this many post slips fan out of an envelope. */
@@ -159,7 +160,7 @@ export default function TripStories({ blogs, onCreateTrip = null }) {
         await deleteTrip(trip.id);
         setTrips((prev) => prev.filter((t) => t.id !== trip.id));
       } catch (err) {
-        window.alert(err.message);
+        window.alert(errorMessage(err));
       } finally {
         setDeletingId(null);
       }
@@ -304,39 +305,78 @@ function Barcode({ seed }) {
 }
 
 /**
- * The pass's itinerary: each stop on a dotted timeline with its dates, and —
- * for editors — an always-there "Add blogs" that starts a post in this trip.
- * Stops themselves are only added on the 3D globe.
+ * The pass's itinerary: each stop on a dotted timeline with its dates (and how
+ * many of the trip's stories are filed under it), and — for editors — an
+ * always-there "Add blogs" that starts a post in this trip. Stops themselves
+ * are only added on the 3D globe.
+ *
+ * A trip with no stops yet but with stories falls back to a timeline of those
+ * stories (where/when each was written), marked as stories rather than stops.
  */
-function PassItinerary({ stops, tripTitle, addBlogHref }) {
-  const shown = stops.slice(0, MAX_PASS_STOPS);
-  const hidden = stops.length - shown.length;
-  return (
-    <div className="trip-pass-itinerary">
-      <span className="trip-pass-label">Itinerary</span>
-      {stops.length > 0 ? (
+function PassItinerary({ stops, posts, tripTitle, addBlogHref }) {
+  if (stops.length > 0) {
+    const shown = stops.slice(0, MAX_PASS_STOPS);
+    const hidden = stops.length - shown.length;
+    return (
+      <div className="trip-pass-itinerary">
+        <span className="trip-pass-label">Itinerary</span>
         <ol className="trip-pass-stops">
-          {shown.map((stop) => (
-            <li key={stop.id} className="trip-pass-stop">
-              <span className="trip-pass-stop-name">
-                {stop.countryCode && <span aria-hidden="true">{countryCodeToFlagEmoji(stop.countryCode)} </span>}
-                {stop.locationName}
-              </span>
-              <span className="trip-pass-stop-date">{formatDateRange(stop.startDate, stop.endDate, "short")}</span>
-            </li>
-          ))}
+          {shown.map((stop) => {
+            const storyCount = posts.filter((p) => p.stopId === stop.id).length;
+            return (
+              <li key={stop.id} className="trip-pass-stop">
+                <span className="trip-pass-stop-name">
+                  {stop.countryCode && <span aria-hidden="true">{countryCodeToFlagEmoji(stop.countryCode)} </span>}
+                  {stop.locationName}
+                </span>
+                {storyCount > 0 && <span className="trip-pass-stop-stories">{storyCount === 1 ? "1 story" : `${storyCount} stories`}</span>}
+                <span className="trip-pass-stop-date">{formatDateRange(stop.startDate, stop.endDate, "short")}</span>
+              </li>
+            );
+          })}
           {hidden > 0 && <li className="trip-pass-stop trip-pass-stop--more">+{plural(hidden, "more stop")}</li>}
         </ol>
+        <AddBlogLink href={addBlogHref} tripTitle={tripTitle} />
+      </div>
+    );
+  }
+
+  // No stops: walk the trip's stories oldest-first, as journey entries.
+  const journey = [...posts].sort((a, b) => postTime(a) - postTime(b));
+  const shown = journey.slice(0, MAX_PASS_STOPS);
+  const hidden = journey.length - shown.length;
+  return (
+    <div className="trip-pass-itinerary">
+      <span className="trip-pass-label">{journey.length > 0 ? "Itinerary · from stories" : "Itinerary"}</span>
+      {journey.length > 0 ? (
+        <ol className="trip-pass-stops">
+          {shown.map((post) => (
+            <li key={post.id} className="trip-pass-stop trip-pass-stop--story">
+              <span className="trip-pass-stop-name">
+                {post.countryCode && <span aria-hidden="true">{countryCodeToFlagEmoji(post.countryCode)} </span>}
+                {post.location?.name || post.countryName || post.title || "Untitled story"}
+              </span>
+              <span className="trip-pass-stop-date">{formatBlogDate(post)}</span>
+            </li>
+          ))}
+          {hidden > 0 && <li className="trip-pass-stop trip-pass-stop--more">+{hidden} more</li>}
+        </ol>
       ) : (
-        <p className="trip-pass-stops-empty">No stops yet</p>
+        <p className="trip-pass-stops-empty">No stops or stories yet</p>
       )}
-      {addBlogHref && (
-        <Link to={addBlogHref} className="trip-pass-add-blog" aria-label={`Add a blog to ${tripTitle}`}>
-          <Plus size={12} aria-hidden="true" />
-          Add blogs
-        </Link>
-      )}
+      {journey.length > 0 && addBlogHref && <p className="trip-pass-stops-empty">No stops yet — add them on the globe.</p>}
+      <AddBlogLink href={addBlogHref} tripTitle={tripTitle} />
     </div>
+  );
+}
+
+function AddBlogLink({ href, tripTitle }) {
+  if (!href) return null;
+  return (
+    <Link to={href} className="trip-pass-add-blog" aria-label={`Add a blog to ${tripTitle}`}>
+      <Plus size={12} aria-hidden="true" />
+      Add blogs
+    </Link>
   );
 }
 
@@ -344,7 +384,10 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
-  const slips = posts.slice(0, MAX_SLIPS);
+  // With more posts than slips, the last slip becomes "+N more" so the fan
+  // always accounts for every story the stub counts.
+  const overflow = posts.length > MAX_SLIPS;
+  const slips = overflow ? [...posts.slice(0, MAX_SLIPS - 1), { id: "__more", more: posts.length - (MAX_SLIPS - 1) }] : posts;
   // The trip's own cover, else its newest post's.
   const cover = trip.coverImage || posts.map((p) => realCover(p.coverImage)).find(Boolean);
   const companions = allCompanions(trip);
@@ -426,6 +469,15 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                 <span className="trip-env-slip-tab trip-env-slip-tab--plain" style={{ left: TAB_LEFT[i] }} aria-hidden="true" />
               )}
               {/* Closed slips sit behind the pass; keep them out of the tab order until revealed. */}
+              {post.more ? (
+                <Link to={tripHref} className="trip-env-slip-link trip-env-slip-link--more" tabIndex={open ? undefined : -1}>
+                  <span className="trip-env-slip-more-count" aria-hidden="true">+{post.more}</span>
+                  <span className="trip-env-slip-text">
+                    <span className="trip-env-slip-title">{post.more} more stories</span>
+                    <span className="trip-env-slip-date">See all {posts.length} in this trip</span>
+                  </span>
+                </Link>
+              ) : (
               <Link to={`/blogs/${post.id}`} className="trip-env-slip-link" tabIndex={open ? undefined : -1}>
                 {realCover(post.coverImage) ? (
                   <img src={post.coverImage} alt="" loading="lazy" />
@@ -437,6 +489,7 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                   <span className="trip-env-slip-date">{formatBlogDate(post)}</span>
                 </span>
               </Link>
+              )}
             </motion.li>
           ))}
         </ul>
@@ -497,7 +550,9 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                   </span>
                 </div>
 
-                {(stops.length > 0 || canEdit) && <PassItinerary stops={stops} tripTitle={trip.title} addBlogHref={canEdit ? addBlogHref : null} />}
+                {(stops.length > 0 || posts.length > 0 || canEdit) && (
+                  <PassItinerary stops={stops} posts={posts} tripTitle={trip.title} addBlogHref={canEdit ? addBlogHref : null} />
+                )}
               </div>
             </div>
 

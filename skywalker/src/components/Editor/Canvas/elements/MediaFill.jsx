@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Link2, Upload, X } from "lucide-react";
 import { isEmbedUrl, toEmbedUrl } from "../../../../lib/blocks";
 import { isDirectVideo, withFirstFramePoster } from "../../../../lib/media";
-import { parseYouTubeId } from "../../../../lib/music";
+import { parseYouTubeId } from "../../../../lib/mediaUrl";
 import { attachTrim, hasTrim, readTrim } from "../../../../lib/mediaTrim";
 import TrimmedEmbed from "../../TrimmedEmbed";
 

@@ -1,10 +1,10 @@
 import { BLOCK_KIND, isEmbedUrl, toEmbedUrl } from "./blocks";
-import { parseYouTubeId } from "./music";
+import { parseSpotifyItem, parseYouTubeId, spotifyEmbedUrl, youTubeEmbedUrl } from "./mediaUrl";
 import { hasTrim, readTrim } from "./mediaTrim";
 
 // Stock cover older posts were published with when none was picked. New posts
 // keep an empty cover instead; this is only kept to recognise the legacy value.
-export const PLACEHOLDER_COVER = "https://picsum.photos/seed/new-post/1600/900";
+const PLACEHOLDER_COVER = "https://picsum.photos/seed/new-post/1600/900";
 
 /** A post's own cover image URL, or "" when it has none (legacy stock placeholder included). */
 export function realCover(url) {
@@ -12,7 +12,7 @@ export function realCover(url) {
 }
 
 const DIRECT_VIDEO = /^data:video\/|\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i;
-const YOUTUBE_EMBED = /youtube\.com\/embed\/([\w-]+)/;
+const TRIMMABLE_SPOTIFY_KINDS = new Set(["track", "episode"]);
 
 export function isDirectVideo(url) {
   return DIRECT_VIDEO.test(url ?? "");
@@ -33,28 +33,26 @@ export function canTrimVideo(url) {
 
 /** Poster image for a video, when one can be derived (YouTube only). */
 export function videoPoster(url) {
-  const match = toEmbedUrl(url).match(YOUTUBE_EMBED);
-  return match ? `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg` : null;
+  const id = parseYouTubeId(url, { allowBareId: false });
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
 }
 
 /** Embeddable player URL for a canvas audio element's Spotify/YouTube link, else "". */
 export function audioEmbedSrc(element) {
   if (element.sourceType === "youtube") {
-    const m = element.src.match(/(?:youtu\.be\/|youtube\.com\/watch\?v=|youtube\.com\/embed\/)([\w-]+)/);
-    return m ? `https://www.youtube.com/embed/${m[1]}?autoplay=0` : "";
+    const id = parseYouTubeId(element.src);
+    return id ? `${youTubeEmbedUrl(id)}?autoplay=0` : "";
   }
   if (element.sourceType === "spotify") {
-    const m = element.src.match(/open\.spotify\.com\/(track|album|playlist|episode)\/([\w]+)/);
-    return m ? `https://open.spotify.com/embed/${m[1]}/${m[2]}` : "";
+    const item = parseSpotifyItem(element.src);
+    return item ? spotifyEmbedUrl(item) : "";
   }
   return "";
 }
 
-const SPOTIFY_ITEM = /open\.spotify\.com\/(?:intl-[\w-]+\/)?(track|album|playlist|episode)\/(\w+)/;
-
 /** True when a canvas audio element's link can be limited to a start/end time (not Spotify albums/playlists). */
 export function canTrimAudioSource(sourceType, src) {
-  if (sourceType === "spotify") return /^(track|episode)$/.test(src?.match(SPOTIFY_ITEM)?.[1] ?? "");
+  if (sourceType === "spotify") return TRIMMABLE_SPOTIFY_KINDS.has(parseSpotifyItem(src)?.kind);
   if (sourceType === "youtube") return Boolean(parseYouTubeId(src));
   return Boolean(sourceType);
 }
@@ -68,7 +66,7 @@ export function trimmedAudioEmbed(element) {
   const trim = { startSec: element.startSec, endSec: element.endSec, loop: element.loop ?? false };
   if (element.sourceType === "youtube") return { type: "youtube", id: parseYouTubeId(element.src), ...trim };
   if (element.sourceType === "spotify") {
-    const [, kind, id] = element.src.match(SPOTIFY_ITEM);
+    const { kind, id } = parseSpotifyItem(element.src);
     return { type: "spotify", id, uri: `spotify:${kind}:${id}`, ...trim };
   }
   return null;

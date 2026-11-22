@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { setBlogVisibility } from "../../lib/blogStore";
+import { errorMessage } from "../../lib/errors";
 import "./VisibilityToggle.css";
 
 const ERROR_MS = 5000;
@@ -33,7 +34,7 @@ export default function VisibilityToggle({ blog, onChange }) {
     } catch (err) {
       console.error(err);
       onChange(previous);
-      setError(`Couldn't make this post ${makePublic ? "public" : "private"}. ${err.message}`);
+      setError(`Couldn't make this post ${makePublic ? "public" : "private"}. ${errorMessage(err)}`);
     } finally {
       setPending(false);
     }

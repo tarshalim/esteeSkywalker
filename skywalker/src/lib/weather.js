@@ -23,7 +23,7 @@ export const WEATHER_CONDITIONS = [
   { id: "thunderstorm", icon: "🌩️", label: "Thunderstorm" },
 ];
 
-export const weatherIcon = (condition) => WEATHER_CONDITIONS.find((c) => c.id === condition)?.icon ?? "";
+const weatherIcon = (condition) => WEATHER_CONDITIONS.find((c) => c.id === condition)?.icon ?? "";
 export const conditionLabel = (condition) => WEATHER_CONDITIONS.find((c) => c.id === condition)?.label ?? "";
 
 /** "☀️ 25°C · Clear Skies" for a badge, or "" when there's no weather. */

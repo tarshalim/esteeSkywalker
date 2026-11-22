@@ -44,7 +44,7 @@ export function cityOf(blog) {
  * would only ever repeat it ("Singapore → Singapore"). Their posts list no
  * cities, which hides the City dropdown for them.
  */
-export const CITY_STATES = new Set(["SG", "MC", "VA", "HK", "MO", "GI"]);
+const CITY_STATES = new Set(["SG", "MC", "VA", "HK", "MO", "GI"]);
 
 /**
  * Filter options built from the posts themselves, so only places that
@@ -92,7 +92,7 @@ export const EMPTY_FILTERS = { country: "", city: "", trip: "", companion: "", d
 export const hasActiveFilters = (f) => Boolean(f.country || f.city || f.trip || f.companion || f.date || f.favoritesOnly);
 
 /** Inclusive [from, to] yyyy-mm-dd bounds of a date filter ("" = open-ended), or null if it's incomplete. */
-export function dateFilterBounds(d) {
+function dateFilterBounds(d) {
   if (!d) return null;
   if (d.mode === "day") return d.start ? [d.start, d.start] : null;
   // "-31" works for every month: these are compared as strings, never parsed.

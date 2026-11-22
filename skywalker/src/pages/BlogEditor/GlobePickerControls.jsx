@@ -4,17 +4,13 @@ import Select from "../../components/Select/Select";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { searchPlaces } from "../../lib/geocode";
 import { countryCodeToFlagEmoji, SMALL_COUNTRY_CENTERS } from "../../lib/countries";
-import { featureView } from "../../lib/geo";
+import { countryList, featureView } from "../../lib/geo";
 import "./GlobePicker.css";
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_MIN_CHARS = 2;
 // Close enough to read a small country's coastline.
 const SMALL_COUNTRY_ALTITUDE = 0.3;
-// Natural Earth leaves both codes as "-99" for a few features.
-const CODE_BY_NAME = { Norway: "NO" };
-
-const validCode = (code) => (/^[A-Z]{2}$/.test(code ?? "") ? code : null);
 
 let regionNames = null;
 try {
@@ -32,11 +28,9 @@ function useCountryOptions() {
   const features = useCountriesGeoJson();
   return useMemo(() => {
     const byCode = new Map();
-    for (const feature of features) {
-      const p = feature.properties ?? {};
-      const code = validCode(p.ISO_A2) ?? validCode(p.WB_A2) ?? CODE_BY_NAME[p.NAME];
-      const view = code && !byCode.has(code) && featureView(feature);
-      if (view) byCode.set(code, { code, name: regionNames?.of(code) ?? p.NAME, ...view });
+    for (const { code, name, feature } of countryList(features)) {
+      const view = featureView(feature);
+      if (view) byCode.set(code, { code, name: regionNames?.of(code) ?? name, ...view });
     }
     for (const [code, [name, lat, lng]] of Object.entries(SMALL_COUNTRY_CENTERS)) {
       if (!byCode.has(code)) byCode.set(code, { code, name, lat, lng, altitude: SMALL_COUNTRY_ALTITUDE });

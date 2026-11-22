@@ -6,7 +6,7 @@ import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { CONTINENTS, COUNTRY_TO_CONTINENT, SMALL_COUNTRY_CENTERS, countryCodeToFlagEmoji } from "../../lib/countries";
 import { continentForCountryCode, findCountryForPoint, formatCoords } from "../../lib/geo";
 import Select from "../Select/Select";
-import { FIELD_INPUT, FIELD_LABEL, fieldInputStyle, fieldLabelStyle as labelStyle } from "./fieldStyles";
+import { ADD_ROW_BUTTON, FIELD_INPUT, FIELD_LABEL, addRowButtonStyle, fieldInputStyle, fieldLabelStyle as labelStyle } from "./fieldStyles";
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_MIN_CHARS = 2;
@@ -361,8 +361,8 @@ export default function TripStopsEditor({
         type="button"
         onClick={add}
         disabled={!tripStart || !tripEnd}
-        className="inline-flex h-9 w-fit items-center gap-1.5 rounded-full border-2 px-3 text-xs font-bold disabled:opacity-40"
-        style={{ borderColor: "var(--border-strong, var(--border))", color: "var(--text-strong, var(--text))" }}
+        className={ADD_ROW_BUTTON}
+        style={addRowButtonStyle}
       >
         <Plus size={14} aria-hidden="true" />
         {value.length > 0 ? "Add another stop" : "Add stop"}

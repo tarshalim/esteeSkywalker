@@ -13,8 +13,9 @@ const THEMES = { light: "#fafaf9", dark: "#0f172a" };
 // Portrait CSS-point viewport sizes + pixel ratio. iPads also get a landscape splash.
 const DEVICES = [
   // iPhone
-  { w: 440, h: 956, r: 3 }, // 16 Pro Max
-  { w: 402, h: 874, r: 3 }, // 16 Pro
+  { w: 440, h: 956, r: 3 }, // 16/17 Pro Max
+  { w: 420, h: 912, r: 3 }, // Air
+  { w: 402, h: 874, r: 3 }, // 16 Pro, 17, 17 Pro
   { w: 430, h: 932, r: 3 }, // 14/15 Pro Max, 15/16 Plus
   { w: 393, h: 852, r: 3 }, // 14 Pro, 15, 15 Pro, 16
   { w: 428, h: 926, r: 3 }, // 12/13 Pro Max, 14 Plus

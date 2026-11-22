@@ -12,6 +12,7 @@ import {
 import { attachTrim, readTrim } from "../../lib/mediaTrim";
 import TrimFields from "../../components/Editor/TrimFields";
 import TrimmedEmbed from "../../components/Editor/TrimmedEmbed";
+import { errorMessage } from "../../lib/errors";
 
 const TABS = [
   { id: "upload", label: "Upload" },
@@ -67,7 +68,7 @@ function MusicPicker({ onPick, onCancel, onError }) {
       onPick(await uploadBlogAudio(file));
     } catch (err) {
       console.error(err);
-      onError(`Couldn't upload audio: ${err.message}`);
+      onError(`Couldn't upload audio: ${errorMessage(err)}`);
     } finally {
       setBusy(false);
     }

@@ -27,7 +27,7 @@ export const ELEMENT_KIND = {
 
 export const DEFAULT_CANVAS_SIZE = { width: 794, height: 1123 }; // A4 @ 96dpi
 
-export const DEFAULT_SIZES = {
+const DEFAULT_SIZES = {
   [ELEMENT_KIND.TEXT]: { width: 300, height: 90 },
   [ELEMENT_KIND.IMAGE]: { width: 320, height: 220 },
   [ELEMENT_KIND.VIDEO]: { width: 360, height: 202 },
@@ -58,7 +58,7 @@ export const DEFAULT_THEME = {
 };
 
 /** Shared typography fields for every element that carries editable text. */
-export const DEFAULT_TEXT_STYLE = {
+const DEFAULT_TEXT_STYLE = {
   fontFamily: "sans",
   fontSize: 18,
   color: "#1e293b",
@@ -361,10 +361,10 @@ export function mediaSlot(element) {
 
 const hasWords = (html) => (html ?? "").replace(/<[^>]*>|&nbsp;/g, "").trim().length > 0;
 
-/** What a dragged element would put into a slot it's dropped on: its photo, clip or words. */
+/** What a dragged element would put into a slot it's dropped on: its photo or clip (with its metadata), or words. */
 export function dockPayload(element) {
-  if (element.kind === ELEMENT_KIND.IMAGE && element.src) return { type: "image", src: element.src };
-  if (element.kind === ELEMENT_KIND.VIDEO && element.url) return { type: "video", src: element.url };
+  if (element.kind === ELEMENT_KIND.IMAGE && element.src) return { type: "image", src: element.src, meta: element.mediaMeta };
+  if (element.kind === ELEMENT_KIND.VIDEO && element.url) return { type: "video", src: element.url, meta: element.mediaMeta };
   if (element.kind === ELEMENT_KIND.TEXT && hasWords(element.html)) return { type: "text", html: element.html };
   return null;
 }
@@ -380,7 +380,10 @@ export function dockPatch(host, payload) {
     return host.kind !== ELEMENT_KIND.TEXT && hasText(host) && !hasWords(host.html) ? { html: payload.html } : null;
   }
   const slot = mediaSlot(host);
-  return slot && !slot.filled && slot.accepts.includes(payload.type) ? slot.fill(payload.src, payload.type) : null;
+  if (!slot || slot.filled || !slot.accepts.includes(payload.type)) return null;
+  // Metadata only travels when it describes this very photo/clip (see lib/mediaMeta.js).
+  const meta = payload.meta?.src === payload.src ? { mediaMeta: payload.meta } : {};
+  return { ...slot.fill(payload.src, payload.type), ...meta };
 }
 
 /** `element` shrunk to fit within `fill` of `host`, centred on it, turned with it and attached to it. */

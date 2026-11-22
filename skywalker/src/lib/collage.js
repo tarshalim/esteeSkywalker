@@ -16,7 +16,7 @@
 
 export const MAX_COLUMNS = 5;
 const MAX_ROW_SPAN = 6;
-export const MAX_ITEMS = 120;
+const MAX_ITEMS = 120;
 
 let counter = 0;
 function makeItemId() {
@@ -24,11 +24,11 @@ function makeItemId() {
   return `ci_${Date.now().toString(36)}_${counter}`;
 }
 
-export function createCollageItem(src, aspect = 1) {
+function createCollageItem(src, aspect = 1) {
   return { id: makeItemId(), src, caption: "", aspect, span: { col: 1, row: 1 } };
 }
 
-export const DEFAULT_COLLAGE_LAYOUT = { mode: "grid", columns: 2, gap: 8, radius: 6, cellAspect: 0.75 };
+const DEFAULT_COLLAGE_LAYOUT = { mode: "grid", columns: 2, gap: 8, radius: 6, cellAspect: 0.75 };
 export const DEFAULT_TEMPLATE = "balanced";
 
 /** A new collage laid out as `templateId`, with its slots open and waiting for photos. */
@@ -41,7 +41,7 @@ export const isFilled = (item) => Boolean(item.src);
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
 /** Photo width / height, read from the file itself so masonry can size tiles before the image loads. */
-export async function measureAspect(file) {
+async function measureAspect(file) {
   try {
     const bitmap = await createImageBitmap(file);
     const aspect = bitmap.width / bitmap.height;
@@ -322,7 +322,7 @@ export const sameBackground = (a = DEFAULT_BACKGROUND, b = DEFAULT_BACKGROUND) =
  * Drops photos into open slots first (starting with `slotId`, if given), then
  * appends the rest; under a template they flow into its overflow rows.
  */
-export function addItems(collage, newItems, { slotId } = {}) {
+function addItems(collage, newItems, { slotId } = {}) {
   const items = [...collage.items];
   const open = items.flatMap((it, i) => (isFilled(it) ? [] : [i]));
   const start = items.findIndex((it) => it.id === slotId);

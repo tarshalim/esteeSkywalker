@@ -1,0 +1,29 @@
+/* Same centred status layout as .blog-detail-status, so a bad URL looks
+   like the app's other "nothing here" screens. */
+.not-found {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0 16px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg);
+}
+
+.not-found h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  color: var(--text);
+}
+
+.not-found p {
+  margin: 0;
+}
+
+.not-found-home-link {
+  color: var(--blue);
+}

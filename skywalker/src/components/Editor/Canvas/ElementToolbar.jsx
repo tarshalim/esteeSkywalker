@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  MapPin,
   AlignCenter,
   AlignLeft,
   AlignRight,
-  ArrowDown,
-  ArrowUp,
   Blend,
   Bold,
   ChevronDown,
@@ -38,6 +37,8 @@ import CollageLayoutPanel from "./CollageLayoutPanel";
 import CollageBackgroundPanel from "./CollageBackgroundPanel";
 import SectionStylePanel from "./SectionStylePanel";
 import FillPanel from "./FillPanel";
+import MediaMetadataPanel from "./MediaMetadataPanel";
+import { coordinateStatus, mediaSourceOf, readMediaMeta } from "../../../lib/mediaMeta";
 import { canHost } from "../../../lib/canvasGroups";
 import {
   ACCENT_COLORS,
@@ -56,18 +57,20 @@ import { CANVAS_FONTS, findFont } from "../../../lib/canvasFonts";
 import { canTrimVideo } from "../../../lib/media";
 import TrimFields from "../TrimFields";
 import { ART_TONES, artFilter, findArt } from "../../../data/scrapbookArt";
+import { LAYER_ACTIONS, layerActionEnabled } from "./layerActions";
 
 const ALIGN_ICONS = { left: AlignLeft, center: AlignCenter, right: AlignRight };
 const NEXT_ALIGN = { left: "center", center: "right", right: "left" };
 
-function Btn({ label, onClick, active, danger, children }) {
+function Btn({ label, onClick, active, danger, disabled, children }) {
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       aria-pressed={active}
-      className={`sb-tool flex shrink-0 items-center justify-center rounded-lg transition ${
+      disabled={disabled}
+      className={`sb-tool flex shrink-0 items-center justify-center rounded-lg transition disabled:pointer-events-none disabled:opacity-35 ${
         danger ? "text-rose-300 hover:bg-rose-500/20" : active ? "bg-blue-500/30 text-white" : "text-slate-300 hover:bg-slate-700 hover:text-white"
       }`}
       onClick={onClick}
@@ -158,12 +161,27 @@ function applyToSelection(elementId, command) {
  * Compact toolbar floating above the selected element. Text controls appear
  * for anything with writeable text; the middle group adapts to the kind.
  */
-export default function ElementToolbar({ element, editing, actions, pageWidth, onPickMedia, onRequestSource, onOpenElements, onAddInside, elementsOpen }) {
+export default function ElementToolbar({
+  element,
+  editing,
+  actions,
+  pageWidth,
+  onPickMedia,
+  onRequestSource,
+  onOpenElements,
+  onAddInside,
+  elementsOpen,
+  layers = { canRaise: true, canLower: true }, // lib/canvasGroups.js layerPosition()
+  openPanel, // { panel, n }: a request from outside (e.g. the media badge) to open a panel
+}) {
   // Scrapbook pieces (collages and section boxes have their own add controls) get the
   // click-to-fill panel, opened straight away on an empty photo frame.
   const fillable = canHost(element) && element.kind !== ELEMENT_KIND.COLLAGE && element.kind !== ELEMENT_KIND.SECTION;
   const emptyFrame = [ELEMENT_KIND.POLAROID, ELEMENT_KIND.FRAME_STICKER].includes(element.kind) && mediaSlot(element)?.filled === false;
-  const [panel, setPanel] = useState(() => (fillable && emptyFrame && !editing ? "fill" : null));
+  const [panel, setPanel] = useState(() => openPanel?.panel ?? (fillable && emptyFrame && !editing ? "fill" : null));
+  useEffect(() => {
+    if (openPanel) setPanel(openPanel.panel);
+  }, [openPanel]);
   const update = (patch, coalesce) => actions.updateElement(element.id, patch, { coalesce });
   const toggle = (name) => setPanel((p) => (p === name ? null : name));
   const AlignIcon = ALIGN_ICONS[element.align] ?? AlignLeft;
@@ -282,6 +300,18 @@ export default function ElementToolbar({ element, editing, actions, pageWidth, o
       </Btn>
     );
   }
+  if (mediaSourceOf(element)) {
+    const located = coordinateStatus(readMediaMeta(element)) !== "missing";
+    kindControls.push(
+      <Btn key="meta" label={`Media metadata (${located ? "has location" : "no location"})`} active={panel === "meta"} onClick={() => toggle("meta")}>
+        <MapPin size={16} />
+        <span
+          className={`-ml-1 mt-3 h-2 w-2 shrink-0 rounded-full ${located ? "bg-emerald-400" : "bg-amber-400"}`}
+          aria-hidden="true"
+        />
+      </Btn>
+    );
+  }
   if (fillable) {
     kindControls.unshift(
       <button
@@ -392,12 +422,16 @@ export default function ElementToolbar({ element, editing, actions, pageWidth, o
           </>
         )}
         <Divider />
-        <Btn label="Bring forward" onClick={() => actions.reorderLayer(element.id, "up")}>
-          <ArrowUp size={16} />
-        </Btn>
-        <Btn label="Send backward" onClick={() => actions.reorderLayer(element.id, "down")}>
-          <ArrowDown size={16} />
-        </Btn>
+        {LAYER_ACTIONS.map(({ direction, label, shortcut, Icon, ...a }) => (
+          <Btn
+            key={direction}
+            label={`${label} (${shortcut})`}
+            disabled={!layerActionEnabled(a, layers)}
+            onClick={() => actions.reorderLayer(element.id, direction)}
+          >
+            <Icon size={16} />
+          </Btn>
+        ))}
         <Btn label="Duplicate" onClick={() => actions.duplicateElement(element.id)}>
           <Copy size={15} />
         </Btn>
@@ -466,6 +500,7 @@ export default function ElementToolbar({ element, editing, actions, pageWidth, o
           {panel === "fill" && (
             <FillPanel element={element} actions={actions} onPickMedia={onPickMedia} onAddInside={onAddInside} onDone={() => setPanel(null)} />
           )}
+          {panel === "meta" && mediaSourceOf(element) && <MediaMetadataPanel element={element} onSave={(meta) => update({ mediaMeta: meta })} />}
           {panel === "trim" && (
             <div className="w-[264px]">
               <TrimFields

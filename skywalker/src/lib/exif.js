@@ -1,6 +1,13 @@
 import exifr from "exifr/dist/lite.esm.js";
+import { extractVideoMetadata } from "./videoMeta";
 
 const pad = (n) => String(n).padStart(2, "0");
+
+/** True for clips, by MIME type or — when a picker leaves `type` empty (.mov, .m4v) — by extension. */
+export function isVideoFile(file) {
+  if (file?.type) return file.type.startsWith("video/");
+  return /\.(mp4|m4v|mov|webm)$/i.test(file?.name ?? "");
+}
 
 /** "Canon EOS R6" from Make "Canon" + Model "Canon EOS R6" (models often repeat the make). */
 function cameraLabel(make, model) {
@@ -26,9 +33,9 @@ export function formatFileSize(bytes) {
  * browser can't decode it (e.g. HEIC outside Safari).
  * @returns {Promise<{width:number,height:number}|null>}
  */
-export async function readMediaDimensions(file) {
+async function readMediaDimensions(file) {
   try {
-    if (file.type.startsWith("video/")) {
+    if (isVideoFile(file)) {
       const url = URL.createObjectURL(file);
       try {
         return await new Promise((resolve) => {
@@ -53,9 +60,11 @@ export async function readMediaDimensions(file) {
 
 /**
  * Extracts date/time taken, GPS, camera, pixel size and file size from an
- * uploaded image or video, entirely client-side. `lite` build (jpg/heic,
- * TIFF+EXIF+GPS dictionaries) keeps the bundle small; exifr already converts
- * GPS rationals + N/S/E/W refs to signed decimal `latitude` / `longitude`.
+ * uploaded image or video, entirely client-side. Photos go through exifr's
+ * `lite` build (jpg/heic, TIFF+EXIF+GPS dictionaries), which already converts
+ * GPS rationals + N/S/E/W refs to signed decimal `latitude` / `longitude`;
+ * MP4/MOV clips through their container metadata (lib/videoMeta.js), whose
+ * capture date and GPS also report as `dateSource: "exif"`.
  * Always resolves — files with no EXIF (screenshots, PNGs, stripped photos)
  * fall back to the file's last-modified date (`dateSource: "file"`) and come
  * back with null GPS/camera so callers fall back to manual input.
@@ -95,6 +104,7 @@ export async function extractPhotoMetadata(file) {
 }
 
 async function extractExif(file) {
+  if (isVideoFile(file)) return extractVideoMetadata(file);
   // A single unfiltered parse() call, rather than exifr's `pick` option: this
   // version of exifr throws ("undefined is not iterable") when `pick` is
   // passed as either an array or `{pick: [...]}, so we just read the fields

@@ -5,9 +5,46 @@ export function hasCoords(point) {
   return Number.isFinite(point?.lat) && Number.isFinite(point?.lng);
 }
 
+// Natural Earth leaves both ISO_A2 and WB_A2 as "-99" on a few features.
+const CODE_BY_NAME = { Norway: "NO" };
+const isIsoCode = (code) => typeof code === "string" && /^[A-Z]{2}$/.test(code);
+
+/**
+ * A countries.geojson feature's ISO 3166-1 alpha-2 code. Natural Earth puts the
+ * placeholder "-99" in ISO_A2 for France and Norway (and for N. Cyprus and
+ * Somaliland, which have no ISO code at all), so fall back to WB_A2, then to a
+ * by-name fix-up. Null when the feature has no usable code.
+ * @returns {string|null}
+ */
+export function featureCountryCode(feature) {
+  const props = feature?.properties ?? {};
+  if (isIsoCode(props.ISO_A2)) return props.ISO_A2;
+  if (isIsoCode(props.WB_A2)) return props.WB_A2;
+  return CODE_BY_NAME[props.NAME] ?? null;
+}
+
+function featureForCountryCode(code, countryFeatures) {
+  return code ? countryFeatures.find((f) => featureCountryCode(f) === code) : undefined;
+}
+
+/**
+ * One entry per country in the geojson, A–Z by the dataset's name, skipping
+ * features without a usable code. The single source for country pickers.
+ * @returns {{code: string, name: string, feature: object}[]}
+ */
+export function countryList(countryFeatures) {
+  const byCode = new Map();
+  for (const feature of countryFeatures) {
+    const code = featureCountryCode(feature);
+    const name = feature.properties?.NAME;
+    if (code && name && !byCode.has(code)) byCode.set(code, { code, name, feature });
+  }
+  return [...byCode.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** Centroid of the geojson feature for an ISO_A2 code — a fallback location. */
 export function centroidForCountryCode(code, countryFeatures) {
-  const feature = countryFeatures.find((f) => f.properties?.ISO_A2 === code || f.properties?.WB_A2 === code);
+  const feature = featureForCountryCode(code, countryFeatures);
   return feature ? getFeatureCentroid(feature) : null;
 }
 
@@ -34,6 +71,11 @@ export function angularDistanceDeg(lat1, lng1, lat2, lng2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return c / DEG2RAD;
 }
+
+const KM_PER_DEG = 111.195;
+
+/** Great-circle distance between two `{lat, lng}` points, in km. */
+export const distanceKm = (a, b) => angularDistanceDeg(a.lat, a.lng, b.lat, b.lng) * KM_PER_DEG;
 
 const toUnitVector = (lat, lng) => {
   const phi = lat * DEG2RAD;
@@ -112,7 +154,7 @@ export function featureView(feature) {
  * as the user zooms in. Tune the multiplier/clamp if pins feel like they
  * disappear too early/late for your camera FOV.
  */
-export function visibleRadiusDeg(altitude) {
+function visibleRadiusDeg(altitude) {
   const raw = altitude * 55;
   return Math.min(Math.max(raw, 6), 90);
 }
@@ -189,15 +231,10 @@ export function isPointInFeature(lat, lng, feature) {
   return polygons.some((rings) => polygonContainsPoint(lat, lng, rings));
 }
 
-/**
- * Natural Earth quirk: France's ISO_A2 is the placeholder "-99" in this
- * dataset; WB_A2 (World Bank code) has the real value. Fall back to it for
- * any feature with a similarly broken ISO_A2.
- */
+/** `code` is null for the few features with no ISO code (see featureCountryCode). */
 function featureToCountryInfo(feature) {
   const props = feature.properties || {};
-  const code = props.ISO_A2 && props.ISO_A2 !== "-99" ? props.ISO_A2 : props.WB_A2 || props.ISO_A2;
-  return { code, name: props.NAME, continent: props.CONTINENT || "" };
+  return { code: featureCountryCode(feature), name: props.NAME, continent: props.CONTINENT || "" };
 }
 
 /**
@@ -208,7 +245,7 @@ function featureToCountryInfo(feature) {
  * missing from this geojson (e.g. Singapore) via a small hardcoded map.
  */
 export function continentForCountryCode(code, countryFeatures, fallback = {}) {
-  const feature = countryFeatures.find((f) => f.properties?.ISO_A2 === code || f.properties?.WB_A2 === code);
+  const feature = featureForCountryCode(code, countryFeatures);
   if (feature) return feature.properties.CONTINENT || fallback[code] || "";
   return fallback[code] || "";
 }
@@ -288,6 +325,7 @@ export function findCountryForPoint(lat, lng, countryFeatures) {
   let nearest = null;
   let nearestDist = Infinity;
   for (const feature of countryFeatures) {
+    if (!featureCountryCode(feature)) continue;
     const centroid = getFeatureCentroid(feature);
     if (!centroid) continue;
     const dist = angularDistanceDeg(lat, lng, centroid.lat, centroid.lng);

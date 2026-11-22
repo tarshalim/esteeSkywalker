@@ -2,8 +2,9 @@ import { useId, useRef, useState } from "react";
 import { ImagePlus, LoaderCircle, Plus, Trash2, Users, X } from "lucide-react";
 import { parseNames } from "../../lib/hierarchy";
 import { fileToUrl } from "../../lib/files";
-import { FIELD_INPUT, FIELD_LABEL, fieldInputStyle, fieldLabelStyle as labelStyle } from "./fieldStyles";
+import { ADD_ROW_BUTTON, FIELD_INPUT, FIELD_LABEL, addRowButtonStyle, fieldInputStyle, fieldLabelStyle as labelStyle } from "./fieldStyles";
 import TripStopsEditor from "./TripStopsEditor";
+import { errorMessage } from "../../lib/errors";
 
 let rowSeq = 0;
 const newRowId = () => `new-${Date.now().toString(36)}-${rowSeq++}`;
@@ -94,8 +95,8 @@ export function CompanionIntervalsEditor({ value, onChange, tripStart, tripEnd }
         type="button"
         onClick={add}
         disabled={!tripStart || !tripEnd}
-        className="inline-flex h-9 w-fit items-center gap-1.5 rounded-full border-2 px-3 text-xs font-bold disabled:opacity-40"
-        style={{ borderColor: "var(--border-strong, var(--border))", color: "var(--text-strong, var(--text))" }}
+        className={ADD_ROW_BUTTON}
+        style={addRowButtonStyle}
       >
         <Plus size={14} aria-hidden="true" />
         Add companions
@@ -110,7 +111,7 @@ export function CompanionIntervalsEditor({ value, onChange, tripStart, tripEnd }
  *
  * @param {{ value: string, onChange: (url: string) => void }} props
  */
-export function TripCoverField({ value, onChange }) {
+function TripCoverField({ value, onChange }) {
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
@@ -122,7 +123,7 @@ export function TripCoverField({ value, onChange }) {
     try {
       onChange(await fileToUrl(file));
     } catch (err) {
-      setError(err.message);
+      setError(errorMessage(err));
     } finally {
       setUploading(false);
     }

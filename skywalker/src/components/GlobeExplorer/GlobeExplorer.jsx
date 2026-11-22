@@ -26,6 +26,7 @@ import { usePageSearch, useSearch } from "../../lib/search";
 import { matchesQuery } from "../../lib/textMatch";
 import { useGlobeSearch } from "../../hooks/useGlobeSearch";
 import { useLocation, useNavigate } from "react-router-dom";
+import { errorMessage } from "../../lib/errors";
 import "./GlobeExplorer.css";
 
 const HOVER_FLY_DEBOUNCE_MS = 250;
@@ -515,7 +516,7 @@ export default function GlobeExplorer({
         if (startTrip) setTripDialog({ trip: null });
       } catch (err) {
         console.error(err);
-        window.alert(`Couldn't save pin: ${err.message}`);
+        window.alert(`Couldn't save pin: ${errorMessage(err)}`);
       }
     },
     [pendingPin, selectStoryPin]
@@ -543,7 +544,7 @@ export default function GlobeExplorer({
       await action();
     } catch (err) {
       console.error(err);
-      window.alert(`Couldn't update this pin: ${err.message}`);
+      window.alert(`Couldn't update this pin: ${errorMessage(err)}`);
     } finally {
       setCardBusy(null);
     }

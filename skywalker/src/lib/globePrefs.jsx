@@ -7,8 +7,7 @@ const STORAGE_KEY = "skywalker-globe-prefs";
 // Remote saves wait for toggling to settle so a burst of clicks is one request.
 const REMOTE_SAVE_DEBOUNCE_MS = 600;
 
-// eslint-disable-next-line react-refresh/only-export-components
-export const DEFAULT_GLOBE_PREFS = {
+const DEFAULT_GLOBE_PREFS = {
   labelMode: "hover", // "hover" | "always"
   showBorders: true,
   showGrid: false,

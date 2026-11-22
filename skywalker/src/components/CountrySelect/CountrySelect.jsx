@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { countryCodeToFlagEmoji } from "../../lib/countries";
+import { countryList } from "../../lib/geo";
 import "./CountrySelect.css";
 
 const MAX_RESULTS = 8;
@@ -18,18 +19,7 @@ export default function CountrySelect({ value, onChange, placeholder = "Search f
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
 
-  const countries = useMemo(() => {
-    const seen = new Set();
-    const list = [];
-    for (const feature of features) {
-      const code = feature.properties?.ISO_A2;
-      const name = feature.properties?.NAME;
-      if (!code || !name || seen.has(code)) continue;
-      seen.add(code);
-      list.push({ code, name });
-    }
-    return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [features]);
+  const countries = useMemo(() => countryList(features), [features]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -37,8 +27,8 @@ export default function CountrySelect({ value, onChange, placeholder = "Search f
     return countries.filter((c) => c.name.toLowerCase().includes(q)).slice(0, MAX_RESULTS);
   }, [countries, query]);
 
-  const handleSelect = (country) => {
-    onChange(country);
+  const handleSelect = ({ code, name }) => {
+    onChange({ code, name });
     setQuery("");
     setFocused(false);
   };

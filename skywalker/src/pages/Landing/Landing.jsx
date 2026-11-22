@@ -107,12 +107,10 @@ export default function Landing() {
     <div className="landing-page" ref={setScrollRoot}>
       <section
         className="landing-feed"
-        aria-labelledby="landing-feed-title"
+        aria-label="Stories"
         data-tour="stories"
         style={{ paddingTop: "calc(var(--nav-bottom) + 20px)" }}
       >
-        <HeroCarousel title="The next horizon is calling" titleId="landing-feed-title" />
-
         <TripStories blogs={blogs} onCreateTrip={handleCreateTrip} />
 
         <BlogFeed
@@ -122,6 +120,11 @@ export default function Landing() {
           scrollRoot={scrollRoot}
           tabsTop="calc(var(--nav-bottom) + 12px)"
         />
+
+        {/* Closes out the feed rather than opening it. It stays above the
+            globe: the globe eats wheel/touch drags, so anything below it
+            would be hard to scroll to. */}
+        <HeroCarousel title="The next horizon is calling" titleId="landing-horizon-title" />
       </section>
 
       <section id="globe" className="landing-globe" ref={globeRef} aria-label="Interactive globe">

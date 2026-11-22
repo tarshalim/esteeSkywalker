@@ -73,7 +73,7 @@ function subtreeIds(elements, id) {
 }
 
 /** The parent id an element should have, judged by where its centre sits. */
-export function attachTarget(elements, el) {
+function attachTarget(elements, el) {
   if (el.kind === ELEMENT_KIND.COLLAGE) return null;
   const c = center(el);
   const own = subtreeIds(elements, el.id); // never attach to yourself or something you carry
@@ -111,7 +111,7 @@ export function slotTargetAt(elements, point, type) {
  * its relative spot (scaled with the parent's box) and turns with it. Its own
  * size is left alone, so stickers and text don't stretch.
  */
-export function followParent(child, from, to) {
+function followParent(child, from, to) {
   const c0 = center(from);
   const c1 = center(to);
   const cc = center(child);
@@ -256,19 +256,42 @@ export function paintOrder(elements) {
   return out;
 }
 
-/** Swaps an element with its neighbour among its siblings (top-level, or children of the same host). */
-export function reorderWithinGroup(elements, id, direction) {
+/** `id`'s siblings (top-level pieces, or children of the same host) bottom to top, and its index among them. */
+function siblingStack(elements, id) {
   const target = elements.find((el) => el.id === id);
-  if (!target) return elements;
+  if (!target) return { siblings: [], index: -1 };
   const ids = new Set(elements.map((el) => el.id));
   const scope = (el) => (el.attachedTo && ids.has(el.attachedTo) ? el.attachedTo : null);
   const siblings = elements.filter((el) => scope(el) === scope(target)).sort((a, b) => a.zIndex - b.zIndex);
-  const idx = siblings.findIndex((el) => el.id === id);
-  const other = siblings[direction === "up" ? idx + 1 : idx - 1];
-  if (!other) return elements;
-  return elements.map((el) => {
-    if (el.id === target.id) return { ...el, zIndex: other.zIndex };
-    if (el.id === other.id) return { ...el, zIndex: target.zIndex };
-    return el;
-  });
+  return { siblings, index: siblings.findIndex((el) => el.id === id) };
+}
+
+/** Whether `id` can still move up ("canRaise") or down ("canLower") among its siblings. */
+export function layerPosition(elements, id) {
+  const { siblings, index } = siblingStack(elements, id);
+  return { canRaise: index >= 0 && index < siblings.length - 1, canLower: index > 0 };
+}
+
+/**
+ * Moves an element through its siblings' stack: "up" / "down" one step past
+ * its neighbour, "front" / "back" to the top or bottom. Layers only shuffle
+ * within a group, so a piece on a collage never sinks behind the collage and
+ * a host's overlays travel with it. The siblings' existing zIndex values are
+ * re-dealt in the new order, leaving every other element untouched; a move
+ * that changes nothing returns `elements` itself.
+ */
+export function reorderWithinGroup(elements, id, direction) {
+  const { siblings, index } = siblingStack(elements, id);
+  if (index < 0) return elements;
+  const to = { up: index + 1, down: index - 1, front: siblings.length - 1, back: 0 }[direction];
+  if (to === undefined || to < 0 || to >= siblings.length || to === index) return elements;
+
+  const order = [...siblings];
+  const [moved] = order.splice(index, 1);
+  order.splice(to, 0, moved);
+  // Strictly increasing slots, even if two siblings ever shared a zIndex.
+  const slots = [];
+  siblings.forEach((el, i) => slots.push(i === 0 ? el.zIndex : Math.max(el.zIndex, slots[i - 1] + 1)));
+  const zById = new Map(order.map((el, i) => [el.id, slots[i]]));
+  return elements.map((el) => (zById.has(el.id) && zById.get(el.id) !== el.zIndex ? { ...el, zIndex: zById.get(el.id) } : el));
 }

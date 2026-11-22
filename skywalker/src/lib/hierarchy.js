@@ -89,7 +89,7 @@ export function journeyLegs(trip) {
  * @param {{ stops?: TripStop[], posts?: import("../types/hierarchy").BlogPost[] }} trip
  * @param {TripStop} stop
  */
-export function postsAtStop(trip, stop) {
+function postsAtStop(trip, stop) {
   const onlyStop = (trip.stops ?? []).length === 1;
   return (trip.posts ?? []).filter((p) => p.stopId === stop.id || (onlyStop && !p.stopId));
 }
@@ -258,7 +258,7 @@ export function validateTrip(trip) {
 }
 
 /** Names of everyone with the trip at any point in [start, end] (yyyy-mm-dd, inclusive). */
-export function companionsDuring(trip, start, end = start) {
+function companionsDuring(trip, start, end = start) {
   if (!trip || !start) return [];
   const names = new Set();
   for (const c of trip.companions ?? []) {

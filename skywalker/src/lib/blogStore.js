@@ -93,12 +93,6 @@ export async function getBlogById(id) {
   return delay(blogs.find((b) => b.id === id) ?? null);
 }
 
-export async function getNextTrackX() {
-  const blogs = await loadBlogs();
-  if (blogs.length === 0) return delay(900);
-  return delay(Math.max(...blogs.map((b) => b.trackX)) + 1000);
-}
-
 export async function upsertBlog(blog) {
   const blogs = await loadBlogs();
   const now = new Date().toISOString();

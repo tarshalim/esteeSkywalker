@@ -2,7 +2,7 @@
 // Deliberately data-only (no React) so it's trivial to unit-reason about and
 // to reuse for other future canvas-like features.
 
-export const HISTORY_LIMIT = 15;
+const HISTORY_LIMIT = 15;
 
 export function createHistory(present) {
   return { past: [], present, future: [] };

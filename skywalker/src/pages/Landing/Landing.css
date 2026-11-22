@@ -33,22 +33,6 @@
     var(--bg);
 }
 
-.landing-feed-header {
-  width: min(1100px, calc(100% - 3rem));
-  margin: 0 auto 1.25rem;
-}
-.landing-feed-header h1 {
-  margin: 0;
-  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--text-strong);
-}
-.landing-feed-header p {
-  margin: 0.35rem 0 0;
-  color: var(--text-muted);
-}
-
 .landing-back-to-stories {
   position: fixed;
   right: 1.25rem;
@@ -78,9 +62,6 @@
     width: 48px;
     height: 48px;
     padding: 0;
-  }
-  .landing-feed-header {
-    width: calc(100% - 1.5rem);
   }
 }
 

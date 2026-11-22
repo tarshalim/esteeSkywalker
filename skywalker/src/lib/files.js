@@ -12,12 +12,11 @@ export function fileToDataUrl(file) {
 // Supabase's project-wide upload cap (50 MB on the Free plan) — anything
 // bigger is rejected with 413 only after the whole file has been sent. Keep
 // in step with the `media` bucket's file_size_limit (see migrations).
-export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 // Formats every current browser can play in a <video>. QuickTime is the
 // iPhone camera's format; Safari plays all of it, Chrome/Firefox the H.264 ones.
-export const VIDEO_MIME_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-m4v"];
-export const VIDEO_ACCEPT = VIDEO_MIME_TYPES.join(",");
+const VIDEO_MIME_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-m4v"];
 const VIDEO_EXT_TYPES = { mp4: "video/mp4", m4v: "video/x-m4v", webm: "video/webm", mov: "video/quicktime" };
 
 const extensionOf = (file) => file.name?.split(".").pop()?.toLowerCase() ?? "";
@@ -29,7 +28,7 @@ function mimeTypeOf(file) {
 }
 
 /** Throws a user-facing Error when `file` can't be uploaded (too big, unplayable video). */
-export function validateUpload(file) {
+function validateUpload(file) {
   const type = mimeTypeOf(file);
   if (type.startsWith("video/") && !VIDEO_MIME_TYPES.includes(type)) {
     throw new Error("That video format can't play on the web — use MP4, WebM or MOV.");
@@ -58,7 +57,7 @@ export async function fileToUrl(file) {
 const MEDIA_URL_PATTERN = new RegExp(`/storage/v1/object/public/${MEDIA_BUCKET}/([^?#"'\\s)]+)`, "g");
 
 /** Adds the storage path of every media-bucket file referenced anywhere in `value` (nested objects/arrays included). */
-export function collectMediaPaths(value, paths = new Set()) {
+function collectMediaPaths(value, paths = new Set()) {
   if (typeof value === "string") {
     for (const m of value.matchAll(MEDIA_URL_PATTERN)) paths.add(decodeURIComponent(m[1]));
   } else if (value && typeof value === "object") {
@@ -68,7 +67,7 @@ export function collectMediaPaths(value, paths = new Set()) {
 }
 
 /** Deletes media-bucket files. Failures are logged, not thrown — a stray file isn't worth blocking the UI. */
-export async function deleteMediaFiles(paths) {
+async function deleteMediaFiles(paths) {
   if (!supabase || paths.length === 0) return;
   const { error } = await supabase.storage.from(MEDIA_BUCKET).remove(paths);
   if (error) console.warn("Couldn't delete media files", paths, error);

@@ -9,7 +9,7 @@ import {
 
 /**
  * Every section's comments and reactions for one post, plus which section's
- * popover is open (only one at a time). Off in the editor preview, where the
+ * trigger is revealed and whose popover is open (one of each at a time). Off in the editor preview, where the
  * post may not exist yet. `viewerKey` refetches reactions when the reader
  * signs in or out, since "mine" depends on who's asking.
  */
@@ -17,6 +17,38 @@ export function useSectionThreads(blogId, { enabled = true, viewerKey = null } =
   const [comments, setComments] = useState([]);
   const [reactions, setReactions] = useState({});
   const [openId, setOpenId] = useState(null);
+  const [revealedId, setRevealedId] = useState(null);
+
+  // A section's action buttons only show once the reader clicks or tabs into
+  // that section; anywhere else hides them again. Resolving through
+  // .closest() means a click on any child of a section counts as the section.
+  useEffect(() => {
+    if (!enabled) return;
+    const sectionOf = (node) => node?.closest?.("[data-section-id]")?.dataset.sectionId ?? null;
+    const reveal = (e) => {
+      // Inside the activity bar or popover: keep the current section.
+      if (e.target.closest?.(".sc-wrap")) return;
+      setRevealedId(sectionOf(e.target));
+    };
+    // Clicks inside an embed (YouTube, Spotify) never reach this document;
+    // all we see is the window losing focus to the iframe.
+    let blurTimer;
+    const onBlur = () => {
+      blurTimer = setTimeout(() => {
+        const active = document.activeElement;
+        if (active?.tagName === "IFRAME") setRevealedId(sectionOf(active));
+      });
+    };
+    document.addEventListener("pointerdown", reveal);
+    document.addEventListener("focusin", reveal);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      clearTimeout(blurTimer);
+      document.removeEventListener("pointerdown", reveal);
+      document.removeEventListener("focusin", reveal);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -80,5 +112,5 @@ export function useSectionThreads(blogId, { enabled = true, viewerKey = null } =
     [blogId, loadReactions]
   );
 
-  return { enabled, bySection, reactions, openId, setOpenId, addComment, removeComment, toggleReaction };
+  return { enabled, bySection, reactions, openId, setOpenId, revealedId, addComment, removeComment, toggleReaction };
 }

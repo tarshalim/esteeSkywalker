@@ -1,9 +1,13 @@
 import { useRef } from "react";
 import { CONTENT_BY_KIND } from "./elementRegistry";
 import { useFitZoom } from "./useFitZoom";
-import { DEFAULT_THEME, canvasHeight } from "../../../lib/canvasElements";
+import { DEFAULT_THEME, ELEMENT_KIND, canvasHeight } from "../../../lib/canvasElements";
 import { paperBackground } from "../../../lib/paperStyles";
 import { paintOrder } from "../../../lib/canvasGroups";
+
+// Purely decorative kinds let clicks fall through to the photo or text they
+// overlap, so a sticker on a photo doesn't steal clicks meant for the photo.
+const PASSTHROUGH_KINDS = new Set([ELEMENT_KIND.STICKER, ELEMENT_KIND.FRAME_STICKER, ELEMENT_KIND.DECOR, ELEMENT_KIND.SECTION]);
 
 /**
  * Published rendering of a canvas doc: same renderers as the editor, no chrome, scaled to fit.
@@ -26,11 +30,13 @@ export default function CanvasReadOnlyView({ doc, renderAnchor = null }) {
           {sorted.map((el, index) => {
             const Content = CONTENT_BY_KIND[el.kind];
             if (!Content) return null;
+            const passthrough = PASSTHROUGH_KINDS.has(el.kind);
             return (
               <div
                 key={el.id}
                 className="absolute"
-                style={{ left: el.x, top: el.y, width: el.width, height: el.height, transform: `rotate(${el.rotation}deg)`, zIndex: index + 1, mixBlendMode: el.blend ? "multiply" : undefined }}
+                data-section-id={passthrough ? undefined : el.id}
+                style={{ left: el.x, top: el.y, width: el.width, height: el.height, transform: `rotate(${el.rotation}deg)`, zIndex: index + 1, mixBlendMode: el.blend ? "multiply" : undefined, pointerEvents: passthrough ? "none" : undefined }}
               >
                 <Content element={el} editable={false} zoom={zoom} autoplayOnVisible />
               </div>

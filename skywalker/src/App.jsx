@@ -7,9 +7,10 @@ import Gallery from "./pages/Gallery/Gallery";
 import MyBlog from "./pages/MyBlog/MyBlog";
 import BlogDetail from "./pages/BlogDetail/BlogDetail";
 import BlogEditor from "./pages/BlogEditor/BlogEditor";
-import MapsPage from "./pages/MapsPage";
+import MapTab from "./pages/MapTab/MapTab";
 import Account from "./pages/Account/Account";
 import Drafts from "./pages/Drafts/Drafts";
+import NotFound from "./pages/NotFound/NotFound";
 import { AuthProvider, RequireAuth } from "./lib/auth";
 import { GlobePrefsProvider } from "./lib/globePrefs";
 import { GlobeSessionProvider } from "./lib/globeSession";
@@ -59,9 +60,10 @@ function AppShell() {
             <Route path="/blogs/new" element={<RequireAuth><PageTransition><BlogEditor /></PageTransition></RequireAuth>} />
             <Route path="/blogs/edit/:id" element={<RequireAuth><PageTransition><BlogEditor /></PageTransition></RequireAuth>} />
             <Route path="/blogs/:id" element={<PageTransition><BlogDetail /></PageTransition>} />
-            <Route path={GLOBE_PATH} element={<PageTransition><MapsPage /></PageTransition>} />
+            <Route path={GLOBE_PATH} element={<PageTransition><MapTab /></PageTransition>} />
             <Route path="/maps" element={<Navigate to={GLOBE_PATH} replace />} />
             <Route path="/account" element={<PageTransition><Account /></PageTransition>} />
+            <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
           </Routes>
         </AnimatePresence>
       </main>

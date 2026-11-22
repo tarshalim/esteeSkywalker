@@ -458,6 +458,34 @@
   box-shadow: inset 0 0 0 1px var(--text-muted);
 }
 
+/* How many of the trip's stories are filed under this stop. */
+.trip-pass-stop-stories {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--blue-deep);
+}
+
+/* Story-derived entries (trip has no stops): hollow dot, so they don't read as stops. */
+.trip-pass-stop--story::before {
+  background: var(--bg-elevated);
+  box-shadow: inset 0 0 0 2px var(--blue-deep);
+}
+
+/* The "+N more stories" slip that ends an overflowing fan. */
+.trip-env-slip-more-count {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 0.35rem;
+  border: 2px dashed var(--text-muted);
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--blue-deep);
+}
+
 .trip-pass-stops-empty {
   margin: 0;
   font-size: 0.75rem;

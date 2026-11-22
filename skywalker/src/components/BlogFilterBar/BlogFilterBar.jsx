@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { CalendarDays, Heart, X } from "lucide-react";
 import { EMPTY_FILTERS, dateFilterLabel, hasActiveFilters } from "../../lib/blogTaxonomy";
 import Select from "../Select/Select";
-import { FIELD_INPUT, fieldInputStyle } from "../TripPicker/fieldStyles";
+import { FIELD_INPUT, FIELD_LABEL, fieldInputStyle, fieldLabelStyle } from "../TripPicker/fieldStyles";
 
 const PILL =
   "inline-flex h-(--control-h-sm) shrink-0 cursor-pointer items-center gap-1.5 rounded-full border-2 px-3 text-xs font-semibold shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-yellow-300 sm:text-sm";
@@ -110,20 +110,20 @@ function DateFilter({ value, onChange }) {
           </div>
 
           {mode === "day" && (
-            <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+            <label className={FIELD_LABEL} style={fieldLabelStyle}>
               On
               <input type="date" className={FIELD_INPUT} style={fieldInputStyle} value={current.start} onChange={(e) => update({ start: e.target.value })} />
             </label>
           )}
           {mode === "month" && (
-            <label className="flex flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+            <label className={FIELD_LABEL} style={fieldLabelStyle}>
               During
               <input type="month" className={FIELD_INPUT} style={fieldInputStyle} value={current.start} onChange={(e) => update({ start: e.target.value })} />
             </label>
           )}
           {mode === "range" && (
             <div className="grid grid-cols-2 gap-2">
-              <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+              <label className={FIELD_LABEL} style={fieldLabelStyle}>
                 From
                 <input
                   type="date"
@@ -134,7 +134,7 @@ function DateFilter({ value, onChange }) {
                   onChange={(e) => update({ start: e.target.value })}
                 />
               </label>
-              <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+              <label className={FIELD_LABEL} style={fieldLabelStyle}>
                 To
                 <input
                   type="date"

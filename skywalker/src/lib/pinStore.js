@@ -1,7 +1,7 @@
 import { makeId } from "./storage";
 import { createCollection } from "./collection";
 import { notifyDataChanged } from "./liveSync";
-import { angularDistanceDeg, hasCoords } from "./geo";
+import { distanceKm, hasCoords } from "./geo";
 
 // Locations API: Supabase `locations` table when configured, otherwise a
 // localStorage mock. Every function returns a Promise so callers
@@ -35,8 +35,7 @@ const pins = createCollection({
 });
 
 /** Posts within this distance of a pin are offered that pin rather than a new one. */
-export const PIN_MERGE_RADIUS_KM = 25;
-const KM_PER_DEG = 111.195;
+const PIN_MERGE_RADIUS_KM = 25;
 
 export const getPins = pins.list;
 export const getPinById = pins.get;
@@ -64,8 +63,6 @@ export async function createPin({ lat, lng, title, note = "", placeName = null, 
   notifyDataChanged("locations");
   return pin;
 }
-
-export const distanceKm = (a, b) => angularDistanceDeg(a.lat, a.lng, b.lat, b.lng) * KM_PER_DEG;
 
 /**
  * Pins within `radiusKm` of a point, nearest first, each with its `distanceKm`.

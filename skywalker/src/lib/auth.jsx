@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "./supabase";
+import { errorMessage } from "./errors";
 
 const AuthContext = createContext(null);
 
@@ -80,7 +81,7 @@ export function AuthProvider({ children }) {
       signOut: async () => {
         if (!supabase) return null;
         const { error } = await supabase.auth.signOut();
-        return error?.message ?? null;
+        return error ? errorMessage(error) : null;
       },
     }),
     [user, username, role, loading, isAdmin]

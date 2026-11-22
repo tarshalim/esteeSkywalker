@@ -26,10 +26,28 @@ import {
 } from "../../../lib/canvasElements";
 import { sectionWidth } from "../../../lib/canvasSections";
 import { photosUploadedPatch } from "../../../lib/collage";
-import { dockTargetAt, followLive, hostAt, paintOrder, slotTargetAt } from "../../../lib/canvasGroups";
+import { dockTargetAt, followLive, hostAt, layerPosition, paintOrder, slotTargetAt } from "../../../lib/canvasGroups";
+import ElementContextMenu from "./ElementContextMenu";
+import { layerDirectionForKey } from "./layerActions";
 import { DECORATION_LIBRARY, LIBRARY_DRAG_TYPE, findLibraryItem } from "../../../lib/scrapbookLibrary";
 import { paperBackground } from "../../../lib/paperStyles";
 import { fileToUrl } from "../../../lib/files";
+import { errorMessage } from "../../../lib/errors";
+import { extractPhotoMetadata, isVideoFile } from "../../../lib/exif";
+import { metaFromExtraction, withMediaMeta } from "../../../lib/mediaMeta";
+import MediaMetaBadge from "./MediaMetaBadge";
+
+/** An upload's date/place/camera as element `mediaMeta` (minus `src`), or null when it isn't a photo or clip. */
+async function readFileMeta(file) {
+  const type = fileMediaType(file) ?? (isVideoFile(file) ? "video" : null);
+  if (!type) return null;
+  try {
+    return metaFromExtraction(await extractPhotoMetadata(file), type);
+  } catch (err) {
+    console.warn("Couldn't read media metadata", err);
+    return null;
+  }
+}
 
 const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 const STAMP_JITTER = 60; // px spread so pieces tapped onto the same collage don't stack exactly
@@ -46,7 +64,7 @@ const DOCK_HINT = "Drop to place inside";
  * toolbar above it, and page-level controls (paper, undo/redo) live in a
  * small dock pinned to the bottom of the viewport.
  */
-export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
+export default function ScrapbookCanvas({ onError, onMediaMetadata }) {
   const { doc, ui, canUndo, canRedo, actions } = useCanvas();
   const frameRef = useRef(null);
   const pageRef = useRef(null);
@@ -63,6 +81,17 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
   const [audioTargetId, setAudioTargetId] = useState(null);
   const [collagePoint, setCollagePoint] = useState(null); // canvas point a new collage goes, while its template gallery is open
   const [uploads, setUploads] = useState(0);
+  const [contextMenu, setContextMenu] = useState(null); // { id, clientPoint } while an element's right-click menu is open
+  // { id, panel, n }: the media badge asked the toolbar to open its metadata panel.
+  const [panelRequest, setPanelRequest] = useState(null);
+  // A request only applies while that element stays selected.
+  useEffect(() => setPanelRequest((r) => (r && r.id !== ui.selectedId ? null : r)), [ui.selectedId]);
+  const selectedExists = doc.elements.some((el) => el.id === ui.selectedId);
+  useEffect(() => setContextMenu((m) => (m && (m.id !== ui.selectedId || !selectedExists) ? null : m)), [ui.selectedId, selectedExists]);
+  const openMetadata = (id) => {
+    actions.select(id);
+    setPanelRequest((r) => ({ id, panel: "meta", n: (r?.n ?? 0) + 1 }));
+  };
 
   const pageHeight = canvasHeight(doc);
   const paper = doc.theme?.paper ?? DEFAULT_THEME.paper;
@@ -70,6 +99,9 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
   const byId = new Map(doc.elements.map((el) => [el.id, el]));
   const parentIds = new Set(doc.elements.map((el) => el.attachedTo).filter(Boolean));
   const selected = doc.elements.find((el) => el.id === ui.selectedId) ?? null;
+  const layers = selected ? layerPosition(doc.elements, selected.id) : null;
+  // The menu belongs to the selected element; it goes away if that changes (undo, delete, click elsewhere).
+  const menuOpen = contextMenu && contextMenu.id === selected?.id;
   const audioTarget = doc.elements.find((el) => el.id === audioTargetId) ?? null;
   const toCanvasPoint = (cx, cy) => clientToCanvasPoint(pageRef.current, zoom, cx, cy);
 
@@ -85,43 +117,51 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
     input.click();
   };
 
-  /** Uploads several files in parallel and applies one patch with every success. */
+  /**
+   * Uploads files while reading their EXIF / video metadata, then applies one
+   * patch with every success; whichever media slot it fills carries that
+   * file's metadata (lib/mediaMeta.js). The first file that knows where or
+   * when it was taken is also handed to the editor to fill the post's details.
+   */
   const uploadFiles = async (elementId, files, toPatch) => {
     if (files.length === 0) return;
     setUploads((n) => n + 1);
     try {
-      const settled = await Promise.allSettled(files.map((file) => fileToUrl(file)));
+      const [settled, metas] = await Promise.all([
+        Promise.allSettled(files.map((file) => fileToUrl(file))),
+        Promise.all(files.map(readFileMeta)),
+      ]);
       const done = [];
+      const metaByUrl = new Map();
       settled.forEach((r, i) => {
-        if (r.status === "fulfilled") done.push({ url: r.value, file: files[i] });
-        else {
+        if (r.status === "fulfilled") {
+          done.push({ url: r.value, file: files[i] });
+          if (metas[i]) metaByUrl.set(r.value, metas[i]);
+        } else {
           console.error(r.reason);
-          onError?.(`Couldn't upload ${files[i].name}: ${r.reason?.message}`);
+          onError?.(`Couldn't upload ${files[i].name}: ${errorMessage(r.reason)}`);
         }
       });
-      if (done.length) actions.updateElement(elementId, await toPatch(done));
+      if (!done.length) return;
+      actions.updateElement(elementId, withMediaMeta(await toPatch(done), metaByUrl));
+      const telling = [...metaByUrl.values()].find((m) => m.lat != null || m.dateSource === "exif");
+      if (telling) onMediaMetadata?.(telling);
+    } catch (err) {
+      console.error(err);
+      onError?.(`Couldn't add ${files.length > 1 ? "those files" : files[0].name}: ${errorMessage(err)}`);
     } finally {
       setUploads((n) => n - 1);
     }
   };
 
-  const handleFile = async (e) => {
+  const handleFile = (e) => {
     const files = [...(e.target.files ?? [])];
     const pick = pendingPickRef.current;
     pendingPickRef.current = null;
     if (!files.length || !pick) return;
     if (pick.multiple) return uploadFiles(pick.elementId, files, pick.toPatch);
     const [file] = files;
-    setUploads((n) => n + 1);
-    try {
-      const url = await fileToUrl(file);
-      actions.updateElement(pick.elementId, await pick.toPatch(url, file));
-    } catch (err) {
-      console.error(err);
-      onError?.(`Couldn't upload ${file.name}: ${err.message}`);
-    } finally {
-      setUploads((n) => n - 1);
-    }
+    return uploadFiles(pick.elementId, [file], ([{ url }]) => pick.toPatch(url, file));
   };
 
   /** Centres a new element on the spot the add-menu was opened from. */
@@ -139,10 +179,7 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
     else if (kind === "image") {
       // No `capture` attribute: phones then offer Take Photo / Photo Library / Browse natively.
       const id = put(createImageElement());
-      pickMedia(id, "image/*", (url, file) => {
-        onPhotoAdded?.(file);
-        return { src: url };
-      });
+      pickMedia(id, "image/*", (url) => ({ src: url }));
     }
   };
 
@@ -188,7 +225,6 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
       onError?.("Only photos and videos can be dropped onto the page.");
       return;
     }
-    media.forEach((file) => fileMediaType(file) === "image" && onPhotoAdded?.(file));
     const host = slotTargetAt(doc.elements, point, fileMediaType(media[0]));
     if (host) {
       const [file] = media;
@@ -275,8 +311,19 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
     setMenu({ clientPoint: { x: e.clientX, y: e.clientY }, point: toCanvasPoint(e.clientX, e.clientY) });
   };
 
+  /** Right-click on an element selects it and opens the arrange menu; text being typed keeps the browser's own menu. */
+  const handleContextMenu = (e) => {
+    const id = e.target.closest?.("[data-element-id]")?.dataset.elementId;
+    if (!id || !byId.has(id) || ui.editingId === id) return;
+    e.preventDefault();
+    setMenu(null);
+    if (ui.selectedId !== id) actions.select(id);
+    setContextMenu({ id, clientPoint: { x: e.clientX, y: e.clientY } });
+  };
+
   useEffect(() => {
     const onKey = (e) => {
+      if (menuOpen) return; // the menu handles its own keys (and Escape closes it)
       const t = e.target;
       const typing = t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
       const mod = e.ctrlKey || e.metaKey;
@@ -304,7 +351,11 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
 
       const el = doc.elements.find((x) => x.id === ui.selectedId);
       if (!el) return;
-      if (e.key === "Delete" || e.key === "Backspace") {
+      const layerMove = layerDirectionForKey(e);
+      if (layerMove) {
+        e.preventDefault(); // Cmd+[ / ] is browser back/forward on macOS
+        actions.reorderLayer(el.id, layerMove);
+      } else if (e.key === "Delete" || e.key === "Backspace") {
         // While rearranging a collage, a stray Backspace shouldn't wipe out the whole thing.
         if (ui.editingId === el.id) return;
         e.preventDefault();
@@ -324,7 +375,7 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ui, doc, actions]);
+  }, [ui, doc, actions, menuOpen]);
 
   return (
     <div ref={frameRef} className="w-full">
@@ -334,6 +385,7 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
           className="absolute left-0 top-0 isolate origin-top-left rounded-[4px] shadow-[0_18px_50px_rgba(15,23,42,0.18),0_2px_6px_rgba(15,23,42,0.08)]"
           style={{ width: doc.size.width, height: pageHeight, transform: `scale(${zoom})`, cursor: "cell", ...paperBackground(paper) }}
           onClick={handlePageClick}
+          onContextMenu={handleContextMenu}
           {...dropProps}
         >
           {sorted.map((element, index) => {
@@ -368,6 +420,7 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
                   onUploadFiles={uploadFiles}
                   onRequestSource={setAudioTargetId}
                 />
+                {!editing && <MediaMetaBadge element={element} zoom={zoom} onOpen={() => openMetadata(element.id)} />}
               </CanvasElement>
             );
           })}
@@ -389,7 +442,7 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
         </div>
       </div>
 
-      {selected && !interacting && (
+      {selected && !interacting && !menuOpen && (
         <ElementToolbar
           key={selected.id}
           element={selected}
@@ -401,6 +454,18 @@ export default function ScrapbookCanvas({ onError, onPhotoAdded }) {
           onOpenElements={openElements}
           onAddInside={addInside}
           elementsOpen={dock === "elements" && elementsTargetId === selected.id}
+          layers={layers}
+          openPanel={panelRequest?.id === selected.id ? panelRequest : null}
+        />
+      )}
+
+      {menuOpen && (
+        <ElementContextMenu
+          clientPoint={contextMenu.clientPoint}
+          element={selected}
+          layers={layers}
+          actions={actions}
+          onClose={() => setContextMenu(null)}
         />
       )}
 

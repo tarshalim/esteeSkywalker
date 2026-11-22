@@ -28,6 +28,7 @@ import { formatDate } from "../../lib/dateFilters";
 import { useAuth } from "../../lib/auth";
 import { usePageSearch, useSearch } from "../../lib/search";
 import { matchesQuery } from "../../lib/textMatch";
+import { errorMessage } from "../../lib/errors";
 import "./Gallery.css";
 
 // Module-level so useFilteredItems' memos aren't invalidated every render.
@@ -305,7 +306,7 @@ export default function Gallery() {
         )}
       </div>
 
-      {error && <p className="gallery-subtitle">Couldn&rsquo;t load the gallery: {error.message}</p>}
+      {error && <p className="gallery-subtitle">Couldn&rsquo;t load the gallery: {errorMessage(error)}</p>}
       {!loading && !error && count === 0 && <p className="gallery-subtitle">Nothing here yet.</p>}
 
       <div className="gallery-grid">

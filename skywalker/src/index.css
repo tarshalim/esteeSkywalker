@@ -307,13 +307,6 @@ input[type="datetime-local"]::-webkit-date-and-time-value {
   background: transparent;
 }
 
-.hide-scrollbar {
-  scrollbar-width: none;
-}
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
 /* Sun/Moon theme toggle */
 .theme-toggle {
   display: inline-flex;

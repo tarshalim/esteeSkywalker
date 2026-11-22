@@ -834,7 +834,7 @@ function hexToHsl(hex) {
 }
 
 /** The palette closest to a paper color; null for near-white or off-palette (e.g. purple) papers. */
-export function paletteForColor(hex) {
+function paletteForColor(hex) {
   const hsl = hexToHsl(hex);
   if (!hsl) return null;
   const { h, s, l } = hsl;

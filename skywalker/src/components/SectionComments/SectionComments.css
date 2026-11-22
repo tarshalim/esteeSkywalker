@@ -1,11 +1,11 @@
-/* Section-anchored comments: a trigger in the right margin of each block
-   (or on the corner of each canvas element) that opens a popover. */
+/* Section-anchored comments: an activity bar in the right margin of each
+   block (or on the corner of each canvas element) that opens a popover. */
 
 .section-anchor {
   position: relative;
 }
 
-/* Block posts: the trigger sits in the card's right padding. */
+/* Block posts: the activity bar sits in the card's right padding. */
 .section-anchor > .sc-wrap {
   position: absolute;
   top: 0.25rem;
@@ -28,51 +28,106 @@
   z-index: 40;
 }
 
-.sc-trigger {
+/* Activity bar: passive count badges on top, revealable actions below. */
+.sc-bar {
+  position: relative;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
+/* Passive badges, always shown once a section has activity. */
+.sc-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
-  min-width: 30px;
-  padding: 0.3rem 0.2rem;
-  border-radius: 999px;
+  gap: 0.25rem;
+  min-height: 24px;
+  padding: 0.2rem 0.5rem;
   border: 1px solid var(--border);
   background: var(--bg-panel-strong);
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
-  opacity: 0.35;
-  box-shadow: 0 4px 12px var(--shadow-color);
-  transition: opacity 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 2px 8px var(--shadow-color);
+  transition: transform 0.15s ease, border-color 0.15s ease;
 }
-.section-anchor:hover .sc-trigger,
-.canvas-anchor:hover .sc-trigger,
-.sc-wrap.has-activity .sc-trigger,
-.sc-wrap.is-open .sc-trigger,
-.sc-trigger:focus-visible {
-  opacity: 1;
-}
-.sc-trigger:hover {
-  transform: scale(1.06);
+.sc-badge:hover {
+  transform: scale(1.05);
   border-color: var(--border-strong);
 }
-@media (hover: none) {
-  .sc-trigger {
-    opacity: 0.8;
-  }
+.sc-badge-count {
+  font-weight: 700;
+}
+/* Comment count: a speech bubble with its tail in the bottom-left corner. */
+.sc-badge--comments {
+  border-radius: 0.8rem 0.8rem 0.8rem 0.2rem;
+}
+/* Reaction summary: the top emojis overlapped, then the total. */
+.sc-badge--reactions {
+  padding-left: 0.25rem;
+  border-radius: 999px;
+}
+.sc-badge--reactions.is-mine {
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 12%, var(--bg-panel-strong));
+}
+.sc-badge-stack {
+  display: inline-flex;
+}
+.sc-badge-stack > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg-panel-strong);
+  background: var(--bg-elevated);
+  font-size: 0.75rem;
+}
+.sc-badge-stack > span + span {
+  margin-left: -0.45rem;
 }
 
-.sc-trigger-item {
+/* Active controls, hidden until the reader clicks or tabs into the section. */
+.sc-actions {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
+  gap: 0.15rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel-strong);
+  box-shadow: 0 4px 12px var(--shadow-color);
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
-.sc-trigger-count {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--text-muted);
+/* Taken out of the flow so it leaves no gap beside the badges. It stays
+   focusable for keyboard readers, and clicks pass through to the section. */
+.sc-wrap:not(.is-revealed) .sc-actions:not(:focus-within) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  transform: scale(0.8);
+  pointer-events: none;
+}
+.sc-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  line-height: 1;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.sc-action:hover {
+  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+  transform: scale(1.1);
 }
 
 .sc-popover {
@@ -296,22 +351,25 @@
   color: #ef4444;
 }
 
-/* Phones: the trigger tucks into the block's corner and the popover becomes
-   a bottom sheet. */
+/* Phones: the activity bar tucks into the block's corner as a row, and the
+   popover becomes a bottom sheet. */
 @media (max-width: 640px) {
   .section-anchor > .sc-wrap {
     left: auto;
     right: -0.9rem;
     top: -0.4rem;
   }
-  .sc-trigger {
+  .sc-bar,
+  .sc-actions {
     flex-direction: row;
-    gap: 0.4rem;
-    padding: 0.35rem 0.55rem;
-    min-height: 32px;
+    align-items: center;
   }
-  .sc-trigger-item {
-    flex-direction: row;
+  .sc-badge {
+    min-height: 30px;
+  }
+  .sc-action {
+    width: 30px;
+    height: 30px;
   }
   .sc-popover {
     position: fixed;

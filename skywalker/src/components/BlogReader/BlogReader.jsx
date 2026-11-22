@@ -112,7 +112,7 @@ export default function BlogReader({ blog, trip = null, toolbar = null, preview 
           <CanvasReadOnlyView doc={canvasDoc} renderAnchor={threads.enabled ? anchorFor : null} />
         ) : (
           (blog.blocks ?? []).map((block) => (
-            <div key={block.id} className="section-anchor">
+            <div key={block.id} className="section-anchor" data-section-id={block.id}>
               <BlockView block={block} editable={false} />
               {anchorFor(block)}
             </div>

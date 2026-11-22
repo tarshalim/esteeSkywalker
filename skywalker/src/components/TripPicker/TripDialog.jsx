@@ -6,6 +6,7 @@ import { draftFromTrip, emptyTripDraft, validateTrip, validateTripBasics } from 
 import { formatDateRange } from "../../lib/dateFilters";
 import TripFields, { CompanionIntervalsEditor } from "./TripFields";
 import TripStopsEditor from "./TripStopsEditor";
+import { errorMessage } from "../../lib/errors";
 
 const WIZARD_STEPS = ["Basics", "Stops"];
 
@@ -59,7 +60,7 @@ export default function TripDialog({
     try {
       await action();
     } catch (err) {
-      setError(err.message);
+      setError(errorMessage(err));
       setBusy(null);
     }
   };

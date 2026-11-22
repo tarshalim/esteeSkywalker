@@ -1,6 +1,7 @@
-// Shared localStorage helpers for the app's mock "API" stores (blogStore.js,
-// pinStore.js). Every store function returns a Promise so swapping these for
-// real fetch() calls later doesn't change any callers.
+// localStorage helpers for mock mode: when the Supabase env vars are unset,
+// the stores (collection.js, blogStore, commentStore, tripStore) read and write
+// here instead. `delay` fakes network latency so mock mode keeps the same
+// Promise API as Supabase mode. `makeId` is used in both modes.
 
 const LATENCY_MS = 150;
 

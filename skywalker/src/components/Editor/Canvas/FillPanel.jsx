@@ -3,6 +3,7 @@ import { Clapperboard, Images, ImagePlus, Link2, Loader2, Type, Upload } from "l
 import { hasText, mediaSlot } from "../../../lib/canvasElements";
 import { collectMedia } from "../../../lib/media";
 import { getPhotos } from "../../../lib/photoStore";
+import { errorMessage } from "../../../lib/errors";
 
 const GALLERY_LIMIT = 60;
 // Anything from the gallery can go on a piece: what its slot can't take is laid on top instead.
@@ -33,7 +34,7 @@ function GalleryGrid({ accepts, onPick }) {
     let live = true;
     getPhotos()
       .then((photos) => live && setItems(collectMedia(photos, []).filter((m) => accepts.includes(m.type)).slice(0, GALLERY_LIMIT)))
-      .catch((err) => live && setError(err.message || "Couldn't load your gallery."));
+      .catch((err) => live && setError(errorMessage(err, "Couldn't load your gallery.")));
     return () => {
       live = false;
     };

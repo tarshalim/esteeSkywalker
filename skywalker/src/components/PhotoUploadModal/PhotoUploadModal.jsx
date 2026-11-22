@@ -6,9 +6,9 @@ import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata, formatFileSize } from "../../lib/exif";
 import { cityFromPlaceName, reverseGeocode } from "../../lib/geocode";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { findCountryForPoint, continentForCountryCode, centroidForCountryCode } from "../../lib/geo";
+import { findCountryForPoint, continentForCountryCode, centroidForCountryCode, distanceKm } from "../../lib/geo";
 import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../lib/countries";
-import { createPin, distanceKm, pinsNear } from "../../lib/pinStore";
+import { createPin, pinsNear } from "../../lib/pinStore";
 import { saveTrip } from "../../lib/tripStore";
 import { NEW_TRIP, emptyTripDraft, isWithinTrip, parseTags, tripCovering, validateTrip } from "../../lib/hierarchy";
 import { formatDate, formatDateRange } from "../../lib/dateFilters";
@@ -16,6 +16,7 @@ import CountrySelect from "../CountrySelect/CountrySelect";
 import MediaView from "../MediaView/MediaView";
 import TripSelect from "../TripPicker/TripSelect";
 import Select from "../Select/Select";
+import { errorMessage } from "../../lib/errors";
 import "./PhotoUploadModal.css";
 
 function todayISO() {
@@ -167,7 +168,7 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
     } catch (err) {
       if (token !== pickTokenRef.current) return;
       // Upload rejected (RLS, size, network) — previously left "Reading…" up forever.
-      setError(`Upload failed: ${err.message}`);
+      setError(`Upload failed: ${errorMessage(err)}`);
       setExtracting(false);
       return;
     }
@@ -347,7 +348,7 @@ export default function PhotoUploadModal({ pins = [], trips = [], blogs = [], in
         tags: parseTags(tagsText),
       });
     } catch (err) {
-      setError(`Couldn't save: ${err.message}`);
+      setError(`Couldn't save: ${errorMessage(err)}`);
     } finally {
       setSaving(false);
     }

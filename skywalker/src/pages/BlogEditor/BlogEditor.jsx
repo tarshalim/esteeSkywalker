@@ -35,6 +35,7 @@ import TripSelect from "../../components/TripPicker/TripSelect";
 import Select from "../../components/Select/Select";
 import { useDataChanges } from "../../lib/liveSync";
 import { deleteBlogAudio, getBlogMusic } from "../../lib/music";
+import { errorMessage } from "../../lib/errors";
 import "./BlogEditor.css";
 
 function todayISO() {
@@ -433,7 +434,7 @@ export default function BlogEditor() {
       [dataUrl, metadata] = await Promise.all([fileToUrl(file), extractPhotoMetadata(file)]);
     } catch (err) {
       console.error(err);
-      showToast(`Couldn't upload cover image: ${err.message}`);
+      showToast(`Couldn't upload cover image: ${errorMessage(err)}`);
       return;
     }
     setCoverImage(dataUrl);
@@ -443,13 +444,13 @@ export default function BlogEditor() {
     }
   };
 
-  // A photo taken live is stamped with the current GPS fix + time, so it
-  // files the post under the right Location (auto pin from coords) and Trip
-  // dates exactly like an EXIF'd cover photo does.
-  // Fills the post's date/place from a photo placed on the canvas; quiet when there's nothing to fill.
-  const handlePhotoAdded = async (file) => {
-    const detected = applyPhotoMetadata(await extractPhotoMetadata(file));
-    if (detected.length > 0) showToast(`📸 Detected from photo: ${detected.join(", ")}`);
+  // Fills the post's date/place from a photo or clip uploaded to the canvas —
+  // the scrapbook reads its EXIF / video metadata (lib/mediaMeta.js), so it
+  // files the post under the right Location and Trip dates exactly like an
+  // EXIF'd cover photo does. Quiet when there's nothing to fill.
+  const handleMediaMetadata = (meta) => {
+    const detected = applyPhotoMetadata(meta);
+    if (detected.length > 0) showToast(`📸 Detected from ${meta.mediaType === "video" ? "video" : "photo"}: ${detected.join(", ")}`);
   };
 
   /**
@@ -623,7 +624,7 @@ export default function BlogEditor() {
       return saved;
     } catch (err) {
       console.error(err);
-      onError(`Couldn't save: ${err.message}`);
+      onError(`Couldn't save: ${errorMessage(err)}`);
       return null;
     } finally {
       setSaving(false);
@@ -681,7 +682,7 @@ export default function BlogEditor() {
       await deleteBlog(blogId);
     } catch (err) {
       console.error(err);
-      setDeleteError(`Couldn't delete this post: ${err.message}`);
+      setDeleteError(`Couldn't delete this post: ${errorMessage(err)}`);
       setDeleting(false);
       return;
     }
@@ -735,7 +736,7 @@ export default function BlogEditor() {
       closeTemplateModal();
       showToast(`Saved layout as “${tpl.name}”`);
     } catch (err) {
-      showToast(`Couldn't save template: ${err.message}`);
+      showToast(`Couldn't save template: ${errorMessage(err)}`);
     } finally {
       setSavingTemplate(false);
     }
@@ -758,7 +759,7 @@ export default function BlogEditor() {
       await deleteTemplate(tpl.id);
       setTemplates((prev) => prev.filter((t) => t.id !== tpl.id));
     } catch (err) {
-      showToast(`Couldn't delete template: ${err.message}`);
+      showToast(`Couldn't delete template: ${errorMessage(err)}`);
     }
   };
 
@@ -989,7 +990,7 @@ export default function BlogEditor() {
 
         <div className="editor-scrapbook" data-tour="editor-scrapbook">
           <CanvasProvider key={canvasSeed.key} initialDoc={canvasSeed.doc} onDocChange={handleCanvasChange}>
-            <ScrapbookCanvas onError={showToast} onPhotoAdded={handlePhotoAdded} />
+            <ScrapbookCanvas onError={showToast} onMediaMetadata={handleMediaMetadata} />
           </CanvasProvider>
         </div>
 

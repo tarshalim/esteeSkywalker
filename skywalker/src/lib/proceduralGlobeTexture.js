@@ -14,7 +14,7 @@ const LANDMASSES = [
   { x: 0.05, y: 0.68, rx: 0.04, ry: 0.05 },
 ];
 
-export function createYellowBlueGlobeCanvas({
+function createYellowBlueGlobeCanvas({
   width = 1024,
   height = 512,
   oceanTop = "#60a5fa",
@@ -47,42 +47,6 @@ export function createYellowBlueGlobeCanvas({
   });
 
   return canvas;
-}
-
-// Land-free ocean surface for the light-mode cartographic globe: the country
-// polygon layer draws every landmass on top, so the texture only needs water.
-export function createCartographicOceanDataUrl({ width = 1024, height = 512 } = {}) {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-
-  const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, "#7dd3fc");
-  gradient.addColorStop(0.5, "#38bdf8");
-  gradient.addColorStop(1, "#7dd3fc");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
-
-  // faint lat/lng grid, like a printed atlas
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 12; i++) {
-    const x = (i / 12) * width;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
-  }
-  for (let i = 1; i < 6; i++) {
-    const y = (i / 6) * height;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-
-  return canvas.toDataURL("image/png");
 }
 
 export function createYellowBlueGlobeDataUrl(options) {

@@ -16,7 +16,7 @@
 import { DEFAULT_CANVAS_SIZE, DEFAULT_THEME } from "./canvasElements";
 import { paintOrder } from "./canvasGroups";
 
-export const CANVAS_LAYOUT_VERSION = 2;
+const CANVAS_LAYOUT_VERSION = 2;
 
 const num = (v, fallback) => (Number.isFinite(v) ? v : fallback);
 

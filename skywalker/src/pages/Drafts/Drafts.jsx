@@ -6,6 +6,7 @@ import { deleteBlog, getBlogs } from "../../lib/blogStore";
 import { draftChecklist } from "../../lib/blogTaxonomy";
 import { realCover } from "../../lib/media";
 import { useAsync } from "../../hooks/useAsync";
+import { errorMessage } from "../../lib/errors";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
@@ -147,7 +148,7 @@ export default function Drafts() {
       await deleteBlog(draft.id);
       setData((prev) => prev.filter((b) => b.id !== draft.id));
     } catch (err) {
-      setActionError(`Couldn't delete: ${err.message}`);
+      setActionError(`Couldn't delete: ${errorMessage(err)}`);
     } finally {
       setDeletingId(null);
     }

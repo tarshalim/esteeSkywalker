@@ -1,13 +1,18 @@
 {
-  "name": "react-prac",
+  "name": "skywalker",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "pwa-assets": "node scripts/generate-pwa-assets.mjs",
     "scrapbook-art": "node scripts/extract-scrapbook-art.mjs"
   },
@@ -35,6 +40,8 @@
     "eslint-plugin-react-refresh": "^0.4.18",
     "globals": "^15.14.0",
     "sharp": "^0.35.5",
-    "vite": "^6.1.0"
+    "tailwindcss": "^4.0.6",
+    "vite": "^6.1.0",
+    "vitest": "^4.1.12"
   }
 }

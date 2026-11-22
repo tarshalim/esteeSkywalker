@@ -25,7 +25,8 @@ const CONTACT = process.argv.find((a) => a.startsWith("--contact="))?.slice("--c
 
 // Sheets to cut into pieces, and the layers to drop from each (background, Freepik credit line).
 // `noText` strips live <text> (sheet titles, frame captions) whose fonts aren't installed and
-// would otherwise render as stray fallback letters.
+// would otherwise render as stray fallback letters. `skip` lists 1-based piece numbers that
+// aren't art (credit text drawn as paths inside the art layer); the other ids keep their numbers.
 const FREEPIK = "DESIGNED_BY_FREEPIK";
 const SHEETS = [
   { id: "cinematic", file: "cinematic.svg" },
@@ -35,7 +36,7 @@ const SHEETS = [
   { id: "oldschool", file: "old_school.svg", drop: ["BACKGROUND"] },
   { id: "paper", file: "rustic_02.svg", drop: ["Background"] },
   { id: "washi", file: "washi tape_01.svg", drop: ["Background"] },
-  { id: "travel", file: "travel-icons.svg", drop: ["Background"], noText: true },
+  { id: "travel", file: "travel-icons.svg", drop: ["Background"], noText: true, skip: [12] },
   { id: "travel2", file: "travel-icons-02.svg", drop: ["BACKGROUND_1_"], noText: true },
   { id: "travel3", file: "travel-icons-03.svg", drop: ["BACKGROUND", FREEPIK] },
   { id: "camping", file: "camping-icons.svg", drop: ["BACKGROUND", FREEPIK] },
@@ -175,7 +176,7 @@ function isolate(data, sheetWidth, box) {
   return { buffer, width, height };
 }
 
-async function cutSheet({ id, file, drop = [], noText = false }) {
+async function cutSheet({ id, file, drop = [], noText = false, skip = [] }) {
   let svg = await readFile(`${SRC}/${file}`, "utf8");
   for (const group of drop) svg = dropGroup(svg, group);
   if (noText) svg = svg.replace(/<text[\s>][\s\S]*?<\/text>/g, "");
@@ -185,6 +186,7 @@ async function cutSheet({ id, file, drop = [], noText = false }) {
 
   const pieces = [];
   for (const [i, box] of boxes.entries()) {
+    if (skip.includes(i + 1)) continue;
     const pieceId = `${id}-${String(i + 1).padStart(2, "0")}`;
     const file = `${OUT}/${id}/${pieceId}.webp`;
     const { buffer, width, height } = isolate(data, info.width, box);

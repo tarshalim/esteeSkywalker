@@ -1,3 +1,4 @@
+import { infraErrorMessage } from "./errors";
 import { delay, makeId, readJSON, writeJSON } from "./storage";
 import { supabase, unwrap } from "./supabase";
 
@@ -37,7 +38,7 @@ const fromRow = (r) => ({
 });
 
 /** A random per-browser id so guests can toggle their own reactions. */
-export function guestKey() {
+function guestKey() {
   let key = readJSON(GUEST_KEY, null);
   if (!key) {
     key = crypto.randomUUID();
@@ -80,7 +81,7 @@ const ERROR_MESSAGES = {
 /** A reader-facing message for a failed comment post. */
 export function commentErrorMessage(err) {
   if (err?.hint === "invalid_guest") return err.message;
-  return ERROR_MESSAGES[err?.hint] ?? "Couldn’t post your comment. Please try again.";
+  return ERROR_MESSAGES[err?.hint] ?? infraErrorMessage(err) ?? "Couldn’t post your comment. Please try again.";
 }
 
 /** @returns {Promise<SectionComment[]>} oldest first */

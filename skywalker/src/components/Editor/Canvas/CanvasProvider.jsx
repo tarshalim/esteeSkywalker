@@ -98,6 +98,7 @@ export function CanvasProvider({ initialDoc, onDocChange, children }) {
         dispatch({ type: "SELECT", id: newId });
       },
 
+      /** `direction`: "up" (bring forward), "down" (send backward), "front" or "back" (lib/canvasGroups.js). */
       reorderLayer(id, direction) {
         mutate((d) => withElements(d, reorderWithinGroup(d.elements, id, direction)));
       },

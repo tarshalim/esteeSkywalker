@@ -37,4 +37,15 @@ export default [
       ],
     },
   },
+  // Node build scripts (scrapbook-art, pwa-assets). Without this block they
+  // were visited but matched no rules.
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      globals: globals.node,
+      sourceType: 'module',
+    },
+    rules: js.configs.recommended.rules,
+  },
 ]

@@ -10,6 +10,7 @@ import GlobePreview from "../../components/GlobePreview/GlobePreview";
 import { useGlobePrefs } from "../../lib/globePrefs";
 import { useTheme } from "../../lib/theme";
 import Select from "../../components/Select/Select";
+import { errorMessage } from "../../lib/errors";
 import "./Account.css";
 
 const GLOBE_TOGGLES = [
@@ -87,7 +88,7 @@ function SignInForm() {
     if (error) {
       if (/already registered/i.test(error.message)) return setError("That username is taken.");
       if (/invalid login credentials/i.test(error.message)) return setError("Wrong username or password.");
-      return setError(error.message);
+      return setError(errorMessage(error));
     }
     // No session means "Confirm email" is still on in Supabase — the synthetic
     // address can't receive the link. Delete the dead account so the username
@@ -180,9 +181,9 @@ function Profile({ user }) {
       // Stored in auth user_metadata alongside display_name; onAuthStateChange
       // (USER_UPDATED) pushes it to the nav avatar without a reload.
       const { error } = await supabase.auth.updateUser({ data: { display_name: displayName.trim(), avatar } });
-      setStatus(error ? { error: error.message } : { notice: "Saved." });
+      setStatus(error ? { error: errorMessage(error) } : { notice: "Saved." });
     } catch (err) {
-      setStatus({ error: err.message });
+      setStatus({ error: errorMessage(err) });
     } finally {
       setBusy(false);
     }
@@ -335,7 +336,7 @@ function AccountsPanel({ currentUserId }) {
       .select("id, username, role")
       .order("created_at")
       .then(({ data, error }) => {
-        if (error) setError(error.message);
+        if (error) setError(errorMessage(error));
         else setAccounts(data);
       });
   }, []);
@@ -345,7 +346,7 @@ function AccountsPanel({ currentUserId }) {
     setError(null);
     const { error } = await supabase.rpc("set_user_role", { target: id, new_role: role });
     setSavingId(null);
-    if (error) return setError(error.message);
+    if (error) return setError(errorMessage(error));
     setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, role } : a)));
   };
 
@@ -355,7 +356,7 @@ function AccountsPanel({ currentUserId }) {
     setError(null);
     const { error } = await supabase.rpc("reject_account", { target: account.id });
     setSavingId(null);
-    if (error) return setError(error.message);
+    if (error) return setError(errorMessage(error));
     setAccounts((prev) => prev.filter((a) => a.id !== account.id));
   };
 

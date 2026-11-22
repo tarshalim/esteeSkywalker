@@ -42,17 +42,48 @@ function CommentAvatar({ comment }) {
   return <img className="sc-avatar" src={avatar.src} alt="" />;
 }
 
+// The reaction summary shows at most this many emojis, most used first.
+const TOP_REACTIONS = 3;
+
 /**
- * The comment/reaction trigger pinned beside one section, and the popover it
- * opens. `threads` comes from useSectionThreads.
+ * The activity bar pinned beside one section, and the popover it opens.
+ * Sections with comments or reactions always show count badges; the 💬/❤️
+ * action buttons stay hidden until the reader clicks the section (or tabs
+ * to it). `threads` comes from useSectionThreads.
  */
 export default function SectionThread({ sectionId, threads, label = "this section" }) {
-  const { bySection, reactions, openId, setOpenId } = threads;
+  const { bySection, reactions, openId, setOpenId, revealedId } = threads;
   const open = openId === sectionId;
+  const revealed = open || revealedId === sectionId;
   const comments = bySection[sectionId] ?? [];
   const sectionReactions = reactions[sectionId] ?? {};
   const reactionTotal = Object.values(sectionReactions).reduce((sum, r) => sum + r.count, 0);
+  const reactedByMe = Object.values(sectionReactions).some((r) => r.mine);
+  const topReactions = Object.entries(sectionReactions)
+    .filter(([, r]) => r.count > 0)
+    .sort(([, a], [, b]) => b.count - a.count)
+    .slice(0, TOP_REACTIONS)
+    .map(([emoji]) => emoji);
   const wrapRef = useRef(null);
+  const reactionsRef = useRef(null);
+  const commentsRef = useRef(null);
+  // Which part of the popover the reader asked for: "comments" or "reactions".
+  const [focusPart, setFocusPart] = useState("comments");
+
+  const openAt = (part) => {
+    if (open && focusPart === part) {
+      setOpenId(null);
+      return;
+    }
+    setFocusPart(part);
+    setOpenId(sectionId);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const target = focusPart === "reactions" ? reactionsRef : commentsRef;
+    target.current?.scrollIntoView({ block: "nearest" });
+  }, [open, focusPart]);
 
   useEffect(() => {
     if (!open) return;
@@ -68,26 +99,59 @@ export default function SectionThread({ sectionId, threads, label = "this sectio
     };
   }, [open, setOpenId]);
 
-  const active = comments.length > 0 || reactionTotal > 0;
-
   return (
-    <div ref={wrapRef} className={`sc-wrap ${open ? "is-open" : ""} ${active ? "has-activity" : ""}`}>
-      <button
-        type="button"
-        className="sc-trigger"
-        aria-expanded={open}
-        aria-label={`Comments and reactions on ${label}: ${comments.length} comments, ${reactionTotal} reactions`}
-        onClick={() => setOpenId(open ? null : sectionId)}
-      >
-        <span className="sc-trigger-item">
-          <span aria-hidden="true">💬</span>
-          {comments.length > 0 && <span className="sc-trigger-count">{comments.length}</span>}
-        </span>
-        <span className="sc-trigger-item">
-          <span aria-hidden="true">❤️</span>
-          {reactionTotal > 0 && <span className="sc-trigger-count">{reactionTotal}</span>}
-        </span>
-      </button>
+    <div ref={wrapRef} className={`sc-wrap ${open ? "is-open" : ""} ${revealed ? "is-revealed" : ""}`}>
+      <div className="sc-bar">
+        {/* Passive badges: always visible once the section has activity. */}
+        {comments.length > 0 && (
+          <button
+            type="button"
+            className="sc-badge sc-badge--comments"
+            aria-expanded={open && focusPart === "comments"}
+            aria-label={`${comments.length} ${comments.length === 1 ? "comment" : "comments"} on ${label}`}
+            onClick={() => openAt("comments")}
+          >
+            <span aria-hidden="true">💬</span>
+            <span className="sc-badge-count">{comments.length}</span>
+          </button>
+        )}
+        {reactionTotal > 0 && (
+          <button
+            type="button"
+            className={`sc-badge sc-badge--reactions ${reactedByMe ? "is-mine" : ""}`}
+            aria-expanded={open && focusPart === "reactions"}
+            aria-label={`${reactionTotal} ${reactionTotal === 1 ? "reaction" : "reactions"} on ${label}: ${topReactions.join(" ")}`}
+            onClick={() => openAt("reactions")}
+          >
+            <span className="sc-badge-stack" aria-hidden="true">
+              {topReactions.map((emoji) => (
+                <span key={emoji}>{emoji}</span>
+              ))}
+            </span>
+            <span className="sc-badge-count">{reactionTotal}</span>
+          </button>
+        )}
+
+        {/* Active controls: revealed when the reader clicks or tabs into the section. */}
+        <div className="sc-actions" role="group" aria-label={`Discuss ${label}`}>
+          <button
+            type="button"
+            className="sc-action"
+            aria-label={`Comment on ${label}`}
+            onClick={() => openAt("comments")}
+          >
+            <span aria-hidden="true">💬</span>
+          </button>
+          <button
+            type="button"
+            className="sc-action"
+            aria-label={`React to ${label}`}
+            onClick={() => openAt("reactions")}
+          >
+            <span aria-hidden="true">❤️</span>
+          </button>
+        </div>
+      </div>
 
       {open && (
         <div className="sc-popover" role="dialog" aria-label={`Discussion on ${label}`}>
@@ -98,7 +162,7 @@ export default function SectionThread({ sectionId, threads, label = "this sectio
             </button>
           </div>
 
-          <div className="sc-reactions" role="group" aria-label="Reactions">
+          <div ref={reactionsRef} className="sc-reactions" role="group" aria-label="Reactions">
             {REACTION_EMOJIS.map((emoji) => {
               const r = sectionReactions[emoji];
               return (
@@ -116,7 +180,9 @@ export default function SectionThread({ sectionId, threads, label = "this sectio
             })}
           </div>
 
-          <CommentList comments={comments} threads={threads} />
+          <div ref={commentsRef}>
+            <CommentList comments={comments} threads={threads} />
+          </div>
           <CommentForm sectionId={sectionId} threads={threads} />
         </div>
       )}
