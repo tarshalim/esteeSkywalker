@@ -7,6 +7,7 @@ import { draftChecklist } from "../../lib/blogTaxonomy";
 import { realCover } from "../../lib/media";
 import { useAsync } from "../../hooks/useAsync";
 import { errorMessage } from "../../lib/errors";
+import LoadingSpinner from "../../components/LoadingSpinner/LoadingSpinner";
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
@@ -184,6 +185,8 @@ export default function Drafts() {
         {(error || actionError) && (
           <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{actionError ?? "Couldn't load your drafts."}</p>
         )}
+
+        {loading && <LoadingSpinner label="Loading drafts…" />}
 
         {!loading && drafts.length === 0 && !error && (
           <p className="rounded-2xl border-2 border-dashed px-4 py-10 text-center text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>

@@ -8,6 +8,7 @@ import { companionOptions, companionsForPost, tripsReferencedBy } from "../../li
 import { useAuth } from "../../lib/auth";
 import { useVibes } from "../../lib/vibes";
 import { useAsync } from "../../hooks/useAsync";
+import LoadingSpinner from "../../components/LoadingSpinner/LoadingSpinner";
 import { useTrailScroll } from "../../hooks/useTrailScroll";
 import { useHorizontalRide } from "../../hooks/useHorizontalRide";
 import TrailBackdrop from "../../components/BlogTrail/TrailBackdrop";
@@ -337,6 +338,8 @@ export default function MyBlog() {
             draftsLink && <div className="hidden md:block">{draftsLink}</div>
           )}
         </header>
+
+        {loading && <LoadingSpinner overlay size="lg" tone="light" label="Loading the trail…" style={{ zIndex: 40 }} />}
 
         {!loading && blogs.length === 0 && (hasFilters || !canCreate) && (
           <p className="absolute inset-x-4 top-1/2 z-40 text-center text-lg font-semibold text-white drop-shadow-md">

@@ -19,6 +19,12 @@
  *   trip_stops       TripStop          -> trips.id (20261024000000_trip_stops.sql)
  *   blogs            BlogPost          blogs.trip_id -> trips.id, blogs.location_id -> locations.id
  *   gallery_items    GalleryItem       gallery_items.trip_id -> trips.id, .blog_id -> blogs.id
+ *
+ * Every store reads these objects back from the row's `data` jsonb, not from
+ * its columns (trip_stops/trip_companions are the exception: real columns,
+ * mapped in tripStore). Triggers keep the two in step, so the shapes below
+ * describe `data` as the triggers leave it. Last checked against
+ * `supabase gen types` on 2026-11-24.
  */
 
 /** yyyy-mm-dd */
@@ -97,9 +103,14 @@ export interface BlogPost {
   id: string;
   title: string;
   status: "draft" | "published";
-  /** The Location this post is filed under (column `blogs.location_id`). Derived from the trip when there is one. */
-  pinId: Location["id"] | null;
-  tripId: Trip["id"] | null;
+  /**
+   * The Location this post is filed under (column `blogs.location_id`). Derived from the trip when there is one.
+   * Optional: on Supabase the `sync_blog_hierarchy` trigger drops the key from `data` when the column is null,
+   * while mock mode stores an explicit `null`, so test with `!= null`, not `=== null`.
+   */
+  pinId?: Location["id"] | null;
+  /** Column `blogs.trip_id`; missing rather than null on Supabase, like `pinId`. */
+  tripId?: Trip["id"] | null;
   /** Which of the trip's stops the post is set at (kept in `data`); null = anywhere on the trip. */
   stopId?: TripStop["id"] | null;
   location: { name: string; lat?: number; lng?: number };
@@ -114,6 +125,8 @@ export interface BlogPost {
   vibes?: string[];
   coverImage: string;
   favorite?: boolean;
+  /** Written into `data` by the `stamp_blog_author` trigger (Supabase only); absent for posts with no owner. */
+  authorName?: string;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }
@@ -127,9 +140,14 @@ export interface GalleryItem {
   type: "image" | "video";
   url: string;
   thumbUrl: string | null;
-  /** Derived from the trip (or the attached post) — column `gallery_items.location_id`. */
-  pinId: Location["id"] | null;
-  tripId: Trip["id"] | null;
+  /**
+   * Column `gallery_items.location_id`: derived from the trip (or the attached post) when there is one,
+   * otherwise the location the item was filed under ("not part of a trip").
+   * Optional: `sync_gallery_item_hierarchy` drops `pinId`/`tripId` from `data` when the column is null
+   * (mock mode keeps an explicit `null`). `blogId` is always written, possibly as null.
+   */
+  pinId?: Location["id"] | null;
+  tripId?: Trip["id"] | null;
   blogId: BlogPost["id"] | null;
   caption?: string;
   tags?: string[];

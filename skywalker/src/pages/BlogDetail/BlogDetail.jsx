@@ -5,6 +5,7 @@ import BlogReader from "../../components/BlogReader/BlogReader";
 import VisibilityToggle from "../../components/VisibilityToggle/VisibilityToggle";
 import { useAsync } from "../../hooks/useAsync";
 import { useAuth } from "../../lib/auth";
+import LoadingSpinner from "../../components/LoadingSpinner/LoadingSpinner";
 import "./BlogDetail.css";
 
 export default function BlogDetail() {
@@ -18,7 +19,7 @@ export default function BlogDetail() {
   const { data: trip } = useAsync(() => (tripId ? getTripById(tripId) : null), [tripId]);
 
   if (loading) {
-    return <div className="blog-detail-status">Loading blog…</div>;
+    return <LoadingSpinner fullPage size="lg" label="Loading story…" />;
   }
 
   if (error || !blog) {

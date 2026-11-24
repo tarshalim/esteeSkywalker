@@ -7,6 +7,7 @@ import { journeyLegs, stopPinsOf } from "../../lib/hierarchy";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { createIdyllicTexture, createYellowBlueGlobeDataUrl, enhanceTexture } from "../../lib/proceduralGlobeTexture";
 import { useTheme } from "../../lib/theme";
+import LoadingSpinner from "../LoadingSpinner/LoadingSpinner";
 import "./PhotoGlobe.css";
 
 const DAY_TEXTURE_URL = "/textures/earth-blue-marble.jpg";
@@ -328,6 +329,9 @@ export default function PhotoGlobe({
   onStopClick = null,
   onSurfaceClick = null,
   onPinDropAt,
+  // Caller's data (pins, trips…) still loading: keep the spinner up after the scene is ready.
+  loading = false,
+  loadingLabel = "Loading globe…",
 }) {
   const globeEl = useRef();
   const wrapperRef = useRef();
@@ -814,6 +818,9 @@ export default function PhotoGlobe({
       }`}
       ref={wrapperRef}
     >
+      {(!isReady || loading) && (
+        <LoadingSpinner overlay size={markerScale > 1 ? "sm" : "lg"} label={markerScale > 1 ? null : loadingLabel} tone={theme === "dark" ? "light" : undefined} />
+      )}
       <Globe
         ref={globeEl}
         width={size.width}

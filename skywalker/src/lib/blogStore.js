@@ -6,12 +6,13 @@ import { deleteOrphanedMedia } from "./files";
 import { notifyDataChanged } from "./liveSync";
 import { hasCoords } from "./geo";
 import { findBuiltInTemplate, normalizeTemplate } from "./templates";
+import { MOCK_KEYS, cascadeBlogDelete, cascadeBlogTrip } from "./mockCascades";
 
 // Blogs/templates API: Supabase `blogs`/`templates` tables when configured,
 // otherwise a localStorage mock. Every function returns a Promise so callers
 // don't care which backend is active.
 
-const BLOGS_KEY = "skywalker.blogs.v1";
+const BLOGS_KEY = MOCK_KEYS.blogs;
 const templates = createCollection({ table: "templates", storageKey: "skywalker.templates.v1" });
 
 function toBlogRow(blog) {
@@ -109,8 +110,12 @@ export async function upsertBlog(blog) {
         ...resolveDates(blog, blogs[idx]),
         updatedAt: now,
       });
+      const prev = blogs[idx];
       blogs[idx] = updated;
-      return saveBlog(updated, blogs);
+      await saveBlog(updated, blogs);
+      // Supabase: the blogs_cascade_trip trigger moves its photos along.
+      if (!supabase) cascadeBlogTrip(prev, updated).forEach(notifyDataChanged);
+      return updated;
     }
   }
 
@@ -148,8 +153,11 @@ export async function deleteBlog(id) {
   }
   const blogs = await loadBlogs();
   writeJSON(BLOGS_KEY, blogs.filter((b) => b.id !== id));
+  // Supabase: FK actions drop its comments and reactions and unattach its photos.
+  const changed = cascadeBlogDelete(id);
   await delay();
   notifyDataChanged("blogs");
+  changed.forEach(notifyDataChanged);
   return true;
 }
 

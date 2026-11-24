@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "./supabase";
 import { errorMessage } from "./errors";
+import LoadingSpinner from "../components/LoadingSpinner/LoadingSpinner";
 
 const AuthContext = createContext(null);
 
@@ -102,7 +103,8 @@ export function useAuth() {
 export function RequireAuth({ children }) {
   const { canEdit, loading } = useAuth();
   const location = useLocation();
-  if (loading) return null;
+  // A spinner, not null: protected pages used to sit blank during the session check.
+  if (loading) return <LoadingSpinner fullPage label="Checking your account…" />;
   if (!canEdit) return <Navigate to="/account" replace state={{ from: location.pathname }} />;
   return children;
 }

@@ -44,7 +44,7 @@ export function cityOf(blog) {
  * would only ever repeat it ("Singapore → Singapore"). Their posts list no
  * cities, which hides the City dropdown for them.
  */
-const CITY_STATES = new Set(["SG", "MC", "VA", "HK", "MO", "GI"]);
+export const CITY_STATES = new Set(["SG", "MC", "VA", "HK", "MO", "GI"]);
 
 /**
  * Filter options built from the posts themselves, so only places that

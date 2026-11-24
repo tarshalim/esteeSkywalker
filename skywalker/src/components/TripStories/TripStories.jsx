@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, LoaderCircle, Pencil, Plane, Plus, Scissors, Trash2 } from "lucide-react";
 import TripDialog from "../TripPicker/TripDialog";
 import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
+import { blogPreview } from "../../lib/blogPreview";
 import { collectMedia, realCover } from "../../lib/media";
 import { deleteTrip, getTrips, saveTrip } from "../../lib/tripStore";
 import { getPins } from "../../lib/pinStore";
@@ -24,8 +25,8 @@ import "./TripStories.css";
 const MAX_SLIPS = 3;
 /** At most this many stops are listed on a pass; the rest fold into "+N more". */
 const MAX_PASS_STOPS = 4;
-/** Where each slip's tab peeks out along the envelope's top edge (% of width). */
-const TAB_LEFT = ["12%", "42%", "70%"];
+/** Slip width (% of the pass) by how many are fanned; narrow enough that they barely overlap. */
+const SLIP_WIDTH = [0, 64, 48, 36];
 /** Travel sticker that marks each slip's tab: airplane, passport, globe. */
 const TAB_ART = ["travel3-09", "travel3-04", "travel3-02"].map(findArt);
 
@@ -36,21 +37,27 @@ const postTime = (b) => new Date(b.postDate ?? b.startDate ?? b.date ?? 0).getTi
 /** Fan position for slip `i` of `n`: -1 (left) … 0 … 1 (right). */
 const fanOffset = (i, n) => (n === 1 ? 0 : (i / (n - 1)) * 2 - 1);
 
+/** Side-by-side place of slip `i` of `n` along the pass, so each one's text can be read. */
+function slipPlace(i, n) {
+  const width = SLIP_WIDTH[n];
+  const left = ((fanOffset(i, n) + 1) / 2) * (100 - width);
+  return { left: `${left}%`, width: `${width}%` };
+}
+
 function slipVariants(i, n, reduceMotion) {
   const off = fanOffset(i, n);
   return {
-    rest: { x: 0, y: 4, rotate: 0, transition: { duration: reduceMotion ? 0 : 0.25, ease: "easeIn" } },
+    rest: { x: `${off * -14}%`, y: 4, rotate: 0, transition: { duration: reduceMotion ? 0 : 0.25, ease: "easeIn" } },
     open: {
-      x: `${off * 34}%`,
-      y: -82 + Math.abs(off) * 14,
-      rotate: off * 9,
+      x: "0%",
+      y: -152 + Math.abs(off) * 6,
+      rotate: off * 2.5,
       transition: reduceMotion
         ? { duration: 0 }
         : { type: "spring", stiffness: 260, damping: 22, delay: i * 0.05 },
     },
   };
 }
-
 /**
  * "My Trips" on the homepage: one envelope per trip. Its published posts sit
  * tucked behind it as paper slips with a coloured tab peeking out, and fan up
@@ -380,6 +387,30 @@ function AddBlogLink({ href, tripTitle }) {
   );
 }
 
+/**
+ * One post's slip of notebook paper: its title and date, the opening words of
+ * its story, and its cover (or first photo) as an avatar in the top-right
+ * corner. Without a photo it's just the paper.
+ */
+function StorySlip({ post, open }) {
+  const { text, isFallback, thumb } = useMemo(() => blogPreview(post), [post]);
+  const [brokenThumb, setBrokenThumb] = useState("");
+  return (
+    <Link to={`/blogs/${post.id}`} className="trip-env-slip-link" tabIndex={open ? undefined : -1}>
+      <span className="trip-env-slip-head">
+        <span className="trip-env-slip-text">
+          <span className="trip-env-slip-title">{post.title || "Untitled story"}</span>
+          <span className="trip-env-slip-date">{formatBlogDate(post)}</span>
+        </span>
+        {thumb && thumb !== brokenThumb && (
+          <img className="trip-env-slip-avatar" src={thumb} alt="" loading="lazy" onError={() => setBrokenThumb(thumb)} />
+        )}
+      </span>
+      <span className={`trip-env-slip-snippet${isFallback ? " is-fallback" : ""}`}>{text}</span>
+    </Link>
+  );
+}
+
 function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting, onEdit, onDelete }) {
   const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
@@ -453,7 +484,7 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
             <motion.li
               key={post.id}
               className={`trip-env-slip trip-env-slip--${i}`}
-              style={{ zIndex: MAX_SLIPS - i }}
+              style={{ ...slipPlace(i, slips.length), "--slip-z": MAX_SLIPS - i }}
               variants={slipVariants(i, slips.length, reduceMotion)}
             >
               {TAB_ART[i] ? (
@@ -463,32 +494,23 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
                   alt=""
                   aria-hidden="true"
                   draggable={false}
-                  style={{ left: TAB_LEFT[i] }}
                 />
               ) : (
-                <span className="trip-env-slip-tab trip-env-slip-tab--plain" style={{ left: TAB_LEFT[i] }} aria-hidden="true" />
+                <span className="trip-env-slip-tab trip-env-slip-tab--plain" aria-hidden="true" />
               )}
               {/* Closed slips sit behind the pass; keep them out of the tab order until revealed. */}
               {post.more ? (
-                <Link to={tripHref} className="trip-env-slip-link trip-env-slip-link--more" tabIndex={open ? undefined : -1}>
-                  <span className="trip-env-slip-more-count" aria-hidden="true">+{post.more}</span>
-                  <span className="trip-env-slip-text">
-                    <span className="trip-env-slip-title">{post.more} more stories</span>
-                    <span className="trip-env-slip-date">See all {posts.length} in this trip</span>
+                <Link to={tripHref} className="trip-env-slip-link" tabIndex={open ? undefined : -1}>
+                  <span className="trip-env-slip-head">
+                    <span className="trip-env-slip-text">
+                      <span className="trip-env-slip-title">{post.more} more stories</span>
+                    </span>
+                    <span className="trip-env-slip-more-count" aria-hidden="true">+{post.more}</span>
                   </span>
+                  <span className="trip-env-slip-snippet is-fallback">See all {posts.length} in this trip</span>
                 </Link>
               ) : (
-              <Link to={`/blogs/${post.id}`} className="trip-env-slip-link" tabIndex={open ? undefined : -1}>
-                {realCover(post.coverImage) ? (
-                  <img src={post.coverImage} alt="" loading="lazy" />
-                ) : (
-                  <CoverPlaceholder variant="blog" seed={post.id} compact className="trip-env-slip-thumb" />
-                )}
-                <span className="trip-env-slip-text">
-                  <span className="trip-env-slip-title">{post.title || "Untitled story"}</span>
-                  <span className="trip-env-slip-date">{formatBlogDate(post)}</span>
-                </span>
-              </Link>
+                <StorySlip post={post} open={open} />
               )}
             </motion.li>
           ))}

@@ -3,6 +3,7 @@ import { supabase, unwrap } from "./supabase";
 import { notifyDataChanged } from "./liveSync";
 import { deleteOrphanedMedia } from "./files";
 import { sortStops, validateTrip } from "./hierarchy";
+import { MOCK_KEYS, cascadeTripDelete, cascadeTripLocation } from "./mockCascades";
 
 // Trips API: Supabase `trips` + `trip_companions` + `trip_stops` when
 // configured, otherwise a localStorage mock (companions and stops embedded in
@@ -17,7 +18,7 @@ import { sortStops, validateTrip } from "./hierarchy";
 /** @typedef {import("../types/hierarchy").TripCompanionInterval} TripCompanionInterval */
 /** @typedef {import("../types/hierarchy").TripStop} TripStop */
 
-const TRIPS_KEY = "skywalker.trips.v1";
+const TRIPS_KEY = MOCK_KEYS.trips;
 
 const COMPANION_COLUMNS = "id, start_date, end_date, companion_names";
 const STOP_COLUMNS =
@@ -143,11 +144,15 @@ export async function saveTrip(input) {
   }
   const trips = readJSON(TRIPS_KEY, []);
   const idx = trips.findIndex((t) => t.id === trip.id);
+  const prevLocationId = idx === -1 ? null : trips[idx].locationId;
   if (idx === -1) trips.push(trip);
   else trips[idx] = { ...trips[idx], ...trip, createdAt: trips[idx].createdAt };
   writeJSON(TRIPS_KEY, trips);
+  // Supabase: the trips_cascade_location trigger moves its posts and photos along.
+  const changed = idx !== -1 && prevLocationId !== trip.locationId ? cascadeTripLocation(trip.id, trip.locationId) : [];
   await delay();
   notifyDataChanged("trips");
+  changed.forEach(notifyDataChanged);
   return trip;
 }
 
@@ -163,9 +168,7 @@ export async function deleteTrip(id) {
     await deleteOrphanedMedia(deleted[0].data, `trip ${id}`);
   } else {
     writeJSON(TRIPS_KEY, readJSON(TRIPS_KEY, []).filter((t) => t.id !== id));
-    for (const key of ["skywalker.blogs.v1", "skywalker.photos.v1"]) {
-      writeJSON(key, readJSON(key, []).map((item) => (item.tripId === id ? { ...item, tripId: null } : item)));
-    }
+    cascadeTripDelete(id).forEach(notifyDataChanged);
     await delay();
   }
   notifyDataChanged("trips");

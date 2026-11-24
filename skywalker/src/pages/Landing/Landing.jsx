@@ -115,6 +115,7 @@ export default function Landing() {
 
         <BlogFeed
           blogs={blogs}
+          loading={blogsLoading}
           globeFilter={globeFilter}
           onClearGlobeFilter={handleClearGlobeFilter}
           scrollRoot={scrollRoot}

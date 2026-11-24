@@ -23,6 +23,7 @@ import FilterBar from "../../components/FilterBar/FilterBar";
 import MediaView from "../../components/MediaView/MediaView";
 import PhotoLightbox from "../../components/PhotoLightbox/PhotoLightbox";
 import PhotoUploadModal from "../../components/PhotoUploadModal/PhotoUploadModal";
+import LoadingSpinner from "../../components/LoadingSpinner/LoadingSpinner";
 import { countryCodeToFlagEmoji } from "../../lib/countries";
 import { formatDate } from "../../lib/dateFilters";
 import { useAuth } from "../../lib/auth";
@@ -307,6 +308,7 @@ export default function Gallery() {
       </div>
 
       {error && <p className="gallery-subtitle">Couldn&rsquo;t load the gallery: {errorMessage(error)}</p>}
+      {loading && <LoadingSpinner size="lg" label="Loading photos & videos…" />}
       {!loading && !error && count === 0 && <p className="gallery-subtitle">Nothing here yet.</p>}
 
       <div className="gallery-grid">

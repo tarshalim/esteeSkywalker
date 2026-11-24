@@ -2,6 +2,8 @@ import { makeId } from "./storage";
 import { createCollection } from "./collection";
 import { notifyDataChanged } from "./liveSync";
 import { distanceKm, hasCoords } from "./geo";
+import { supabase } from "./supabase";
+import { MOCK_KEYS, cascadePinDelete } from "./mockCascades";
 
 // Locations API: Supabase `locations` table when configured, otherwise a
 // localStorage mock. Every function returns a Promise so callers
@@ -24,7 +26,7 @@ import { distanceKm, hasCoords } from "./geo";
 
 const pins = createCollection({
   table: "locations",
-  storageKey: "skywalker.pins.v1",
+  storageKey: MOCK_KEYS.pins,
   toRow: (pin) => ({
     name: pin.placeName || pin.title,
     lat: pin.lat,
@@ -43,6 +45,8 @@ export const getPinById = pins.get;
 export async function deletePin(id) {
   await pins.remove(id);
   notifyDataChanged("locations");
+  // Supabase: FK actions delete its trips and unfile its posts and photos.
+  if (!supabase) cascadePinDelete(id).forEach(notifyDataChanged);
   return true;
 }
 

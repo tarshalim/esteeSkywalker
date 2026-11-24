@@ -1,6 +1,7 @@
 import { infraErrorMessage } from "./errors";
 import { delay, makeId, readJSON, writeJSON } from "./storage";
 import { supabase, unwrap } from "./supabase";
+import { MOCK_KEYS } from "./mockCascades";
 
 // Section-anchored comments and emoji reactions: Supabase `section_comments`
 // / `section_reactions` (see the section_comments migration) when configured,
@@ -19,8 +20,8 @@ export const EMAIL_MAX = 254;
 // Same shape the stamp_section_comment trigger enforces.
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-const COMMENTS_KEY = "skywalker.sectionComments.v1";
-const REACTIONS_KEY = "skywalker.sectionReactions.v1";
+const COMMENTS_KEY = MOCK_KEYS.comments;
+const REACTIONS_KEY = MOCK_KEYS.reactions;
 const GUEST_KEY = "skywalker.guestKey.v1";
 const GUEST_PROFILE_KEY = "skywalker.guestProfile.v1";
 

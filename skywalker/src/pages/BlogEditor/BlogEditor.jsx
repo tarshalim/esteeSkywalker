@@ -36,6 +36,7 @@ import Select from "../../components/Select/Select";
 import { useDataChanges } from "../../lib/liveSync";
 import { deleteBlogAudio, getBlogMusic } from "../../lib/music";
 import { errorMessage } from "../../lib/errors";
+import LoadingSpinner from "../../components/LoadingSpinner/LoadingSpinner";
 import "./BlogEditor.css";
 
 function todayISO() {
@@ -765,18 +766,16 @@ export default function BlogEditor() {
 
   const closeGallery = useCallback(() => setGalleryOpen(false), []);
 
+  if (loadState === "loading") return <LoadingSpinner fullPage size="lg" label="Loading post…" />;
+
   if (loadState !== "ready") {
     return (
       <div className="editor-page">
         <div className="editor-canvas">
-          {loadState === "loading" ? (
-            <p>Loading post…</p>
-          ) : (
-            <p>
-              {loadState === "missing" ? "That post doesn't exist." : "Couldn't load this post."}{" "}
-              <Link to="/blogs">← Back to the journey</Link>
-            </p>
-          )}
+          <p>
+            {loadState === "missing" ? "That post doesn't exist." : "Couldn't load this post."}{" "}
+            <Link to="/blogs">← Back to the journey</Link>
+          </p>
         </div>
       </div>
     );

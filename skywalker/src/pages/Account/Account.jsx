@@ -10,6 +10,7 @@ import GlobePreview from "../../components/GlobePreview/GlobePreview";
 import { useGlobePrefs } from "../../lib/globePrefs";
 import { useTheme } from "../../lib/theme";
 import Select from "../../components/Select/Select";
+import LoadingSpinner from "../../components/LoadingSpinner/LoadingSpinner";
 import { errorMessage } from "../../lib/errors";
 import "./Account.css";
 
@@ -23,7 +24,7 @@ const GLOBE_TOGGLES = [
 export default function Account() {
   const { user, loading, enabled } = useAuth();
 
-  if (loading) return <div className="account-page" />;
+  if (loading) return <LoadingSpinner fullPage label="Loading your account…" />;
 
   return (
     <div className="account-page">
@@ -367,7 +368,7 @@ function AccountsPanel({ currentUserId }) {
     <section className="account-admin">
       {error && <p className="account-error">{error}</p>}
       {!accounts ? (
-        !error && <p className="account-muted">Loading…</p>
+        !error && <LoadingSpinner size="sm" label="Loading accounts…" />
       ) : (
         <>
           <h2>Waiting for approval</h2>

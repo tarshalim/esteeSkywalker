@@ -119,11 +119,15 @@ export default function GlobeExplorer({
   // The whole hierarchy: locations -> trips -> posts and gallery items.
   // Real store, not the hard-coded mock: uploads used to never reach the globe.
   // Each source fails independently so one bad request doesn't blank the rest.
+  // Only the first load shows the spinner; live-sync refreshes update in place.
+  const [storiesLoading, setStoriesLoading] = useState(true);
   const loadStories = useCallback(() => {
-    getBlogs().then(setBlogs, reportLoadError("blogs"));
-    pinStore.getPins().then(setCustomPins, reportLoadError("pins"));
-    getTrips().then(setTrips, reportLoadError("trips"));
-    getPhotos().then(setGalleryItems, reportLoadError("photos"));
+    Promise.allSettled([
+      getBlogs().then(setBlogs, reportLoadError("blogs")),
+      pinStore.getPins().then(setCustomPins, reportLoadError("pins")),
+      getTrips().then(setTrips, reportLoadError("trips")),
+      getPhotos().then(setGalleryItems, reportLoadError("photos")),
+    ]).then(() => setStoriesLoading(false));
   }, []);
 
   useEffect(loadStories, [loadStories]);
@@ -685,6 +689,7 @@ export default function GlobeExplorer({
             onCustomPinClick={handleCustomPinClick}
             onStopClick={handleStopClick}
             onPinDropAt={handlePinDropAt}
+            loading={storiesLoading}
           />
         </ErrorBoundary>
         <AnimatePresence>

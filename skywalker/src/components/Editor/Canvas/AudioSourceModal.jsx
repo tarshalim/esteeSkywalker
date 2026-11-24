@@ -2,7 +2,11 @@ import { useState } from "react";
 import { X, Upload, Link2 } from "lucide-react";
 import { fileToUrl } from "../../../lib/files";
 import { canTrimAudioSource } from "../../../lib/media";
+import { errorMessage } from "../../../lib/errors";
 import TrimFields from "../TrimFields";
+
+// Fallback for pickers that leave `file.type` empty (some .m4a/.wav/.flac on Windows).
+const AUDIO_FILE_EXT = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|weba)$/i;
 
 function detectUrlSourceType(url) {
   if (/youtu\.be\/|youtube\.com\//.test(url)) return "youtube";
@@ -27,19 +31,36 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
   const [pendingUpload, setPendingUpload] = useState(null);
   const [trim, setTrim] = useState({ startSec: element.startSec ?? null, endSec: element.endSec ?? null, loop: element.loop ?? false });
   const [trimError, setTrimError] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
+    // Reset so picking the same file again after an error still fires onChange.
+    e.target.value = "";
     if (!file) return;
-    const dataUrl = await fileToUrl(file);
-    setPendingUpload({ dataUrl, name: file.name });
-    if (!title) setTitle(file.name.replace(/\.[^.]+$/, ""));
+    // `accept` is only a hint, and the `media` bucket has no MIME allowlist, so check here.
+    if (!(file.type ? file.type.startsWith("audio/") : AUDIO_FILE_EXT.test(file.name))) {
+      setUploadError("That isn't an audio file. Choose an MP3, M4A, WAV, OGG or similar.");
+      return;
+    }
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const dataUrl = await fileToUrl(file);
+      setPendingUpload({ dataUrl, name: file.name });
+      if (!title) setTitle(file.name.replace(/\.[^.]+$/, ""));
+    } catch (err) {
+      setUploadError(`Couldn't upload: ${errorMessage(err)}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const urlSourceType = detectUrlSourceType(url.trim());
   // Albums/playlists have no single timeline to trim.
   const trimmable = tab === "upload" || !url.trim() || canTrimAudioSource(urlSourceType, url.trim());
-  const canSave = (tab === "upload" ? Boolean(pendingUpload || element.sourceType === "upload") : url.trim().length > 0) && !(trimmable && trimError);
+  const canSave = !(tab === "upload" && uploading) && (tab === "upload" ? Boolean(pendingUpload || element.sourceType === "upload") : url.trim().length > 0) && !(trimmable && trimError);
   const savedTrim = trimmable ? trim : { startSec: null, endSec: null, loop: trim.loop };
 
   const handleSave = () => {
@@ -101,11 +122,22 @@ export default function AudioSourceModal({ element, palette, onSave, onClose }) 
         </div>
 
         {tab === "upload" ? (
-          <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-600 py-6 text-xs text-slate-400 cursor-pointer hover:border-blue-400 hover:text-blue-300">
-            <Upload size={20} />
-            {pendingUpload?.name || (element.sourceType === "upload" ? "Replace file…" : "Choose an MP3 file")}
-            <input type="file" accept="audio/*" hidden onChange={handleFile} />
-          </label>
+          <>
+            <label
+              className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-600 py-6 text-xs text-slate-400 ${
+                uploading ? "cursor-wait opacity-60" : "cursor-pointer hover:border-blue-400 hover:text-blue-300"
+              }`}
+            >
+              <Upload size={20} />
+              {uploading ? "Uploading…" : pendingUpload?.name || (element.sourceType === "upload" ? "Replace file…" : "Choose an MP3 file")}
+              <input type="file" accept="audio/*" hidden disabled={uploading} onChange={handleFile} />
+            </label>
+            {uploadError && (
+              <p role="alert" className="m-0 mt-2 text-[11px] text-red-300">
+                {uploadError}
+              </p>
+            )}
+          </>
         ) : (
           <input
             className="w-full text-sm px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 outline-none focus:border-blue-400"
