@@ -18,9 +18,10 @@ export default function TourBanner() {
           className="tour-banner glass-panel"
           aria-label="Guided tour"
           initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 24 }}
-          transition={{ duration: 0.35, ease: "easeOut", delay: 0.8 }}
+          // The entrance waits for the page to settle; the exit must not, or
+          // "Not now" leaves the banner up (and clickable) for another 0.8 s.
+          animate={{ opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut", delay: 0.8 } }}
+          exit={{ opacity: 0, y: 24, transition: { duration: 0.2, ease: "easeIn" } }}
         >
           <span className="tour-banner-icon" aria-hidden="true">
             <Sparkles size={18} />

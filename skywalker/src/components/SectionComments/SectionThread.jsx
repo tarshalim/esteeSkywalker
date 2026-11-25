@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../lib/auth";
 import { AVATARS, avatarFor } from "../../lib/avatars";
+import { errorMessage } from "../../lib/errors";
 import {
   COMMENT_MAX,
   EMAIL_MAX,
@@ -9,6 +10,7 @@ import {
   commentErrorMessage,
   getGuestProfile,
   saveGuestProfile,
+  validateCommentBody,
   validateGuest,
 } from "../../lib/commentStore";
 import "./SectionComments.css";
@@ -194,6 +196,22 @@ function CommentList({ comments, threads }) {
   const { user, isAdmin, enabled } = useAuth();
   // The offline mock has no accounts; its single user moderates everything.
   const canDelete = (c) => !enabled || isAdmin || (user && c.userId === user.id);
+  const [deleting, setDeleting] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const remove = async (id) => {
+    if (!window.confirm("Delete this comment?")) return;
+    setDeleting(id);
+    setDeleteError(null);
+    try {
+      await threads.removeComment(id);
+    } catch (err) {
+      console.error("Failed to delete comment", err);
+      setDeleteError({ id, message: errorMessage(err, "Couldn’t delete that comment. Please try again.") });
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   if (comments.length === 0) return <p className="sc-empty">No comments here yet — start the conversation.</p>;
   return (
@@ -212,17 +230,19 @@ function CommentList({ comments, threads }) {
                 <button
                   type="button"
                   className="sc-delete"
-                  onClick={() => {
-                    if (window.confirm("Delete this comment?")) {
-                      threads.removeComment(c.id).catch((err) => console.error("Failed to delete comment", err));
-                    }
-                  }}
+                  disabled={deleting === c.id}
+                  onClick={() => remove(c.id)}
                 >
-                  Delete
+                  {deleting === c.id ? "Deleting…" : "Delete"}
                 </button>
               )}
             </div>
             <p className="sc-body">{c.body}</p>
+            {deleteError?.id === c.id && (
+              <p className="sc-error" role="alert">
+                {deleteError.message}
+              </p>
+            )}
           </div>
         </li>
       ))}
@@ -250,15 +270,15 @@ function CommentForm({ sectionId, threads }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!body.trim()) return;
-    if (!member) {
-      const problem = validateGuest(guest);
-      if (problem) {
-        setError(problem);
-        return;
-      }
+    const problem = validateCommentBody(body) ?? (member ? null : validateGuest(guest));
+    if (problem) {
+      setError(problem);
+      return;
     }
-    // Looks like a bot: act as if it worked so it doesn't learn to adapt.
-    if (honeypot || Date.now() - openedAt.current < MIN_FILL_MS) {
+    // Looks like a bot: act as if it worked so it doesn't learn to adapt. Only
+    // guests are checked: members are signed in, and a quick "❤️ love this"
+    // from them must not vanish silently.
+    if (!member && (honeypot || Date.now() - openedAt.current < MIN_FILL_MS)) {
       setBody("");
       return;
     }
@@ -270,7 +290,7 @@ function CommentForm({ sectionId, threads }) {
       setBody("");
     } catch (err) {
       console.error("Failed to post comment", err);
-      setError(commentErrorMessage(err));
+      setError(commentErrorMessage(err, { member: Boolean(member) }));
     } finally {
       setBusy(false);
     }

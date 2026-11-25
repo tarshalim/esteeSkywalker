@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addSectionComment,
   deleteSectionComment,
+  flipReaction,
   getSectionComments,
   getSectionReactions,
   toggleSectionReaction,
 } from "../../lib/commentStore";
+import { useLatestOnly } from "../../hooks/useLatestOnly";
 
 /**
  * Every section's comments and reactions for one post, plus which section's
@@ -61,13 +63,20 @@ export function useSectionThreads(blogId, { enabled = true, viewerKey = null } =
     };
   }, [blogId, enabled]);
 
-  const loadReactions = useCallback(
-    () =>
-      getSectionReactions(blogId)
-        .then(setReactions)
-        .catch((err) => console.error("Failed to load reactions", err)),
-    [blogId]
-  );
+  // Toggles run one at a time (`toggleChain`) and the counts are reloaded only
+  // once none is left in flight (`pendingRef`). Only the newest reload is
+  // applied (`beginLoad`), and never while a toggle is pending, so an older
+  // response can't overwrite a click the server hasn't seen yet.
+  const beginLoad = useLatestOnly();
+  const pendingRef = useRef(0);
+  const toggleChain = useRef(Promise.resolve());
+
+  const loadReactions = useCallback(() => {
+    const isCurrent = beginLoad();
+    return getSectionReactions(blogId)
+      .then((map) => isCurrent() && pendingRef.current === 0 && setReactions(map))
+      .catch((err) => console.error("Failed to load reactions", err));
+  }, [blogId, beginLoad]);
 
   useEffect(() => {
     if (enabled) loadReactions();
@@ -93,21 +102,25 @@ export function useSectionThreads(blogId, { enabled = true, viewerKey = null } =
     setComments((list) => list.filter((c) => c.id !== id));
   }, []);
 
-  // Optimistic: flip it locally, then reconcile with the server's count.
+  // Optimistic: flip it locally, then reconcile with the server's count once
+  // every queued toggle has landed. Sending them one at a time matters: two
+  // overlapping toggle RPCs for the same emoji both miss the delete and both
+  // insert, and the second fails on the primary key.
   const toggleReaction = useCallback(
-    async (sectionId, emoji) => {
-      setReactions((map) => {
-        const section = map[sectionId] ?? {};
-        const prev = section[emoji] ?? { count: 0, mine: false };
-        const next = { count: Math.max(0, prev.count + (prev.mine ? -1 : 1)), mine: !prev.mine };
-        return { ...map, [sectionId]: { ...section, [emoji]: next } };
+    (sectionId, emoji) => {
+      setReactions((map) => flipReaction(map, sectionId, emoji));
+      pendingRef.current += 1;
+      const run = toggleChain.current.then(async () => {
+        try {
+          await toggleSectionReaction(blogId, sectionId, emoji);
+        } catch (err) {
+          console.error("Failed to toggle reaction", err);
+        }
+        pendingRef.current -= 1;
+        if (pendingRef.current === 0) await loadReactions();
       });
-      try {
-        await toggleSectionReaction(blogId, sectionId, emoji);
-      } catch (err) {
-        console.error("Failed to toggle reaction", err);
-      }
-      loadReactions();
+      toggleChain.current = run;
+      return run;
     },
     [blogId, loadReactions]
   );

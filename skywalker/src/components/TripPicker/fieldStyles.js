@@ -1,5 +1,5 @@
 // Shared form styling for the trip picker (TripFields, TripStopsEditor) and the
-// BlogFilterBar date popover. Sized from the --control-* tokens so text inputs
+// shared DateFilter popover (FilterControls). Sized from the --control-* tokens so text inputs
 // match <Select variant="field">.
 export const FIELD_INPUT =
   "h-(--control-h) w-full min-w-0 rounded-(--radius-field) border-2 px-(--control-px) text-sm outline-none focus:border-[var(--blue)]";

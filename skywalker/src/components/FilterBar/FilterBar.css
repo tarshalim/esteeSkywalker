@@ -1,4 +1,8 @@
 .filter-bar {
+  /* Anchors the DateFilter panel on narrow screens (its pill is position: static there). */
+  /* Above the gallery cards (their flag buttons are z-index 2) while the panel is open. */
+  position: relative;
+  z-index: var(--z-raised);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -111,10 +115,6 @@
   color: var(--text-on-accent);
 }
 
-.filter-bar-range {
-  position: relative;
-}
-
 .filter-bar-range-toggle {
   display: inline-flex;
   align-items: center;
@@ -127,52 +127,11 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  max-width: 14rem;
 }
 .filter-bar-range-toggle.is-active {
   border-color: var(--border-strong);
   color: var(--blue);
-}
-
-.filter-bar-range-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--border);
-  width: 200px;
-}
-
-.filter-bar-range-popover label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.filter-bar-range-popover input {
-  border-radius: var(--radius-field);
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text);
-  padding: 6px 8px;
-  font-size: 12px;
-}
-
-.filter-bar-range-clear {
-  align-self: flex-start;
-  border: none;
-  background: transparent;
-  color: var(--blue);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
 }
 
 .filter-bar-clear {
@@ -284,23 +243,6 @@
   }
   .filter-bar-clear {
     padding: 0 8px;
-  }
-
-  /* Opens in-flow inside the drawer instead of floating off-screen. */
-  .filter-bar-range:has(.filter-bar-range-popover) {
-    flex-basis: 100%;
-  }
-  .filter-bar-range-popover {
-    position: static;
-    width: 100%;
-    margin-top: 8px;
-    box-shadow: none;
-  }
-  .filter-bar-range-popover input {
-    min-height: 44px;
-  }
-  .filter-bar-range-clear {
-    min-height: 44px;
   }
 }
 

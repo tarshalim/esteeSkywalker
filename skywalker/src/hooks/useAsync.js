@@ -1,35 +1,54 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLatestOnly } from "./useLatestOnly";
 
 /**
- * Runs an async loader and tracks { data, error, loading }, ignoring results
- * that land after unmount or after `deps` change (so a slow response for an
- * old route param can't overwrite the current one). `setData` allows local
- * updates after a mutation, e.g. appending a freshly uploaded photo.
+ * Runs an async loader and tracks { data, error, loading }. Only the latest
+ * request's result is applied: one that lands after unmount, after `deps`
+ * change (so a slow response for an old route param can't overwrite the
+ * current one) or after a newer `reload()` is ignored.
+ *
+ * `reload()` re-runs the loader in place for live-sync refreshes: no loading
+ * state, and a failed refresh keeps the data already on screen (it's logged).
+ * `setData` allows local updates after a mutation, e.g. appending a freshly
+ * uploaded photo.
  */
 export function useAsync(load, deps, initialData = null) {
   const [state, setState] = useState({ data: initialData, error: null, loading: true });
-
+  const begin = useLatestOnly();
+  // reload() always runs the loader from the latest render. Declared before the
+  // load effect so it's up to date when that effect runs in the same commit.
+  const loadRef = useRef(load);
   useEffect(() => {
-    let cancelled = false;
-    setState((prev) => ({ ...prev, error: null, loading: true }));
+    loadRef.current = load;
+  });
+
+  const run = useCallback(() => {
+    const isCurrent = begin();
     Promise.resolve()
-      .then(load)
+      .then(() => loadRef.current())
       .then(
-        (data) => !cancelled && setState({ data, error: null, loading: false }),
+        (data) => isCurrent() && setState({ data, error: null, loading: false }),
         (error) => {
-          if (cancelled) return;
+          if (!isCurrent()) return;
           console.error(error);
-          setState((prev) => ({ ...prev, error, loading: false }));
+          // Only surface the error when nothing is shown yet; a failed refresh
+          // leaves the current data (and any earlier error) as they are.
+          setState((prev) => (prev.loading ? { ...prev, error, loading: false } : prev));
         }
       );
-    return () => {
-      cancelled = true;
-    };
+  }, [begin]);
+
+  useEffect(() => {
+    setState((prev) => ({ ...prev, error: null, loading: true }));
+    run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  const setData = (updater) =>
-    setState((prev) => ({ ...prev, data: typeof updater === "function" ? updater(prev.data) : updater }));
+  const setData = useCallback(
+    (updater) =>
+      setState((prev) => ({ ...prev, data: typeof updater === "function" ? updater(prev.data) : updater })),
+    []
+  );
 
-  return { ...state, setData };
+  return { ...state, setData, reload: run };
 }

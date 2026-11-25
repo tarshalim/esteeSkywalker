@@ -4,7 +4,7 @@ import { searchPlaces } from "../../lib/geocode";
 import { blankStop, stopHasCoords } from "../../lib/hierarchy";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { CONTINENTS, COUNTRY_TO_CONTINENT, SMALL_COUNTRY_CENTERS, countryCodeToFlagEmoji } from "../../lib/countries";
-import { continentForCountryCode, findCountryForPoint, formatCoords } from "../../lib/geo";
+import { continentForCountryCode, countryList, findCountryForPoint, formatCoords } from "../../lib/geo";
 import Select from "../Select/Select";
 import { ADD_ROW_BUTTON, FIELD_INPUT, FIELD_LABEL, addRowButtonStyle, fieldInputStyle, fieldLabelStyle as labelStyle } from "./fieldStyles";
 
@@ -14,11 +14,7 @@ const SEARCH_MIN_CHARS = 2;
 /** Every country A–Z: the geojson's polygons plus the microstates it lacks. */
 function useCountryOptions(features) {
   return useMemo(() => {
-    const byCode = new Map();
-    for (const f of features) {
-      const { ISO_A2: code, NAME: name } = f.properties ?? {};
-      if (code && code !== "-99" && name && !byCode.has(code)) byCode.set(code, name);
-    }
+    const byCode = new Map(countryList(features).map(({ code, name }) => [code, name]));
     for (const [code, [name]] of Object.entries(SMALL_COUNTRY_CENTERS)) if (!byCode.has(code)) byCode.set(code, name);
     return [...byCode].map(([code, name]) => ({ code, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [features]);
@@ -81,7 +77,12 @@ function StopPlaceInput({ value, onChange, onPick, label, autoFocus = false }) {
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
-        onKeyDown={(e) => e.key === "Escape" && setIsFocused(false)}
+        onKeyDown={(e) => {
+          if (e.key !== "Escape") return;
+          // Closing open suggestions uses up this Escape; the dialog stays (useDialog skips handled keys).
+          if (suggestions.length > 0) e.preventDefault();
+          setIsFocused(false);
+        }}
         aria-autocomplete="list"
         aria-label={label}
         autoFocus={autoFocus}

@@ -1,23 +1,24 @@
-import { delay, readJSON, writeJSON, makeId } from "./storage";
-import { supabase, unwrap, fromRows } from "./supabase";
+import { makeId } from "./storage";
+import { supabase } from "./supabase";
 import { createCollection } from "./collection";
 import { deleteBlogAudio, getBlogMusic } from "./music";
 import { deleteOrphanedMedia } from "./files";
+import { dateYear } from "./dateFilters";
 import { notifyDataChanged } from "./liveSync";
-import { hasCoords } from "./geo";
+import { hasExactCoords, postLocationFields } from "./postLocation";
 import { findBuiltInTemplate, normalizeTemplate } from "./templates";
 import { MOCK_KEYS, cascadeBlogDelete, cascadeBlogTrip } from "./mockCascades";
 
 // Blogs/templates API: Supabase `blogs`/`templates` tables when configured,
-// otherwise a localStorage mock. Every function returns a Promise so callers
-// don't care which backend is active.
+// otherwise a localStorage mock (both through lib/collection). Every function
+// returns a Promise so callers don't care which backend is active.
 
-const BLOGS_KEY = MOCK_KEYS.blogs;
-const templates = createCollection({ table: "templates", storageKey: "skywalker.templates.v1" });
-
-function toBlogRow(blog) {
-  return {
-    id: blog.id,
+const blogs = createCollection({
+  table: "blogs",
+  storageKey: MOCK_KEYS.blogs,
+  orderBy: "track_x",
+  label: "post",
+  toRow: (blog) => ({
     track_x: blog.trackX ?? 0,
     status: blog.status ?? "draft",
     start_date: blog.startDate ?? null,
@@ -25,10 +26,10 @@ function toBlogRow(blog) {
     // A trip implies its location; the blogs trigger derives location_id from it.
     location_id: blog.pinId ?? null,
     trip_id: blog.tripId ?? null,
-    data: blog,
     updated_at: blog.updatedAt ?? new Date().toISOString(),
-  };
-}
+  }),
+});
+const templates = createCollection({ table: "templates", storageKey: "skywalker.templates.v1", label: "template" });
 
 /**
  * A post is dated by `startDate` plus an optional `endDate` (null for a
@@ -40,7 +41,7 @@ function resolveDates(blog, prev = {}) {
     blog.startDate ?? blog.postDate ?? blog.date ?? prev.startDate ?? prev.postDate ?? prev.date ?? new Date().toISOString().slice(0, 10);
   const endDate = "endDate" in blog ? blog.endDate || null : prev.endDate ?? null;
   if (endDate && endDate < startDate) throw new Error("End date can't be before the start date");
-  return { startDate, endDate, postDate: startDate, date: startDate, year: new Date(startDate).getFullYear() };
+  return { startDate, endDate, postDate: startDate, date: startDate, year: dateYear(startDate) };
 }
 
 // Fields that were dropped from the model; cleared from posts as they're saved.
@@ -52,23 +53,7 @@ function withoutRemovedFields(blog) {
   return next;
 }
 
-async function loadBlogs() {
-  if (supabase) {
-    return fromRows(unwrap(await supabase.from("blogs").select("data").order("track_x")));
-  }
-  return readJSON(BLOGS_KEY, []);
-}
-
-async function saveBlog(blog, blogs) {
-  if (supabase) {
-    unwrap(await supabase.from("blogs").upsert(toBlogRow(blog)));
-  } else {
-    writeJSON(BLOGS_KEY, blogs);
-    await delay();
-  }
-  notifyDataChanged("blogs");
-  return blog;
-}
+const RESERVED_IDS = new Set(["new", "drafts"]);
 
 function slugify(text) {
   return (
@@ -80,49 +65,55 @@ function slugify(text) {
   );
 }
 
+/** A post's trail position; a missing or broken one counts as 0, like `track_x`'s default. */
+const trailX = (blog) => (Number.isFinite(blog.trackX) ? blog.trackX : 0);
+
+/** Where a new story goes: 1000 past the last one, so the trail keeps creation order. */
+const FIRST_TRACK_X = 900;
+const TRACK_X_STEP = 1000;
+function nextTrackX(all) {
+  return all.length === 0 ? FIRST_TRACK_X : Math.max(...all.map(trailX)) + TRACK_X_STEP;
+}
+
 export async function getBlogs() {
-  const blogs = await loadBlogs();
-  return delay([...blogs].sort((a, b) => a.trackX - b.trackX));
+  // Mock mode keeps insertion order, so sort in both.
+  return [...(await blogs.list())].sort((a, b) => trailX(a) - trailX(b));
 }
 
-export async function getBlogById(id) {
-  if (supabase) {
-    const row = unwrap(await supabase.from("blogs").select("data").eq("id", id).maybeSingle());
-    return row?.data ?? null;
-  }
-  const blogs = await loadBlogs();
-  return delay(blogs.find((b) => b.id === id) ?? null);
-}
+export const getBlogById = blogs.get;
 
+/**
+ * Saves a post: merges into the existing one when `blog.id` matches, else
+ * creates it with a slug id and the next trail position. Returns the post as
+ * stored (in Supabase mode, after the triggers have run).
+ */
 export async function upsertBlog(blog) {
-  const blogs = await loadBlogs();
+  const all = await blogs.list();
   const now = new Date().toISOString();
 
-  if (blog.id) {
-    const idx = blogs.findIndex((b) => b.id === blog.id);
-    if (idx !== -1) {
-      const updated = withoutRemovedFields({
-        ...blogs[idx],
-        ...blog,
-        // Shallow-merging would replace `location` wholesale and drop the
-        // lat/lng the globe needs whenever the payload only carries a name.
-        location: { ...blogs[idx].location, ...blog.location },
-        ...resolveDates(blog, blogs[idx]),
-        updatedAt: now,
-      });
-      const prev = blogs[idx];
-      blogs[idx] = updated;
-      await saveBlog(updated, blogs);
-      // Supabase: the blogs_cascade_trip trigger moves its photos along.
-      if (!supabase) cascadeBlogTrip(prev, updated).forEach(notifyDataChanged);
-      return updated;
-    }
+  const prev = blog.id ? all.find((b) => b.id === blog.id) : null;
+  if (prev) {
+    const updated = withoutRemovedFields({
+      ...prev,
+      ...blog,
+      // Shallow-merging would replace `location` wholesale and drop the
+      // lat/lng the globe needs whenever the payload only carries a name.
+      location: { ...prev.location, ...blog.location },
+      ...resolveDates(blog, prev),
+      updatedAt: now,
+    });
+    const saved = await blogs.update(updated);
+    notifyDataChanged("blogs");
+    // Supabase: the blogs_cascade_trip trigger moves its photos along.
+    if (!supabase) cascadeBlogTrip(prev, updated).forEach(notifyDataChanged);
+    return saved;
   }
 
   let id = slugify(blog.title || "untitled");
-  if (blogs.some((b) => b.id === id)) id = `${id}-${Date.now().toString(36)}`;
+  // /blogs/new and /blogs/drafts are routes, so a post with either id could never be opened.
+  if (RESERVED_IDS.has(id) || all.some((b) => b.id === id)) id = `${id}-${Date.now().toString(36)}`;
 
-  const trackX = blog.trackX ?? (blogs.length === 0 ? 900 : Math.max(...blogs.map((b) => b.trackX)) + 1000);
+  const trackX = Number.isFinite(blog.trackX) ? blog.trackX : nextTrackX(all);
 
   const created = withoutRemovedFields({
     laneOffset: 0,
@@ -136,28 +127,22 @@ export async function upsertBlog(blog) {
     createdAt: now,
     updatedAt: now,
   });
-  blogs.push(created);
-  return saveBlog(created, blogs);
+  const saved = await blogs.insert(created);
+  notifyDataChanged("blogs");
+  return saved;
 }
 
 export async function deleteBlog(id) {
-  if (supabase) {
-    const blog = await getBlogById(id);
-    // RLS turns a forbidden delete into a silent no-op, so check a row actually went.
-    const deleted = unwrap(await supabase.from("blogs").delete().eq("id", id).select("id"));
-    if (deleted.length === 0) throw new Error("This post may already be gone, or you don't have permission to delete it.");
-    // The post is gone either way; leftover files are only logged.
-    notifyDataChanged("blogs");
-    await Promise.all([deleteBlogAudio(getBlogMusic(blog)?.storagePath), deleteOrphanedMedia(blog, `post ${blog.id}`)]);
-    return true;
-  }
-  const blogs = await loadBlogs();
-  writeJSON(BLOGS_KEY, blogs.filter((b) => b.id !== id));
-  // Supabase: FK actions drop its comments and reactions and unattach its photos.
-  const changed = cascadeBlogDelete(id);
-  await delay();
+  // Throws if RLS (or a concurrent delete) left the row in place.
+  const blog = await blogs.remove(id);
   notifyDataChanged("blogs");
-  changed.forEach(notifyDataChanged);
+  if (supabase) {
+    // The post is gone either way; leftover files are only logged.
+    await Promise.all([deleteBlogAudio(getBlogMusic(blog)?.storagePath), deleteOrphanedMedia(blog, `post ${blog.id}`)]);
+  } else {
+    // Supabase: FK actions drop its comments and reactions and unattach its photos.
+    cascadeBlogDelete(id).forEach(notifyDataChanged);
+  }
   return true;
 }
 
@@ -170,15 +155,9 @@ export async function setBlogVisibility(id, visible) {
   const blog = await getBlogById(id);
   if (!blog) throw new Error("This post no longer exists.");
   if (visible && !blog.countryCode) throw new Error("Add a country in the editor first.");
-  const updated = { ...blog, status: visible ? "published" : "draft", updatedAt: new Date().toISOString() };
-  if (supabase) {
-    // RLS turns a forbidden update into a silent no-op, so check a row actually changed.
-    const rows = unwrap(await supabase.from("blogs").update(toBlogRow(updated)).eq("id", id).select("id"));
-    if (rows.length === 0) throw new Error("You don't have permission to change this post.");
-    notifyDataChanged("blogs");
-    return updated;
-  }
-  return upsertBlog(updated);
+  const saved = await blogs.update({ ...blog, status: visible ? "published" : "draft", updatedAt: new Date().toISOString() });
+  notifyDataChanged("blogs");
+  return saved;
 }
 
 /**
@@ -195,9 +174,10 @@ export async function setBlogsPin(blogIds, pin) {
   for (const id of blogIds) {
     const blog = await getBlogById(id);
     if (!blog) continue;
+    // A country-centroid fallback isn't a spot of its own, so the pin's replaces it.
     const location =
-      pin && !hasCoords(blog.location)
-        ? { name: blog.location?.name || pin.placeName || pin.title, lat: pin.lat, lng: pin.lng }
+      pin && !hasExactCoords(blog.location)
+        ? { name: postLocationFields(blog.location).name || pin.placeName || pin.title, lat: pin.lat, lng: pin.lng, approx: false }
         : undefined;
     const tripId = pin && blog.pinId === pin.id ? blog.tripId ?? null : null;
     const stopId = tripId ? blog.stopId ?? null : null;
@@ -216,7 +196,17 @@ export async function getTemplateById(id) {
   return findBuiltInTemplate(id) ?? normalizeTemplate(await templates.get(id));
 }
 
-export const deleteTemplate = templates.remove;
+/**
+ * Deletes a saved template and the uploads only it still referenced (a post
+ * deleted after the template was saved leaves its photos to the template).
+ * `keep` is unsaved work that may use the same files, e.g. the editor's canvas
+ * after the template was applied to it.
+ */
+export async function deleteTemplate(id, keep = null) {
+  const removed = await templates.remove(id);
+  await deleteOrphanedMedia(removed, `template ${id}`, keep);
+  return removed;
+}
 
 export async function saveTemplate({ name, description = "", title, excerpt = "", coverImage, vibes = [], weather = null, blocks, canvas }) {
   const saved = await templates.insert({

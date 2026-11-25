@@ -1,0 +1,415 @@
+.trip-detail {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: calc(var(--nav-bottom) + 2rem) 0 4rem;
+  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--blue) 10%, var(--bg)) 0%, var(--bg) 55%);
+}
+
+.trip-detail--status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+}
+.trip-detail-status-text {
+  color: var(--text-muted);
+}
+
+.trip-detail-container {
+  width: min(1200px, calc(100% - 3rem));
+  margin: 0 auto;
+}
+
+.trip-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.trip-detail-back:hover,
+.trip-detail-back:focus-visible {
+  color: var(--text-strong);
+}
+
+/* ---- Boarding pass summary ---------------------------------------------- */
+
+.trip-detail-pass {
+  --stub: 12.5rem;
+  --notch: 0.7rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--stub);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--yellow) 9%, var(--bg-elevated));
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 28px var(--shadow-color);
+  /* Semi-circle notches where the perforation meets the top and bottom edges. */
+  --notch-at: calc(100% - var(--stub));
+  mask:
+    radial-gradient(circle var(--notch) at var(--notch-at) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+    radial-gradient(circle var(--notch) at var(--notch-at) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+}
+
+.trip-detail-pass-main {
+  min-width: 0;
+}
+
+.trip-detail-pass-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1.25rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: var(--blue-deep);
+  color: #ffffff;
+}
+.trip-detail-pass-code {
+  margin-left: auto;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  letter-spacing: 0.12em;
+  opacity: 0.85;
+}
+
+.trip-detail-pass-body {
+  display: flex;
+  gap: 1.25rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+
+.trip-detail-pass-cover {
+  flex-shrink: 0;
+  width: 7.5rem;
+  height: 7.5rem;
+  border-radius: 0.6rem;
+  object-fit: cover;
+  border: 3px solid var(--bg-elevated);
+  box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.trip-detail-pass-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.trip-detail-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.trip-detail-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.trip-detail-facts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Stops read as a route: chips joined by a dotted line. */
+.trip-detail-stops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trip-detail-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-size: 0.78rem;
+  color: var(--text);
+}
+.trip-detail-stop + .trip-detail-stop::before {
+  content: "";
+  width: 0.9rem;
+  margin: 0 0.35rem 0 -0.75rem;
+  border-top: 2px dotted var(--border-strong);
+  opacity: 0.6;
+}
+.trip-detail-stop-name {
+  font-weight: 600;
+}
+.trip-detail-stop-date {
+  color: var(--text-muted);
+}
+.trip-detail-stops-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Tear-away stub behind a perforated line. */
+.trip-detail-pass-stub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.25rem 1rem;
+  border-left: 2px dashed var(--border);
+}
+.trip-detail-create {
+  white-space: nowrap;
+}
+.trip-detail-barcode {
+  display: flex;
+  align-items: stretch;
+  height: 30px;
+  max-width: 100%;
+  overflow: hidden;
+  opacity: 0.8;
+}
+.trip-detail-barcode span {
+  flex-shrink: 0;
+  background: var(--text);
+}
+
+/* ---- Section headings + view switcher ------------------------------------ */
+
+.trip-detail-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin: 2.5rem 0 1.5rem;
+}
+.trip-detail-section-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 650;
+  color: var(--text);
+}
+.trip-detail-count {
+  padding: 0.1rem 0.55rem;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.trip-detail-views {
+  display: inline-flex;
+  padding: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 14px var(--shadow-color);
+}
+.trip-detail-view {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: var(--control-h-sm);
+  padding: 0 0.95rem;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.trip-detail-view > :not(.trip-detail-view-pill) {
+  position: relative;
+}
+.trip-detail-view:hover {
+  color: var(--text);
+}
+.trip-detail-view.is-active {
+  color: var(--text-on-accent);
+}
+.trip-detail-view:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.trip-detail-view-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--yellow);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--blue-deep) 60%, transparent);
+}
+
+/* ---- Story grid ---------------------------------------------------------- */
+
+.trip-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+  gap: 1.75rem 1.25rem;
+}
+
+.trip-detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 2.5rem 0;
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+.trip-detail-empty p {
+  margin: 0;
+}
+
+/* ---- Media gallery ------------------------------------------------------- */
+
+.trip-detail-add-media {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-pill);
+  background: var(--yellow);
+  color: var(--text-on-accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.trip-detail-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr));
+  gap: 1rem;
+}
+
+.trip-detail-media-item {
+  position: relative;
+  display: block;
+  padding: 0;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  border: 2px solid var(--border);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.trip-detail-media-item img,
+.trip-detail-media-item video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+.trip-detail-media-item:hover,
+.trip-detail-media-item:focus-visible {
+  border-color: var(--yellow);
+  outline: none;
+}
+.trip-detail-media-item:hover img,
+.trip-detail-media-item:hover video {
+  transform: scale(1.08);
+}
+.trip-detail-media-label {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  text-align: left;
+  color: #ffffff;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.8), transparent);
+}
+.trip-detail-media-date {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.68rem;
+  opacity: 0.85;
+}
+
+/* ---- Small screens ------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  /* The stub drops below the pass; the perforation turns horizontal. */
+  .trip-detail-pass {
+    grid-template-columns: minmax(0, 1fr);
+    mask: none;
+  }
+  .trip-detail-pass-stub {
+    flex-direction: row;
+    justify-content: space-between;
+    border-left: none;
+    border-top: 2px dashed var(--border);
+    padding: 0.9rem 1.25rem;
+  }
+  .trip-detail-barcode {
+    height: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .trip-detail {
+    padding-top: calc(var(--nav-bottom) + 1rem);
+  }
+  .trip-detail-container {
+    width: calc(100% - 1.5rem);
+  }
+  .trip-detail-pass-body {
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 0.9rem 1rem 1rem;
+  }
+  .trip-detail-pass-cover {
+    width: 100%;
+    height: 9rem;
+  }
+  .trip-detail-views {
+    width: 100%;
+  }
+  .trip-detail-view {
+    flex: 1;
+    justify-content: center;
+  }
+  /* Two cards per row on phones, like the home feed. */
+  .trip-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .trip-detail-media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+}

@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "../../lib/theme";
 import { GLOBE_HASH, GLOBE_PATH } from "../../lib/routes";
-import { ROLE_LABELS, useAuth } from "../../lib/auth";
+import { ROLE_LABELS, accountDisplayName, useAuth } from "../../lib/auth";
 import { useTour } from "../../lib/tour";
 import { useSearch } from "../../lib/search";
 import Avatar from "../Avatar/Avatar";
@@ -223,7 +223,7 @@ function SignOutRow({ signOut, role }) {
  * button pattern: opening focuses the first item, arrows/Home/End move
  * between items, Escape returns to the avatar, Tab closes.
  */
-function AccountMenu({ user, username, role, active }) {
+function AccountMenu({ user, username, role, isAdmin, active }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
@@ -254,7 +254,7 @@ function AccountMenu({ user, username, role, active }) {
     e.preventDefault();
   };
 
-  const displayName = user.user_metadata?.display_name || username || "Signed in";
+  const displayName = accountDisplayName(user, username) || "Signed in";
 
   return (
     <div ref={rootRef} className="relative">
@@ -318,9 +318,21 @@ function AccountMenu({ user, username, role, active }) {
               className={MENU_ROW}
               style={{ color: "var(--text)" }}
             >
-              <Settings size={18} strokeWidth={2.25} aria-hidden="true" />
+              <UserRound size={18} strokeWidth={2.25} aria-hidden="true" />
               Account settings
             </Link>
+            {isAdmin && (
+              <Link
+                to="/settings"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className={MENU_ROW}
+                style={{ color: "var(--text)" }}
+              >
+                <Settings size={18} strokeWidth={2.25} aria-hidden="true" />
+                Settings
+              </Link>
+            )}
             <SignOutRow signOut={signOut} role="menuitem" />
           </div>
         </div>
@@ -335,7 +347,7 @@ function AccountMenu({ user, username, role, active }) {
  * `right-0` under the trigger, which sits at the bar's right edge, so the
  * panel always opens inside the viewport.
  */
-function MobileMenu({ user, accountLabel, theme, onToggleTheme, onStartTour, isActive }) {
+function MobileMenu({ user, accountLabel, isAdmin, theme, onToggleTheme, onStartTour, isActive }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
@@ -410,6 +422,13 @@ function MobileMenu({ user, accountLabel, theme, onToggleTheme, onStartTour, isA
               <UserRound size={18} strokeWidth={2.25} aria-hidden="true" />
               <span className="min-w-0 truncate">{accountLabel}</span>
             </Link>
+            {isAdmin && (
+              <Link to="/settings" onClick={close} className={MENU_ROW} style={rowStyle(isActive("/settings"))}
+                aria-current={isActive("/settings") ? "page" : undefined}>
+                <Settings size={18} strokeWidth={2.25} aria-hidden="true" />
+                Settings
+              </Link>
+            )}
             <div className="mx-3 my-1 h-px" style={{ background: "var(--border)" }} aria-hidden="true" />
             <button
               type="button"
@@ -459,7 +478,7 @@ export default function TopNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
-  const { user, username, role, canEdit } = useAuth();
+  const { user, username, role, canEdit, isAdmin } = useAuth();
   const { start: startTour } = useTour();
   const accountLabel = user ? `Account (${username ?? "signed in"})` : "Sign in";
 
@@ -678,6 +697,7 @@ export default function TopNav() {
         <MobileMenu
           user={user}
           accountLabel={accountLabel}
+          isAdmin={isAdmin}
           theme={theme}
           onToggleTheme={toggleTheme}
           onStartTour={startTour}
@@ -706,7 +726,13 @@ export default function TopNav() {
           </button>
 
           {user ? (
-            <AccountMenu user={user} username={username} role={role} active={isActive("/account")} />
+            <AccountMenu
+              user={user}
+              username={username}
+              role={role}
+              isAdmin={isAdmin}
+              active={isActive("/account") || isActive("/settings")}
+            />
           ) : (
             <Link
               to="/account"

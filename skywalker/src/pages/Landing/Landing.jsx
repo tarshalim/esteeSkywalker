@@ -93,6 +93,16 @@ export default function Landing() {
     scrollToGlobe("instant");
   }, [blogsLoading, scrollToGlobe]);
 
+  // GlobeExplorer re-reports the selection whenever its pins reload, as a new
+  // object. Keep the old one when nothing changed, so the feed doesn't treat
+  // a data refresh as a new filter and drop back to its first page.
+  const handleGlobeFilter = useCallback(
+    (next) =>
+      setGlobeFilter((prev) =>
+        prev && next && prev.countryCode === next.countryCode && prev.label === next.label ? prev : next
+      ),
+    []
+  );
   const handleClearGlobeFilter = useCallback(() => setClearSignal((n) => n + 1), []);
 
   // A trip lives at a pin, so "Create New Trip" heads down to the globe and
@@ -133,7 +143,7 @@ export default function Landing() {
           variant="embedded"
           focusRequest={focusRequest}
           showGallery={false}
-          onFilterChange={setGlobeFilter}
+          onFilterChange={handleGlobeFilter}
           clearSignal={clearSignal}
           newTripSignal={newTripSignal}
           searchActive={Boolean(inGlobe)}

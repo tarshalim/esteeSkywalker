@@ -1,22 +1,14 @@
-import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { LoaderCircle, Trash2, TriangleAlert } from "lucide-react";
+import { useDialog } from "../../hooks/useDialog";
 
 /**
  * Confirms deleting the post open in the editor. Escape and the backdrop
  * cancel, except while the delete is in flight — it can't be recalled then.
  */
 export default function DeletePostDialog({ title, isPublished, deleting, error, onConfirm, onCancel }) {
-  const cancel = () => {
-    if (!deleting) onCancel();
-  };
-
-  useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && !deleting && onCancel();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [deleting, onCancel]);
+  const { ref, dismiss } = useDialog({ onDismiss: onCancel, locked: deleting });
 
   return createPortal(
     <motion.div
@@ -24,9 +16,10 @@ export default function DeletePostDialog({ title, isPublished, deleting, error, 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      onClick={cancel}
+      onClick={dismiss}
     >
       <motion.div
+        ref={ref}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-post-title"

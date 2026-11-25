@@ -20,6 +20,13 @@ export function loginEmail(username) {
   return name.includes("@") ? name : `${name}@${USERNAME_EMAIL_DOMAIN}`;
 }
 
+// The name shown for an account: its trimmed display name, else its username.
+// Same rule as the `stamp_blog_author` trigger, which writes it onto posts.
+// eslint-disable-next-line react-refresh/only-export-components
+export function accountDisplayName(user, username) {
+  return user?.user_metadata?.display_name?.trim() || username || null;
+}
+
 // Without Supabase configured there's no auth at all — the localStorage mock
 // is single-user, so `canEdit` is always true in that mode. With Supabase,
 // editing needs the admin or super_admin role (see the roles migration).
@@ -106,5 +113,15 @@ export function RequireAuth({ children }) {
   // A spinner, not null: protected pages used to sit blank during the session check.
   if (loading) return <LoadingSpinner fullPage label="Checking your account…" />;
   if (!canEdit) return <Navigate to="/account" replace state={{ from: location.pathname }} />;
+  return children;
+}
+
+// Route guard for admin-only pages. Anyone else (signed out, read-only, or
+// mock mode with no accounts) gets `fallback` — the 404 page — so the route
+// doesn't reveal that it exists. The server enforces the same rule.
+export function RequireAdmin({ children, fallback = null }) {
+  const { enabled, isAdmin, loading } = useAuth();
+  if (loading) return <LoadingSpinner fullPage label="Checking your account…" />;
+  if (!enabled || !isAdmin) return fallback;
   return children;
 }

@@ -1,5 +1,28 @@
 # Pins, Trips, Blogs & Photos — Data Architecture Audit & Globe UX Spec
 
+> **Status (checked against the code 2026-11-24).** §1 is still a correct description of
+> the location → trip → post/photo hierarchy. §2–§5 are a **proposal**, and only part of
+> it shipped, with a different design:
+>
+> - **Multi-stop trips shipped in a different form.** `trip_stops`
+>   ([20261024000000_trip_stops.sql](../supabase/migrations/20261024000000_trip_stops.sql))
+>   stores each stop's own `location_name`, country, continent, `latitude`/`longitude`
+>   and dates, ordered by `start_date` then `sequence_order`. A stop does **not** reference
+>   `locations`, there's no `ordinal`, `arrive_date`/`depart_date` or `on delete restrict`,
+>   and `trips.location_id` was **kept** as the trip's home pin, so `cascade_trip_location`
+>   is still there. No `cover_photo_id` was added. Stop dates must fall inside the trip
+>   (`check_trip_stop_bounds`, `check_trip_shrink`), and trips are saved atomically by the
+>   `save_trip` RPC.
+> - **Trip arcs shipped.** `PhotoGlobe` draws `arcsData` from `journeyLegs(trip)` in
+>   [lib/hierarchy.js](../src/lib/hierarchy.js). Its `labelsData` shows place names on
+>   every pin when the "always" label pref is on; there are no `1, 2, 3…` stop labels.
+> - **Still open from §1.2:** A2 naming (`pinId`, `photoStore`), A3 (photos are still
+>   clustered into separate `kind: "photo"` markers), A4, A5, A6 for posts and photos (the
+>   database only checks companion and stop dates), A7 (`trips.location_id` is still
+>   `on delete cascade`) and A8 (virtual `blog:<id>` pins).
+>
+> The shapes the client actually stores are in [src/types/hierarchy.d.ts](../src/types/hierarchy.d.ts).
+
 Scope: the four core entities and how the 3D globe (`components/PhotoGlobe`,
 `components/GlobeExplorer`, `components/PinQuickCard`) draws them.
 

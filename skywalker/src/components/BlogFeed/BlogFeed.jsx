@@ -1,10 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
 import {
   MapPin,
   CalendarDays,
-  ArrowRight,
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
   Check,
@@ -16,12 +14,12 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../lib/auth";
-import { formatBlogDate } from "../../lib/dateFilters";
 import { getTrips } from "../../lib/tripStore";
 import { useDataChanges } from "../../lib/liveSync";
 import { useAsync } from "../../hooks/useAsync";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
 import { countryCodeToFlagEmoji } from "../../lib/countries";
+import { dateTime, dateYear } from "../../lib/dateFilters";
 import {
   EMPTY_PLACE_FILTER,
   blogPlaces,
@@ -36,30 +34,16 @@ import {
   toggleCity,
 } from "../../lib/blogPlaces";
 import JourneyPortal from "../JourneyPortal/JourneyPortal";
-import CoverPlaceholder from "../CoverPlaceholder/CoverPlaceholder";
+import BlogCard from "../BlogCard/BlogCard";
 import Select from "../Select/Select";
 import LoadingSpinner from "../LoadingSpinner/LoadingSpinner";
-import { realCover } from "../../lib/media";
 import "./BlogFeed.css";
 
 const PAGE_SIZE = 6;
 const ALL_YEARS = "all";
 
-const blogTime = (b) => new Date(b.postDate ?? b.date).getTime();
-const blogYear = (b) => new Date(b.postDate ?? b.date).getFullYear();
-
-/**
- * Steps a card's location text down as it grows (multi-city or long region
- * names) so it can share one row with the date; anything still too long is
- * ellipsized by the `truncate` wrapper, with the full name in the tooltip.
- */
-const locationFontScale = (place) => {
-  const len = place.length;
-  if (len <= 18) return "1em";
-  if (len <= 26) return "0.92em";
-  if (len <= 34) return "0.85em";
-  return "0.78em";
-};
+const blogTime = (b) => dateTime(b.postDate ?? b.date);
+const blogYear = (b) => dateYear(b.postDate ?? b.date);
 
 /**
  * Multi-select City / Region dropdown for the chosen country, as a trigger
@@ -200,10 +184,8 @@ export default function BlogFeed({
   const filtersRef = useRef(null);
 
   // Trips give a post its stops; country outlines place photos by GPS.
-  const { data: trips, setData: setTrips } = useAsync(getTrips, [], []);
-  useDataChanges(["trips", "trip_stops"], () => {
-    getTrips().then(setTrips, console.error);
-  });
+  const { data: trips, reload: reloadTrips } = useAsync(getTrips, [], []);
+  useDataChanges(["trips", "trip_stops"], reloadTrips);
   const countryFeatures = useCountriesGeoJson();
 
   const published = useMemo(
@@ -222,7 +204,9 @@ export default function BlogFeed({
 
   const placeOptions = useMemo(() => placeFilterOptions([...placesById.values()].map((places) => ({ places }))), [placesById]);
   // A pick that's no longer on offer (post deleted/edited) quietly falls away.
-  const place = resolvePlaceFilter(placeFilter, placeOptions);
+  // Memoised: a stale pick resolves to a new object, and the page-size reset
+  // below is keyed on it, so an unmemoised one would undo every "load more".
+  const place = useMemo(() => resolvePlaceFilter(placeFilter, placeOptions), [placeFilter, placeOptions]);
   const countryOptions = place.continent ? placeOptions.countries.filter((c) => c.continent === place.continent) : placeOptions.countries;
   const cityOptions = place.country ? placeOptions.cities.filter((c) => c.countryCode === place.country) : [];
   const crumbs = placeFilterCrumbs(place, placeOptions);
@@ -428,48 +412,7 @@ export default function BlogFeed({
       ) : (
         <div className="blog-feed-grid">
           {visible.map((blog, i) => (
-            <motion.article
-              key={blog.id}
-              className="blog-card"
-              initial={{ opacity: 0, y: 28 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ duration: 0.5, delay: (i % PAGE_SIZE) * 0.06, ease: "easeOut" }}
-            >
-              <Link to={`/blogs/${blog.id}`} className="blog-card-link">
-                <div className="blog-card-media">
-                  {realCover(blog.coverImage) ? (
-                    <img src={blog.coverImage} alt="" loading="lazy" />
-                  ) : (
-                    <CoverPlaceholder variant="blog" seed={blog.id} />
-                  )}
-                  {blog.continent && <span className="blog-card-badge">{blog.continent}</span>}
-                </div>
-                <div className="blog-card-body">
-                  <div className="blog-card-meta flex items-center justify-between gap-2 w-full min-w-0">
-                    {(() => {
-                      const place = blog.location?.name ?? blog.countryName ?? "";
-                      return (
-                        <span className="blog-card-place min-w-0" title={place}>
-                          <MapPin size={13} className="shrink-0" />
-                          <span className="truncate" style={{ fontSize: locationFontScale(place) }}>
-                            {place}
-                          </span>
-                        </span>
-                      );
-                    })()}
-                    <span className="blog-card-date shrink-0 whitespace-nowrap">
-                      <CalendarDays size={13} className="shrink-0" /> {formatBlogDate(blog)}
-                    </span>
-                  </div>
-                  <h3 className="blog-card-title">{blog.title}</h3>
-                  {blog.excerpt && <p className="blog-card-excerpt">{blog.excerpt}</p>}
-                  <span className="blog-card-cta">
-                    Read story <ArrowRight size={14} />
-                  </span>
-                </div>
-              </Link>
-            </motion.article>
+            <BlogCard key={blog.id} blog={blog} delay={(i % PAGE_SIZE) * 0.06} />
           ))}
         </div>
       )}

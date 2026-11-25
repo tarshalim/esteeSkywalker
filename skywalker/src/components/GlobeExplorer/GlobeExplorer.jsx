@@ -21,10 +21,12 @@ import { buildStoryPins, isShownByStop, materializePin, pinsNear } from "../../l
 import { useDataChanges } from "../../lib/liveSync";
 import { isPointInView, clusterPhotosByLocation, hasCoords } from "../../lib/geo";
 import { useAuth } from "../../lib/auth";
+import { useGlobeSession } from "../../lib/globeSession";
 import { useGlobePrefs } from "../../lib/globePrefs";
 import { usePageSearch, useSearch } from "../../lib/search";
 import { matchesQuery } from "../../lib/textMatch";
 import { useGlobeSearch } from "../../hooks/useGlobeSearch";
+import { useLatestOnly } from "../../hooks/useLatestOnly";
 import { useLocation, useNavigate } from "react-router-dom";
 import { errorMessage } from "../../lib/errors";
 import "./GlobeExplorer.css";
@@ -71,10 +73,23 @@ export default function GlobeExplorer({
   newTripSignal = 0,
   searchActive = true,
 }) {
-  const [galleryItems, setGalleryItems] = useState([]);
-  const [blogs, setBlogs] = useState([]);
-  const [customPins, setCustomPins] = useState([]);
-  const [trips, setTrips] = useState([]);
+  // Shared with the other GlobeExplorer mount (/#globe <-> /globe): pick up
+  // where it left off. Read once, on mount. A deep link (focusRequest) brings
+  // its own target, so it skips the restored selection; its fly target
+  // already wins over the restored camera inside PhotoGlobe.
+  const session = useGlobeSession();
+  const { user, canEdit } = useAuth();
+  const userId = user?.id ?? null;
+  const [restored] = useState(() => ({
+    camera: session.camera,
+    selection: focusRequest ? null : session.selection,
+    data: session.data?.userId === userId ? session.data : null,
+  }));
+
+  const [galleryItems, setGalleryItems] = useState(() => restored.data?.galleryItems ?? []);
+  const [blogs, setBlogs] = useState(() => restored.data?.blogs ?? []);
+  const [customPins, setCustomPins] = useState(() => restored.data?.customPins ?? []);
+  const [trips, setTrips] = useState(() => restored.data?.trips ?? []);
   // Trip create/edit from the quick card: { trip: null } creates, { trip } edits,
   // { trip, addStop: true, newStop } adds a stop picked on the globe.
   const [tripDialog, setTripDialog] = useState(null);
@@ -84,9 +99,9 @@ export default function GlobeExplorer({
   const stopPromptTrackRef = useRef(null);
 
   const [viewport, setViewport] = useState(null);
-  const [selectedCountry, setSelectedCountry] = useState(null); // { code, name } | null
-  const [selectedLocationId, setSelectedLocationId] = useState(null);
-  const [selectedCustomPinId, setSelectedCustomPinId] = useState(null);
+  const [selectedCountry, setSelectedCountry] = useState(restored.selection?.country ?? null); // { code, name } | null
+  const [selectedLocationId, setSelectedLocationId] = useState(restored.selection?.locationId ?? null);
+  const [selectedCustomPinId, setSelectedCustomPinId] = useState(restored.selection?.customPinId ?? null);
   // A trip stop's pin: opens its location's card (selectedCustomPinId), focused on the stop.
   const [selectedStopId, setSelectedStopId] = useState(null);
   const [hoveredCountry, setHoveredCountry] = useState(null); // { code, name } | null
@@ -108,7 +123,6 @@ export default function GlobeExplorer({
 
   // Display settings live on the Account page; changes there apply here live.
   const { prefs } = useGlobePrefs();
-  const { canEdit } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const hoverFlyTimeoutRef = useRef(null);
@@ -120,21 +134,43 @@ export default function GlobeExplorer({
   // Real store, not the hard-coded mock: uploads used to never reach the globe.
   // Each source fails independently so one bad request doesn't blank the rest.
   // Only the first load shows the spinner; live-sync refreshes update in place.
-  const [storiesLoading, setStoriesLoading] = useState(true);
+  // Last refresh wins: a slower, older one (or one finishing after unmount) is dropped.
+  // A restored marker cache is shown at once (no spinner) while the fresh load runs.
+  const [storiesLoading, setStoriesLoading] = useState(!restored.data);
+  const beginStoriesLoad = useLatestOnly();
+  // Whose view the loaded data is (drafts are editor-only), so the cache is
+  // only reused by the same user. Set when a load starts, not when it lands.
+  const loadedForRef = useRef(restored.data?.userId ?? userId);
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
   const loadStories = useCallback(() => {
+    const isCurrent = beginStoriesLoad();
+    loadedForRef.current = userIdRef.current;
+    const apply = (set) => (value) => {
+      if (isCurrent()) set(value);
+    };
     Promise.allSettled([
-      getBlogs().then(setBlogs, reportLoadError("blogs")),
-      pinStore.getPins().then(setCustomPins, reportLoadError("pins")),
-      getTrips().then(setTrips, reportLoadError("trips")),
-      getPhotos().then(setGalleryItems, reportLoadError("photos")),
-    ]).then(() => setStoriesLoading(false));
-  }, []);
+      getBlogs().then(apply(setBlogs), reportLoadError("blogs")),
+      pinStore.getPins().then(apply(setCustomPins), reportLoadError("pins")),
+      getTrips().then(apply(setTrips), reportLoadError("trips")),
+      getPhotos().then(apply(setGalleryItems), reportLoadError("photos")),
+    ]).then(() => apply(setStoriesLoading)(false));
+  }, [beginStoriesLoad]);
 
   useEffect(loadStories, [loadStories]);
 
   // Publishing/editing a post or (un)linking it to a pin — here, in another
   // tab, or by another editor — refreshes the pins without a page reload.
   useDataChanges(["blogs", "locations", "trips", "trip_companions", "trip_stops", "gallery_items"], loadStories);
+
+  // Keep the session current for the next mount (it's a plain object: no re-render).
+  useEffect(() => {
+    if (storiesLoading) return;
+    session.data = { userId: loadedForRef.current, galleryItems, blogs, customPins, trips };
+  }, [session, storiesLoading, galleryItems, blogs, customPins, trips]);
+  useEffect(() => {
+    session.selection = { country: selectedCountry, locationId: selectedLocationId, customPinId: selectedCustomPinId };
+  }, [session, selectedCountry, selectedLocationId, selectedCustomPinId]);
 
   useEffect(() => () => clearTimeout(hoverFlyTimeoutRef.current), []);
 
@@ -580,40 +616,58 @@ export default function GlobeExplorer({
   );
   const clientPointOf = useCallback((lat, lng) => globeRef.current?.clientPointOf(lat, lng) ?? null, []);
   // Every camera frame (drag, zoom, fly-to) moves the prompt with its spot.
-  const handleCameraChange = useCallback(() => stopPromptTrackRef.current?.(), []);
+  const handleCameraChange = useCallback(
+    (pov) => {
+      session.camera = pov;
+      stopPromptTrackRef.current?.();
+    },
+    [session]
+  );
+
+  // The open card's real pin, created first if it's a virtual story-pin. The
+  // card (and the trip dialog, which needs it) switches to the new pin at once:
+  // linking the post makes the virtual pin vanish on the next reload, which
+  // would otherwise close them, and a retry would see no pin at all.
+  const materializeSelected = useCallback(async () => {
+    const pin = await materializePin(selectedStoryPin, setBlogsPin);
+    if (pin !== selectedStoryPin) {
+      setCustomPins((prev) => (prev.some((p) => p.id === pin.id) ? prev : [...prev, pin]));
+      setSelectedCustomPinId(pin.id);
+    }
+    return pin;
+  }, [selectedStoryPin]);
 
   // Step 3 of the cascade: content at this location, inside `trip` (and at `stop`) when given.
   const handleNewStory = useCallback(
     (trip = null, stop = null) =>
       runCardAction("Opening…", async () => {
-        const pin = await materializePin(selectedStoryPin, setBlogsPin);
+        const pin = await materializeSelected();
         navigate(`/blogs/new?${hierarchyQuery(pin, trip, stop)}`);
       }),
-    [runCardAction, selectedStoryPin, navigate]
+    [runCardAction, materializeSelected, navigate]
   );
 
   const handleAddPhotos = useCallback(
     (trip = null) =>
       runCardAction("Opening…", async () => {
-        const pin = await materializePin(selectedStoryPin, setBlogsPin);
+        const pin = await materializeSelected();
         navigate(`/gallery?upload=1&${hierarchyQuery(pin, trip)}`);
       }),
-    [runCardAction, selectedStoryPin, navigate]
+    [runCardAction, materializeSelected, navigate]
   );
 
   // Trip dialog: throws back into the dialog so it can show the error.
   const handleSaveTrip = useCallback(
     async (draft) => {
-      const pin = await materializePin(selectedStoryPin, setBlogsPin);
+      const pin = await materializeSelected();
       const saved = await saveTrip({ ...(tripDialog?.trip ?? {}), ...draft, locationId: pin.id });
       setTrips((prev) => [saved, ...prev.filter((t) => t.id !== saved.id)]);
-      setSelectedCustomPinId(pin.id);
       setTripDialog(null);
       // "Save & View on Globe": the new route's pins and arcs are drawn from
       // `trips` straight away; fly to where the journey begins.
       if (!tripDialog?.trip) flyToPin(saved.stops.find(stopHasCoords) ?? pin);
     },
-    [selectedStoryPin, tripDialog, flyToPin]
+    [materializeSelected, tripDialog, flyToPin]
   );
 
   const handleDeleteTrip = useCallback(async () => {
@@ -627,18 +681,29 @@ export default function GlobeExplorer({
     (blogIds) => {
       setIsAttachOpen(false);
       runCardAction("Attaching…", async () => {
-        const pin = await materializePin(selectedStoryPin, setBlogsPin);
+        const pin = await materializeSelected();
         await setBlogsPin(blogIds, pin);
-        setSelectedCustomPinId(pin.id);
       });
     },
-    [runCardAction, selectedStoryPin]
+    [runCardAction, materializeSelected]
   );
 
   const handleDetach = useCallback(
     (post) => runCardAction("Removing…", () => setBlogsPin([post.id], null)),
     [runCardAction]
   );
+
+  // The card asks first. Its trips go with it (FK cascade); posts and photos are unfiled.
+  const handleDeletePin = useCallback(() => {
+    const pinId = selectedStoryPin?.id;
+    if (!pinId || selectedStoryPin.virtual) return;
+    runCardAction("Deleting…", async () => {
+      await pinStore.deletePin(pinId);
+      setCustomPins((prev) => prev.filter((p) => p.id !== pinId));
+      setTrips((prev) => prev.filter((t) => t.locationId !== pinId));
+      handleCloseCard();
+    });
+  }, [runCardAction, selectedStoryPin, handleCloseCard]);
 
   return (
     <div className={`globe-explorer globe-explorer--${variant}${showGallery ? "" : " globe-explorer--no-gallery"}`}>
@@ -679,6 +744,8 @@ export default function GlobeExplorer({
             isPlacingPin={isPlacingPin}
             pendingPin={pendingPin ?? shownStopPrompt}
             flyToTarget={flyTarget}
+            initialView={restored.camera ?? undefined}
+            fitInitialView={!restored.camera}
             onViewportChange={setViewport}
             onCameraChange={handleCameraChange}
             onSurfaceClick={canPromptStop ? handleSurfaceClick : null}
@@ -708,6 +775,7 @@ export default function GlobeExplorer({
               onEditTrip={(trip) => setTripDialog({ trip })}
               onAttach={() => setIsAttachOpen(true)}
               onDetach={handleDetach}
+              onDelete={handleDeletePin}
             />
           )}
         </AnimatePresence>

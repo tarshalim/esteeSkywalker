@@ -1,5 +1,37 @@
 # Blog Post Canvas Editor — Functional Spec & Architecture
 
+> **Archived (2026-11-24).** This is the original design proposal. The editor that
+> shipped is a different design, so don't use this file as a reference for the code.
+> What's different:
+>
+> - **No journey lines.** There's no `JourneyLine`, `journeyLines`, `JourneyLineLayer` or
+>   `lib/journeyLine.js`. A canvas doc is `{ version, size, theme, elements }`
+>   ([lib/canvasLayout.js](../../src/lib/canvasLayout.js)).
+> - **12 element kinds, not 6.** `ELEMENT_KIND` in
+>   [lib/canvasElements.js](../../src/lib/canvasElements.js) adds `note`, `polaroid`,
+>   `viewfinder`, `decor`, `collage` and `section`. Elements can be grouped through
+>   `attachedTo` ([lib/canvasGroups.js](../../src/lib/canvasGroups.js)).
+> - **Theme is `{ paper, palette }`**, picked in `PaperPicker`. There's no
+>   `pageBg`/`canvasBg`/grid.
+> - **No canvas resize handles or manual zoom/pan.** The page is A4 wide and grows with its
+>   content (`canvasHeight`), and `useFitZoom` scales it to the viewport.
+> - **Different component tree.** [ScrapbookCanvas.jsx](../../src/components/Editor/Canvas/ScrapbookCanvas.jsx)
+>   is the workspace and keyboard handler; `AddMenu` replaces the toolbar and sticker
+>   drawer; `ElementToolbar`, `FloatingPanel` and `ElementContextMenu` replace the
+>   inspector; `elementRegistry.js` maps kinds to renderers. None of `CanvasWorkspace`,
+>   `CanvasStage`, `FloatingToolbar`, `StickerDrawer`, `ThemePanel`,
+>   `CanvasSizeControls`, `InspectorPanel`, `useSpawnAtCursor` or `lib/stickers.js` exist.
+> - **Uploads go to Supabase Storage** (`fileToUrl` in [lib/files.js](../../src/lib/files.js));
+>   data URLs are only the mock-mode fallback. There's no S3 path.
+> - **Posts are read through `BlogReader`** (via `importCanvasLayout`). Legacy block posts are
+>   converted with [lib/canvasConvert.js](../../src/lib/canvasConvert.js), which also keeps a
+>   derived `blocks` array on canvas posts.
+>
+> Still accurate: `CanvasProvider` + `canvasReducer` with a `COMMIT` choke point,
+> UI state kept out of history, the 15-entry FIFO undo stack in
+> [lib/canvasHistory.js](../../src/lib/canvasHistory.js), and Ctrl/Cmd+Z, Ctrl+Y,
+> Delete/Backspace and Escape.
+
 Scope: `/blogs/new` and `/blogs/edit/:id` (`src/pages/BlogEditor/BlogEditor.jsx`).
 
 The existing editor is a linear, top-to-bottom content-block editor (`lib/blocks.js` +

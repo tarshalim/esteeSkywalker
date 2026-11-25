@@ -40,6 +40,9 @@ export default function TrimFields({ value, onChange, onErrorChange, showLoop = 
   useEffect(() => {
     onErrorChange?.(error);
   }, [error, onErrorChange]);
+  // Unmounting drops the typed text (a remount starts from `value`), so its
+  // error goes too, e.g. "Replace music" hides the fields mid-edit.
+  useEffect(() => () => onErrorChange?.(null), [onErrorChange]);
 
   const edit = (nextStart, nextEnd) => {
     setStartText(nextStart);

@@ -7,6 +7,7 @@ import { formatDateRange } from "../../lib/dateFilters";
 import TripFields, { CompanionIntervalsEditor } from "./TripFields";
 import TripStopsEditor from "./TripStopsEditor";
 import { errorMessage } from "../../lib/errors";
+import { useDialog } from "../../hooks/useDialog";
 
 const WIZARD_STEPS = ["Basics", "Stops"];
 
@@ -53,6 +54,8 @@ export default function TripDialog({
   const [busy, setBusy] = useState(null); // "save" | "delete" | null
   const errorId = useId();
   const onBasics = creating && step === 0;
+  // Escape, the backdrop, ✕ and Cancel do nothing while a save or delete is in flight.
+  const { ref, dismiss } = useDialog({ onDismiss: onCancel, locked: Boolean(busy) });
 
   const run = async (kind, action) => {
     setBusy(kind);
@@ -149,13 +152,16 @@ export default function TripDialog({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      onClick={onCancel}
+      onClick={dismiss}
     >
       <motion.form
+        ref={ref}
         role="dialog"
+        aria-modal="true"
         aria-labelledby="trip-dialog-title"
+        tabIndex={-1}
         onSubmit={handleSubmit}
-        className="glass-panel flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl sm:max-w-2xl sm:rounded-2xl"
+        className="glass-panel flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-2xl outline-none sm:max-w-2xl sm:rounded-2xl"
         style={{ background: "var(--bg-panel-strong)", color: "var(--text)" }}
         initial={{ y: 32, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -187,7 +193,7 @@ export default function TripDialog({
           </div>
           <button
             type="button"
-            onClick={onCancel}
+            onClick={dismiss}
             className="-m-1 inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-black/10"
             aria-label="Close"
           >
@@ -227,7 +233,7 @@ export default function TripDialog({
               Back
             </button>
           ) : (
-            <button type="button" onClick={onCancel} className={secondaryButton}>
+            <button type="button" onClick={dismiss} disabled={Boolean(busy)} className={secondaryButton}>
               Cancel
             </button>
           )}

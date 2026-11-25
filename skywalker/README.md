@@ -65,8 +65,10 @@ supabase db push
 ```
 
 The data model (locations/pins, trips and trip stops, blogs, photos) is described in
-[docs/data-architecture-spec.md](docs/data-architecture-spec.md). The canvas editor is
-described in [docs/canvas-editor-spec.md](docs/canvas-editor-spec.md).
+[docs/data-architecture-spec.md](docs/data-architecture-spec.md); its status note at the
+top says which parts of the proposal shipped. The canvas editor's original design is
+archived in [docs/archive/canvas-editor-spec.md](docs/archive/canvas-editor-spec.md); the
+editor that shipped differs, and the note at the top lists how.
 
 ## Scripts
 

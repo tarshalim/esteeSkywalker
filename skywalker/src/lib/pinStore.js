@@ -167,17 +167,40 @@ export function buildStoryPins(pinList, blogs, showLoose = () => true, { trips =
   ];
 }
 
+// blogId -> the pin materializePin created for that post. The virtual pin stays
+// on screen until the reload after linking lands, so a second click, or a
+// retry after the link failed, must reuse that pin rather than make another.
+// Post ids are title slugs, freed when a post is deleted, so an entry can
+// outlive its post and come back for a new one elsewhere: it's only reused
+// while it's still where the post is.
+const materialized = new Map();
+
 /**
  * The real pin behind a story pin, creating it (and filing the post under
- * it) when it's a virtual stand-in for an unpinned post.
+ * it) when it's a virtual stand-in for an unpinned post. Calls for the same
+ * post share one pin, even when they overlap or the first one's link failed.
  * @param {StoryPin} storyPin
  * @param {function(string[], Pin): Promise} linkPosts - blogStore.setBlogsPin
  * @returns {Promise<Pin>}
  */
 export async function materializePin(storyPin, linkPosts) {
   if (!storyPin.virtual) return storyPin;
-  const { lat, lng, title, placeName } = storyPin;
-  const pin = await createPin({ lat, lng, title, placeName });
-  await linkPosts([storyPin.blogId], pin);
+  const { blogId, lat, lng, title, placeName } = storyPin;
+  const previous = materialized.get(blogId);
+  const next = (async () => {
+    const earlier = previous ? await previous.catch(() => null) : null;
+    // Still there, and still where the post is? (It may have been deleted since, which
+    // is why the post is virtual again; or the post moved, or a deleted post's id was
+    // reused by a new post somewhere else.)
+    const current = earlier && (await getPinById(earlier.id));
+    if (current && hasCoords(current) && distanceKm(current, { lat, lng }) <= PIN_MERGE_RADIUS_KM) return current;
+    return createPin({ lat, lng, title, placeName });
+  })();
+  materialized.set(blogId, next);
+  next.catch(() => {
+    if (materialized.get(blogId) === next) materialized.delete(blogId);
+  });
+  const pin = await next;
+  await linkPosts([blogId], pin);
   return pin;
 }

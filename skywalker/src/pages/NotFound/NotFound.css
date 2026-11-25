@@ -27,3 +27,13 @@
 .not-found-home-link {
   color: var(--blue);
 }
+
+/* RouteError's "Reload page" is a button styled as the same text link. */
+button.not-found-home-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

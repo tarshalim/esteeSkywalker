@@ -12,9 +12,11 @@ const GlobeSessionContext = createContext(null);
  * this changes, so it's a plain mutable object, not React state:
  *   camera    {lat, lng, altitude} | null — last point of view
  *   selection {country, locationId, customPinId}
- *   data      {userId, photos, blogs, customPins, trips} | null — marker cache
- *             (shown on mount while the fresh fetch runs; ignored if it was
- *             loaded for a different user)
+ *   data      {userId, galleryItems, blogs, customPins, trips} | null — marker
+ *             cache (shown on mount while the fresh fetch runs; ignored if it
+ *             was loaded for a different user)
+ * GlobeExplorer reads it once on mount and writes it as these change.
+ * Memory only: a full page reload starts from the default view.
  */
 export function GlobeSessionProvider({ children }) {
   const session = useRef({

@@ -1,5 +1,5 @@
 // localStorage helpers for mock mode: when the Supabase env vars are unset,
-// the stores (collection.js, blogStore, commentStore, tripStore) read and write
+// the stores (collection.js, commentStore, tripStore) read and write
 // here instead. `delay` fakes network latency so mock mode keeps the same
 // Promise API as Supabase mode. `makeId` is used in both modes.
 

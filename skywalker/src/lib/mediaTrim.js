@@ -26,11 +26,14 @@ export function parseTimestamp(input) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-/** 135 → "2:15", 3725 → "1:02:05", 45.5 → "0:45.5"; "" for no time. */
+/** 135 → "2:15", 3725 → "1:02:05", 45.5 → "0:45.5", 45.96 → "0:45.96"; "" for no time. */
 export function formatTimestamp(sec) {
   if (!Number.isFinite(sec)) return "";
-  const whole = Math.floor(sec);
-  const fraction = Math.round((sec - whole) * 10);
+  // Round to whole milliseconds first, so 59.9996 carries to "1:00" and the
+  // text parses back to the stored value (TrimFields re-reads it after a tidy).
+  const ms = Math.round(sec * 1000);
+  const whole = Math.floor(ms / 1000);
+  const fraction = String(ms % 1000).padStart(3, "0").replace(/0+$/, "");
   const h = Math.floor(whole / 3600);
   const m = Math.floor((whole % 3600) / 60);
   const s = String(whole % 60).padStart(2, "0") + (fraction ? `.${fraction}` : "");
@@ -40,7 +43,8 @@ export function formatTimestamp(sec) {
 /** Returns a message when a start/end pair can't be saved, else null. */
 export function trimError(startSec, endSec) {
   if (Number.isNaN(startSec) || Number.isNaN(endSec)) return "Use m:ss or seconds, e.g. 0:45 or 45.";
-  if (startSec != null && endSec != null && endSec <= startSec) return "End time must be after the start time.";
+  // A blank start means 0:00, so an end of 0 is never after it.
+  if (endSec != null && endSec <= (startSec ?? 0)) return "End time must be after the start time.";
   return null;
 }
 

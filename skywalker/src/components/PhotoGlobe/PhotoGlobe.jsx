@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import Globe from "react-globe.gl";
-import { angularDistanceDeg, clusterPhotosByLocation, escapeHtml, slerpLatLng } from "../../lib/geo";
+import { angularDistanceDeg, clusterPhotosByLocation, escapeHtml, featureCountryCode, slerpLatLng } from "../../lib/geo";
 import { formatDateRange } from "../../lib/dateFilters";
 import { journeyLegs, stopPinsOf } from "../../lib/hierarchy";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
@@ -312,6 +312,9 @@ export default function PhotoGlobe({
   // settings preview) scales them up to stay legible. Pins are screen-sized.
   markerScale = 1,
   initialView = DEFAULT_VIEW,
+  // false: open exactly at initialView (a restored camera the user zoomed
+  // in on), instead of pulling it back to fit a portrait stage.
+  fitInitialView = true,
   isPlacingPin,
   lockRotation = false,
   panOnly = false,
@@ -363,6 +366,7 @@ export default function PhotoGlobe({
   // The settings preview mounts/unmounts with its page; free the GPU program.
   useEffect(() => () => globeMaterial.dispose(), [globeMaterial]);
   const initialViewRef = useRef(initialView);
+  const fitInitialViewRef = useRef(fitInitialView);
   const onCameraChangeRef = useRef(onCameraChange);
   onCameraChangeRef.current = onCameraChange;
   const reportCamera = useCallback(() => {
@@ -517,14 +521,16 @@ export default function PhotoGlobe({
     [onViewportChange]
   );
 
-  const handleGlobeReady = useCallback(() => {
+  const initGlobe = useCallback(() => {
     const target = flyToTargetRef.current;
     const initial = initialViewRef.current;
     const { clientWidth, clientHeight } = wrapperRef.current;
     globeEl.current.pointOfView(
       target
         ? { lat: target.lat, lng: target.lng, altitude: target.altitude ?? FLY_TO_ALTITUDE }
-        : { ...initial, altitude: fitAltitudeToStage(initial.altitude, globeEl.current.camera(), clientWidth, clientHeight) },
+        : fitInitialViewRef.current
+          ? { ...initial, altitude: fitAltitudeToStage(initial.altitude, globeEl.current.camera(), clientWidth, clientHeight) }
+          : initial,
       0
     );
     onViewportChange(globeEl.current.pointOfView());
@@ -543,6 +549,16 @@ export default function PhotoGlobe({
     controls.addEventListener("change", reportCamera);
   }, [onViewportChange, reportCamera]);
 
+  // three-globe fires onReady synchronously when there's no globe image yet
+  // (globeImageUrl starts null), i.e. inside <Globe>'s layout-effect mount,
+  // before React has attached wrapperRef or globeEl. Run after the commit,
+  // and not at all if the globe unmounted in between.
+  const handleGlobeReady = useCallback(() => {
+    queueMicrotask(() => {
+      if (wrapperRef.current && globeEl.current) initGlobe();
+    });
+  }, [initGlobe]);
+
   useEffect(() => {
     if (isReady && globeEl.current) globeEl.current.controls().autoRotate = autoRotate;
   }, [isReady, autoRotate]);
@@ -553,10 +569,10 @@ export default function PhotoGlobe({
 
   const polygonCapColor = useCallback(
     (feature) => {
-      const iso2 = feature.properties.ISO_A2;
+      const iso2 = featureCountryCode(feature);
       // Selection wins even for a country with no photos yet — search can
       // select any country, not just visited ones.
-      if (iso2 === selectedCountryCode) return palette.selectedColor;
+      if (iso2 && iso2 === selectedCountryCode) return palette.selectedColor;
       return visitedCountryCodes.has(iso2) ? palette.visitedColor : palette.landColor;
     },
     [visitedCountryCodes, selectedCountryCode, palette]
@@ -564,8 +580,8 @@ export default function PhotoGlobe({
 
   const polygonLabel = useCallback(
     (feature) => {
-      const iso2 = feature.properties.ISO_A2;
-      const count = photos.filter((p) => p.countryCode === iso2).length;
+      const iso2 = featureCountryCode(feature);
+      const count = iso2 ? photos.filter((p) => p.countryCode === iso2).length : 0;
       return `<div class="globe-tooltip"><strong>${escapeHtml(feature.properties.NAME)}</strong><br/>${
         count > 0 ? `${count} photo${count === 1 ? "" : "s"}` : "No photos yet"
       }</div>`;
@@ -790,7 +806,7 @@ export default function PhotoGlobe({
         if (coords) onSurfaceClick({ lat: coords.lat, lng: coords.lng });
         return;
       }
-      const iso2 = feature.properties.ISO_A2;
+      const iso2 = featureCountryCode(feature);
       if (!visitedCountryCodes.has(iso2)) return;
       const isDeselecting = iso2 === selectedCountryCode;
       onCountryClick(isDeselecting ? null : iso2, isDeselecting ? null : feature.properties.NAME);
@@ -841,7 +857,7 @@ export default function PhotoGlobe({
         polygonLabel={polygonLabel}
         onPolygonClick={handlePolygonClick}
         onPolygonHover={(feature) => {
-          const iso2 = feature?.properties?.ISO_A2;
+          const iso2 = feature ? featureCountryCode(feature) : null;
           onCountryHover(
             iso2 && visitedCountryCodes.has(iso2) ? { code: iso2, name: feature.properties.NAME } : null
           );

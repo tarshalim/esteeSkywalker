@@ -1,14 +1,16 @@
 import { useId, useState } from "react";
-import { CalendarRange, ChevronDown, Globe, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, Globe, SlidersHorizontal, X } from "lucide-react";
+import { DateFilter } from "../FilterControls/FilterControls";
 import { countryCodeToFlagEmoji } from "../../lib/countries";
 import "./FilterBar.css";
 
 /**
  * Glassmorphic top control bar: continent single-select pills (narrows which
  * country pills show) + country multi-select pills + year multi-select
- * pills + a newest/oldest sort toggle + an expandable custom date range.
- * Purely presentational — all state comes from useFilteredItems. Shared by
- * Gallery.jsx and BlogsJourney.jsx. `availableContinents`/`availableYears`
+ * pills + a newest/oldest sort toggle + the shared DateFilter (day, month
+ * or range; the same picker as the blog trail's BlogFilterBar).
+ * Purely presentational — all state comes from useFilteredItems. Used by
+ * Gallery.jsx. `availableContinents`/`availableYears`
  * are optional — omit them (or pass empty arrays) and those rows just don't
  * render, so a caller that hasn't wired up the continent tier still works.
  *
@@ -27,13 +29,12 @@ export default function FilterBar({
   onToggleYear,
   sortOrder,
   onSortOrderChange,
-  dateRange,
-  onDateRangeChange,
+  dateFilter,
+  onDateFilterChange,
   hasActiveFilters,
   onClearFilters,
   resultCount,
 }) {
-  const [rangeOpen, setRangeOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const bodyId = useId();
 
@@ -131,41 +132,7 @@ export default function FilterBar({
             </button>
           </div>
 
-          <div className="filter-bar-range">
-            <button
-              type="button"
-              className={`filter-bar-range-toggle ${dateRange ? "is-active" : ""}`}
-              onClick={() => setRangeOpen((prev) => !prev)}
-            >
-              <CalendarRange size={14} />
-              Date range
-            </button>
-            {rangeOpen && (
-              <div className="filter-bar-range-popover glass-panel">
-                <label>
-                  From
-                  <input
-                    type="date"
-                    value={dateRange?.start ?? ""}
-                    onChange={(e) => onDateRangeChange({ start: e.target.value, end: dateRange?.end ?? "" })}
-                  />
-                </label>
-                <label>
-                  To
-                  <input
-                    type="date"
-                    value={dateRange?.end ?? ""}
-                    onChange={(e) => onDateRangeChange({ start: dateRange?.start ?? "", end: e.target.value })}
-                  />
-                </label>
-                {dateRange && (
-                  <button type="button" className="filter-bar-range-clear" onClick={() => onDateRangeChange(null)}>
-                    Clear range
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          <DateFilter value={dateFilter} onChange={onDateFilterChange} triggerClassName="filter-bar-range-toggle" />
 
           {hasActiveFilters && (
             <button type="button" className="filter-bar-clear" onClick={onClearFilters}>

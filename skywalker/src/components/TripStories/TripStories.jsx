@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, LoaderCircle, Pencil, Plane, Plus, Scissors, Trash2 } from "lucide-react";
@@ -19,12 +19,14 @@ import { continentForCountryCode } from "../../lib/geo";
 import { COUNTRY_TO_CONTINENT, countryCodeToFlagEmoji } from "../../lib/countries";
 import { findArt } from "../../data/scrapbookArt";
 import { errorMessage } from "../../lib/errors";
+import { newBlogInTripPath, ticketCode, tripPath } from "../../lib/tripPass";
+import Barcode from "./Barcode";
 import "./TripStories.css";
 
 /** At most this many post slips fan out of an envelope. */
 const MAX_SLIPS = 3;
-/** At most this many stops are listed on a pass; the rest fold into "+N more". */
-const MAX_PASS_STOPS = 4;
+/** At most this many stops are listed on a pass; the rest fold behind "Read more". */
+const MAX_PASS_STOPS = 3;
 /** Slip width (% of the pass) by how many are fanned; narrow enough that they barely overlap. */
 const SLIP_WIDTH = [0, 64, 48, 36];
 /** Travel sticker that marks each slip's tab: airplane, passport, globe. */
@@ -62,7 +64,7 @@ function slipVariants(i, n, reduceMotion) {
  * "My Trips" on the homepage: one envelope per trip. Its published posts sit
  * tucked behind it as paper slips with a coloured tab peeking out, and fan up
  * out of the envelope on hover (or via the stories count on touch). The
- * envelope opens the trip (its gallery); each slip opens its post. Editors get
+ * envelope opens the trip's page (/trips/:id); each slip opens its post. Editors get
  * inline edit/delete.
  *
  * @param {{ blogs: Array, onCreateTrip?: ?function(): void }} props - every post
@@ -73,9 +75,9 @@ export default function TripStories({ blogs, onCreateTrip = null }) {
   const { user, canEdit } = useAuth();
   // Same rule as TopNav's "Create Blog": signed-out visitors see it and get sent to log in.
   const canCreate = Boolean(onCreateTrip) && (!user || canEdit);
-  const { data: trips, setData: setTrips, loading } = useAsync(getTrips, [], []);
-  const { data: pins, setData: setPins } = useAsync(getPins, [], []);
-  const { data: photos, setData: setPhotos } = useAsync(getPhotos, [], []);
+  const { data: trips, setData: setTrips, loading, reload: reloadTrips } = useAsync(getTrips, [], []);
+  const { data: pins, reload: reloadPins } = useAsync(getPins, [], []);
+  const { data: photos, reload: reloadPhotos } = useAsync(getPhotos, [], []);
   // The trip whose edit dialog is open. Its stops aren't editable here — only on the 3D globe.
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -84,12 +86,10 @@ export default function TripStories({ blogs, onCreateTrip = null }) {
   const countryFeatures = useCountriesGeoJson();
 
   useDataChanges(["trips", "trip_companions", "trip_stops", "locations"], () => {
-    getTrips().then(setTrips, console.error);
-    getPins().then(setPins, console.error);
+    reloadTrips();
+    reloadPins();
   });
-  useDataChanges(["gallery_items"], () => {
-    getPhotos().then(setPhotos, console.error);
-  });
+  useDataChanges(["gallery_items"], reloadPhotos);
 
   const pinTitles = useMemo(() => new Map(pins.map((p) => [p.id, p.title])), [pins]);
   const pinsById = useMemo(() => new Map(pins.map((p) => [p.id, p])), [pins]);
@@ -276,41 +276,6 @@ function RegionChip({ active, count, onClick, children }) {
   );
 }
 
-/** Small stable hash of a string (FNV-1a), for the ticket code and barcode. */
-function hashString(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-/** Airline-style code for a trip, e.g. "XIA-4F2": destination letters + a hash of its id. */
-function ticketCode(trip, destination) {
-  const letters = (destination || trip.title || "").replace(/[^a-z]/gi, "").slice(0, 3).toUpperCase().padEnd(3, "X");
-  const suffix = hashString(trip.id).toString(36).slice(-3).toUpperCase().padStart(3, "0");
-  return `${letters}-${suffix}`;
-}
-
-/** Decorative barcode whose bars come from the trip id, so each pass looks different. */
-function Barcode({ seed }) {
-  const bars = useMemo(() => {
-    let h = hashString(seed);
-    return Array.from({ length: 34 }, () => {
-      h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
-      return { width: 1 + (h % 3), gap: 1 + ((h >>> 4) % 2) };
-    });
-  }, [seed]);
-  return (
-    <div className="trip-pass-barcode" aria-hidden="true">
-      {bars.map((bar, i) => (
-        <span key={i} style={{ width: bar.width, marginRight: bar.gap }} />
-      ))}
-    </div>
-  );
-}
-
 /**
  * The pass's itinerary: each stop on a dotted timeline with its dates (and how
  * many of the trip's stories are filed under it), and — for editors — an
@@ -321,13 +286,18 @@ function Barcode({ seed }) {
  * stories (where/when each was written), marked as stories rather than stops.
  */
 function PassItinerary({ stops, posts, tripTitle, addBlogHref }) {
+  // Long itineraries fold behind "Read more" so passes keep one height in the grid.
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+  const toggle = () => setExpanded((e) => !e);
+
   if (stops.length > 0) {
-    const shown = stops.slice(0, MAX_PASS_STOPS);
-    const hidden = stops.length - shown.length;
+    const shown = expanded ? stops : stops.slice(0, MAX_PASS_STOPS);
+    const hidden = stops.length - MAX_PASS_STOPS;
     return (
       <div className="trip-pass-itinerary">
         <span className="trip-pass-label">Itinerary</span>
-        <ol className="trip-pass-stops">
+        <ol id={listId} className="trip-pass-stops">
           {shown.map((stop) => {
             const storyCount = posts.filter((p) => p.stopId === stop.id).length;
             return (
@@ -341,8 +311,8 @@ function PassItinerary({ stops, posts, tripTitle, addBlogHref }) {
               </li>
             );
           })}
-          {hidden > 0 && <li className="trip-pass-stop trip-pass-stop--more">+{plural(hidden, "more stop")}</li>}
         </ol>
+        <ItineraryToggle hidden={hidden} noun="stop" expanded={expanded} controls={listId} onToggle={toggle} />
         <AddBlogLink href={addBlogHref} tripTitle={tripTitle} />
       </div>
     );
@@ -350,13 +320,13 @@ function PassItinerary({ stops, posts, tripTitle, addBlogHref }) {
 
   // No stops: walk the trip's stories oldest-first, as journey entries.
   const journey = [...posts].sort((a, b) => postTime(a) - postTime(b));
-  const shown = journey.slice(0, MAX_PASS_STOPS);
-  const hidden = journey.length - shown.length;
+  const shown = expanded ? journey : journey.slice(0, MAX_PASS_STOPS);
+  const hidden = journey.length - MAX_PASS_STOPS;
   return (
     <div className="trip-pass-itinerary">
       <span className="trip-pass-label">{journey.length > 0 ? "Itinerary · from stories" : "Itinerary"}</span>
       {journey.length > 0 ? (
-        <ol className="trip-pass-stops">
+        <ol id={listId} className="trip-pass-stops">
           {shown.map((post) => (
             <li key={post.id} className="trip-pass-stop trip-pass-stop--story">
               <span className="trip-pass-stop-name">
@@ -366,14 +336,26 @@ function PassItinerary({ stops, posts, tripTitle, addBlogHref }) {
               <span className="trip-pass-stop-date">{formatBlogDate(post)}</span>
             </li>
           ))}
-          {hidden > 0 && <li className="trip-pass-stop trip-pass-stop--more">+{hidden} more</li>}
         </ol>
       ) : (
         <p className="trip-pass-stops-empty">No stops or stories yet</p>
       )}
+      <ItineraryToggle hidden={hidden} noun="story" expanded={expanded} controls={listId} onToggle={toggle} />
       {journey.length > 0 && addBlogHref && <p className="trip-pass-stops-empty">No stops yet — add them on the globe.</p>}
       <AddBlogLink href={addBlogHref} tripTitle={tripTitle} />
     </div>
+  );
+}
+
+/** "Read more (+N stops)" / "Show less" under a folded itinerary; nothing when it all fits. */
+function ItineraryToggle({ hidden, noun, expanded, controls, onToggle }) {
+  if (hidden <= 0) return null;
+  const more = noun === "story" ? (hidden === 1 ? "1 story" : `${hidden} stories`) : plural(hidden, noun);
+  return (
+    <button type="button" className="trip-pass-more" aria-expanded={expanded} aria-controls={controls} onClick={onToggle}>
+      {expanded ? "Show less" : `Read more (+${more})`}
+      <ChevronDown size={12} className="trip-pass-more-icon" aria-hidden="true" />
+    </button>
   );
 }
 
@@ -430,9 +412,10 @@ function TripEnvelope({ trip, posts, photoCount, destination, canEdit, deleting,
   const from = stops.length > 1 ? stops[0].locationName : "Home";
   const to = stops.at(-1)?.locationName || destination || "Somewhere";
   const via = stops.length > 2 ? plural(stops.length - 2, "stop") : null;
-  const tripHref = `/gallery?trip=${encodeURIComponent(trip.id)}`;
+  // The trip's own page: its stories (grid or ridden as a trail) and all its media.
+  const tripHref = tripPath(trip.id);
   // The editor starts inside this trip (and at its pin) from `trip` alone.
-  const addBlogHref = `/blogs/new?trip=${encodeURIComponent(trip.id)}`;
+  const addBlogHref = newBlogInTripPath(trip.id);
   const slipsId = `trip-slips-${trip.id}`;
 
   // While open, a click/tap outside the envelope or Esc tucks the slips back in.

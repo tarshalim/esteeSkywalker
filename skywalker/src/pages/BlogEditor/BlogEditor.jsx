@@ -16,7 +16,9 @@ import CountrySelect from "../../components/CountrySelect/CountrySelect";
 import { fileToUrl } from "../../lib/files";
 import { extractPhotoMetadata } from "../../lib/exif";
 import { useCountriesGeoJson } from "../../hooks/useCountriesGeoJson";
-import { findCountryForPoint, continentForCountryCode, centroidForCountryCode, formatCoords, hasCoords } from "../../lib/geo";
+import { useLatestOnly } from "../../hooks/useLatestOnly";
+import { findCountryForPoint, continentForCountryCode, centroidForCountryCode, formatCoords } from "../../lib/geo";
+import { postLocationFields, postLocationPayload } from "../../lib/postLocation";
 import { realCover } from "../../lib/media";
 import { COUNTRY_TO_CONTINENT } from "../../lib/countries";
 import UnsavedChangesDialog from "./UnsavedChangesDialog";
@@ -36,6 +38,7 @@ import Select from "../../components/Select/Select";
 import { useDataChanges } from "../../lib/liveSync";
 import { deleteBlogAudio, getBlogMusic } from "../../lib/music";
 import { errorMessage } from "../../lib/errors";
+import { accountDisplayName, useAuth } from "../../lib/auth";
 import LoadingSpinner from "../../components/LoadingSpinner/LoadingSpinner";
 import "./BlogEditor.css";
 
@@ -50,6 +53,11 @@ export default function BlogEditor() {
   const isEditMode = Boolean(id);
 
   const [blogId, setBlogId] = useState(id ?? null);
+  // Stamped server-side from the post's owner (`stamp_blog_author`); kept only
+  // so Preview shows the byline readers will see. A new post will be stamped
+  // with the signed-in editor's name, since `owner_id` defaults to them.
+  const [authorName, setAuthorName] = useState(null);
+  const { user, username } = useAuth();
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState(""); // the summary shown on feed cards
   const [coverImage, setCoverImage] = useState("");
@@ -78,6 +86,8 @@ export default function BlogEditor() {
   const [weather, setWeather] = useState(null); // see lib/weather.js
   // Bumped when a template sets the weather, so WeatherField re-reads its status.
   const [weatherKey, setWeatherKey] = useState(0);
+  // A loaded post's weather isn't re-fetched on open; see WeatherField's `syncedOnMount`.
+  const weatherSyncedOnLoadRef = useRef(false);
   const { vibes: vibeList } = useVibes();
   const [music, setMusic] = useState(null);
   // A start/end time the music field can't save yet (e.g. end before start).
@@ -127,25 +137,32 @@ export default function BlogEditor() {
   const showTourGallery = useTour().preview === "template-gallery";
   useEffect(() => setGalleryOpen(showTourGallery), [showTourGallery]);
 
+  // Last refresh wins, so an older, slower live-sync reload can't overwrite a newer one.
+  const beginPinsLoad = useLatestOnly();
   const loadPins = useCallback(() => {
+    const isCurrent = beginPinsLoad();
     getPins()
       .then((list) => {
+        if (!isCurrent()) return;
         setPins(list);
         setPinsLoaded(true);
       })
       .catch((err) => console.error("Failed to load pins", err));
-  }, []);
+  }, [beginPinsLoad]);
   useEffect(loadPins, [loadPins]);
   useDataChanges(["locations"], loadPins);
 
+  const beginTripsLoad = useLatestOnly();
   const loadTrips = useCallback(() => {
+    const isCurrent = beginTripsLoad();
     getTrips()
       .then((list) => {
+        if (!isCurrent()) return;
         setTrips(list);
         setTripsLoaded(true);
       })
       .catch((err) => console.error("Failed to load trips", err));
-  }, []);
+  }, [beginTripsLoad]);
   useEffect(loadTrips, [loadTrips]);
   useDataChanges(["trips", "trip_companions", "trip_stops"], loadTrips);
 
@@ -189,11 +206,14 @@ export default function BlogEditor() {
           if (!blog) return setLoadState("missing");
           loadedIdRef.current = blog.id;
           setBlogId(blog.id);
+          setAuthorName(blog.authorName ?? null);
           setTitle(blog.title ?? "");
           setExcerpt(blog.excerpt ?? "");
           setCoverImage(realCover(blog.coverImage));
-          setLocationName(blog.location?.name || "");
-          setCoords(hasCoords(blog.location) ? { lat: blog.location.lat, lng: blog.location.lng } : null);
+          // Not the save-time fallbacks: a placeholder name or a country centroid.
+          const loc = postLocationFields(blog.location);
+          setLocationName(loc.name);
+          setCoords(loc.coords);
           setPinChoice(blog.pinId ?? "auto");
           setTripId(blog.tripId ?? "");
           setStopId(blog.stopId ?? "");
@@ -205,6 +225,8 @@ export default function BlogEditor() {
           setCity(blog.city || "");
           setVibes(blog.vibes ?? []);
           setWeather(blog.weather ?? null);
+          // Saved weather (even a cleared one) belongs to the saved date and place.
+          weatherSyncedOnLoadRef.current = blog.weather !== undefined;
           savedMusicRef.current = getBlogMusic(blog);
           setMusic(savedMusicRef.current);
           seedCanvas(importCanvasLayout(blog.canvas) ?? blocksToCanvas(blog.blocks));
@@ -486,10 +508,6 @@ export default function BlogEditor() {
     return detected;
   };
 
-  // Without lat/lng a post can never be pinned on, searched on, or deep-linked
-  // to from the globe — fall back to the country's centroid.
-  const resolveCoords = () => coords ?? (country ? centroidForCountryCode(country.code, countries) : null);
-
   // Where to look up the weather: the pinned point, else the typed city /
   // waypoint geocoded, else the country's centroid.
   // The country outlines load async; they only matter when the centroid is all we have.
@@ -536,7 +554,14 @@ export default function BlogEditor() {
     excerpt: excerpt.trim(),
     // No stock fallback: an empty cover renders as a themed placeholder.
     coverImage,
-    location: { name: locationName.trim() || country?.name || "Unnamed waypoint", ...resolveCoords() },
+    // Without lat/lng a post can never be pinned on, searched on, or deep-linked
+    // to from the globe, so a post with no exact spot falls back to the country's centroid.
+    location: postLocationPayload({
+      name: locationName,
+      coords,
+      countryName: country?.name,
+      centroid: country ? centroidForCountryCode(country.code, countries) : null,
+    }),
     countryCode: country?.code ?? "",
     countryName: country?.name ?? "",
     continent: country ? continentForCountryCode(country.code, countries, COUNTRY_TO_CONTINENT) : "",
@@ -614,6 +639,7 @@ export default function BlogEditor() {
       const saved = await upsertBlog({ ...buildPayload(nextStatus), pinId, tripId: savedTripId, stopId: savedStopId });
       loadedIdRef.current = saved.id;
       setBlogId(saved.id);
+      setAuthorName(saved.authorName ?? null);
       setStatus(saved.status);
       markClean(nextPinChoice, savedTripId ?? "");
       // The saved post no longer points at the previous upload, so its file can go.
@@ -708,7 +734,9 @@ export default function BlogEditor() {
   // Built from the same payload a save sends, so the preview is the post as saved.
   const openPreview = () => {
     const trip = tripDisabledReason ? null : selectedTrip ?? (effectiveTripId === NEW_TRIP ? tripDraft : null);
-    setPreview({ blog: buildPayload(status), trip });
+    // An unsaved post has no stamp yet; it will get the editor's own name.
+    const author = blogId ? authorName : accountDisplayName(user, username);
+    setPreview({ blog: { ...buildPayload(status), authorName: author }, trip });
   };
   const closePreview = useCallback(() => setPreview(null), []);
 
@@ -757,7 +785,8 @@ export default function BlogEditor() {
   const handleDeleteTemplate = async (tpl) => {
     if (!window.confirm(`Delete the template “${tpl.name}”? Posts made from it aren't affected.`)) return;
     try {
-      await deleteTemplate(tpl.id);
+      // The open post may be using its photos (applied, not saved yet).
+      await deleteTemplate(tpl.id, { canvas: canvasDocRef.current, coverImage });
       setTemplates((prev) => prev.filter((t) => t.id !== tpl.id));
     } catch (err) {
       showToast(`Couldn't delete template: ${errorMessage(err)}`);
@@ -974,6 +1003,7 @@ export default function BlogEditor() {
           date={startDate}
           placeKey={weatherPlaceKey}
           resolvePoint={resolveWeatherPoint}
+          syncedOnMount={weatherSyncedOnLoadRef.current}
         />
 
         <VibesField value={vibes} onChange={setVibes} />

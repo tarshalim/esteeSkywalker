@@ -89,9 +89,10 @@
     <script>
       try {
         var t = localStorage.getItem("skywalker-theme");
-        if (t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches)) {
-          document.documentElement.classList.add("dark");
-        }
+        var dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+        var metas = document.querySelectorAll('meta[name="theme-color"]');
+        for (var i = 0; i < metas.length; i++) metas[i].setAttribute("content", dark ? "#0f172a" : "#fafaf9");
       } catch (e) {}
     </script>
     <title>Skywalker</title>

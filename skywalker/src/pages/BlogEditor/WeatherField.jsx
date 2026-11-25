@@ -24,12 +24,15 @@ const STATUS_TEXT = {
  *   date: string,                                       // yyyy-mm-dd
  *   placeKey: string,                                   // changes whenever the place does
  *   resolvePoint: (signal: AbortSignal) => Promise<?{ lat: number, lng: number }>,
+ *   syncedOnMount?: boolean,  // the value (even null) is already the saved one for this date/place
  * }} props
  */
-export default function WeatherField({ value, onChange, date, placeKey, resolvePoint }) {
+export default function WeatherField({ value, onChange, date, placeKey, resolvePoint, syncedOnMount = false }) {
   const syncKey = `${date}|${placeKey}`;
-  // A loaded post already has weather for its date/place; don't refetch it on open.
-  const syncedKeyRef = useRef(value ? syncKey : null);
+  // A loaded post already has weather for its date/place; don't refetch it on
+  // open. That includes weather the writer cleared, which would otherwise
+  // reappear every time the post is opened.
+  const syncedKeyRef = useRef(value || syncedOnMount ? syncKey : null);
   const [status, setStatus] = useState(value ? value.source : null);
   const [syncNonce, setSyncNonce] = useState(0);
   const latest = useRef({ onChange, resolvePoint, manual: value?.source === "manual" });

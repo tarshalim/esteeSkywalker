@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight, MapPin } from "lucide-react";
 import { usePlaceName } from "../../hooks/usePlaceName";
 import { formatCoords, isWaterName } from "../../lib/geo";
+import { useDialog } from "../../hooks/useDialog";
 import "./PinNamePopover.css";
 
 /**
@@ -38,15 +39,35 @@ export default function PinNamePopover({ coords, placeName = null, nearbyPin = n
   const isCoordsOnly = place === coordsLabel;
   const preposition = isCoordsOnly ? "at" : isWaterName(place) ? "in the" : "in";
 
-  const handleSubmit = (e) => {
+  // A second click or Enter while the first save is in flight would create a
+  // duplicate pin (pendingPin stays set until createPin resolves). The ref
+  // blocks it at once; the state disables the buttons.
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    onConfirm({ title: title.trim(), note: note.trim(), placeName: place, startTrip: withTrip });
+    if (!title.trim() || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await onConfirm({ title: title.trim(), note: note.trim(), placeName: place, startTrip: withTrip });
+    } finally {
+      // On success the popover unmounts; on failure (onConfirm reports it) allow a retry.
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+  const { ref, dismiss } = useDialog({ onDismiss: onCancel, locked: saving });
+  const cancel = () => {
+    if (!savingRef.current) dismiss();
   };
 
   return createPortal(
-    <div className="pin-name-popover-backdrop" onClick={onCancel}>
+    <div className="pin-name-popover-backdrop" onClick={cancel}>
       <form
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
         className="glass-panel pin-name-popover"
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
@@ -76,7 +97,7 @@ export default function PinNamePopover({ coords, placeName = null, nearbyPin = n
         </div>
 
         {nearbyPin && (
-          <button type="button" className="pin-name-popover-existing" onClick={onUseExisting}>
+          <button type="button" className="pin-name-popover-existing" onClick={onUseExisting} disabled={saving}>
             <span>
               <strong>{nearbyPin.title}</strong> is already pinned{" "}
               {nearbyPin.distanceKm < 1 ? "here" : `${Math.round(nearbyPin.distanceKm)} km away`}
@@ -111,11 +132,11 @@ export default function PinNamePopover({ coords, placeName = null, nearbyPin = n
         </label>
         {withTrip && <p className="pin-name-popover-trip-hint">Next: name the trip, then add its stops along the way.</p>}
         <div className="pin-name-popover-actions">
-          <button type="button" className="pin-name-popover-cancel" onClick={onCancel}>
+          <button type="button" className="pin-name-popover-cancel" onClick={cancel} disabled={saving}>
             Cancel
           </button>
-          <button type="submit" className="pin-name-popover-save">
-            {withTrip ? "Save pin & plan trip" : "Save pin"}
+          <button type="submit" className="pin-name-popover-save" disabled={saving} aria-busy={saving}>
+            {saving ? "Saving…" : withTrip ? "Save pin & plan trip" : "Save pin"}
           </button>
         </div>
       </form>

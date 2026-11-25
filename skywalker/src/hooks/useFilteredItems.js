@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { isWithinRange } from "../lib/dateFilters";
+import { dateTime, dateYear, matchesDateFilter } from "../lib/dateFilters";
 
 /**
  * Generic controlled continent+country+date/year filter/sort for a list of
- * items. Shared by Gallery.jsx and BlogsJourney.jsx so the FilterBar's
- * filtering/sorting logic only lives in one place. `getContinent` is
+ * items, behind the Gallery's FilterBar. The date tier uses the same
+ * DateFilter shape (and matching rule) as the blog trail. `getContinent` is
  * optional — omit it and the continent tier simply has no data to show
  * (FilterBar hides that row), so existing callers don't need to change.
  *
@@ -16,9 +16,9 @@ export function useFilteredItems(items, { getCountryCode, getCountryName, getDat
   const [countryFilter, setCountryFilter] = useState([]); // array of codes; empty = all
   const [yearFilter, setYearFilter] = useState([]); // array of numbers; empty = all
   const [sortOrder, setSortOrder] = useState("newest"); // "newest" | "oldest"
-  const [dateRange, setDateRange] = useState(null); // { start, end } | null
+  const [dateFilter, setDateFilter] = useState(null); // DateFilter (day / month / range) | null
 
-  const getYear = (item) => new Date(getDate(item)).getFullYear();
+  const getYear = (item) => dateYear(getDate(item));
 
   const availableContinents = useMemo(() => {
     if (!getContinent) return [];
@@ -75,16 +75,16 @@ export function useFilteredItems(items, { getCountryCode, getCountryName, getDat
     if (yearFilter.length > 0) {
       next = next.filter((item) => yearFilter.includes(getYear(item)));
     }
-    if (dateRange) {
-      next = next.filter((item) => isWithinRange(getDate(item), dateRange));
+    if (dateFilter) {
+      next = next.filter((item) => matchesDateFilter(getDate(item), null, dateFilter));
     }
     next = [...next].sort((a, b) => {
-      const diff = new Date(getDate(a)).getTime() - new Date(getDate(b)).getTime();
+      const diff = dateTime(getDate(a)) - dateTime(getDate(b));
       return sortOrder === "newest" ? -diff : diff;
     });
     return next;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, continentFilter, countryFilter, yearFilter, dateRange, sortOrder, getCountryCode, getDate, getContinent]);
+  }, [items, continentFilter, countryFilter, yearFilter, dateFilter, sortOrder, getCountryCode, getDate, getContinent]);
 
   const toggleCountry = (code) => {
     setCountryFilter((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
@@ -113,11 +113,11 @@ export function useFilteredItems(items, { getCountryCode, getCountryName, getDat
     setContinentFilterState(null);
     setCountryFilter([]);
     setYearFilter([]);
-    setDateRange(null);
+    setDateFilter(null);
     setSortOrder("newest");
   };
 
-  const hasActiveFilters = Boolean(continentFilter) || countryFilter.length > 0 || yearFilter.length > 0 || Boolean(dateRange);
+  const hasActiveFilters = Boolean(continentFilter) || countryFilter.length > 0 || yearFilter.length > 0 || Boolean(dateFilter);
 
   return {
     filtered,
@@ -133,8 +133,8 @@ export function useFilteredItems(items, { getCountryCode, getCountryName, getDat
     toggleYear,
     sortOrder,
     setSortOrder,
-    dateRange,
-    setDateRange,
+    dateFilter,
+    setDateFilter,
     clearFilters,
     hasActiveFilters,
   };

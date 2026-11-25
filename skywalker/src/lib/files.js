@@ -80,14 +80,15 @@ const MEDIA_TABLES = ["blogs", "templates", "gallery_items", "locations", "trips
  * Deletes the uploads a just-deleted record referenced. Templates copy a
  * post's cover/canvas URLs, and gallery photos, pins or trips can point at
  * the same upload, so only files nothing else references are removed.
- * Failures are logged, not thrown.
+ * `keep` is anything else still in use but not saved yet (an open editor's
+ * canvas), whose files are spared too. Failures are logged, not thrown.
  */
-export async function deleteOrphanedMedia(value, label) {
+export async function deleteOrphanedMedia(value, label, keep = null) {
   const paths = collectMediaPaths(value);
   if (!supabase || paths.size === 0) return;
   try {
     const results = await Promise.all(MEDIA_TABLES.map((t) => supabase.from(t).select("data")));
-    const stillUsed = new Set();
+    const stillUsed = collectMediaPaths(keep);
     for (const rows of results.map(unwrap)) for (const row of rows) collectMediaPaths(row.data, stillUsed);
     await deleteMediaFiles([...paths].filter((p) => !stillUsed.has(p)));
   } catch (err) {

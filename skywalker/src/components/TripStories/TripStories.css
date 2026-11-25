@@ -72,9 +72,9 @@
 .trip-stories-grid {
   display: grid;
   /* Wider than story cards: a trip is the container, so passes get fewer, broader columns. */
-  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   /* Generous rows: fanned slips rise out over the row above. */
-  gap: 3rem 1.5rem;
+  gap: 2.75rem 1.25rem;
   padding-top: 0.5rem;
 }
 
@@ -254,11 +254,11 @@
 
 .trip-env-front {
   /* Width of the tear-away stub; the perforation and notches sit on its edge. */
-  --stub: 6.5rem;
-  --notch: 9px;
+  --stub: 5.5rem;
+  --notch: 8px;
   position: relative;
   z-index: 5;
-  border-radius: 0.9rem;
+  border-radius: 0.8rem;
   /* drop-shadow (not box-shadow) so the shadow follows the notched outline. */
   filter: drop-shadow(0 8px 18px var(--shadow-color));
   transition: transform 0.25s ease, filter 0.25s ease, outline-color 0.2s ease;
@@ -323,11 +323,11 @@
 .trip-pass-header {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 1rem;
-  font-size: 0.68rem;
+  gap: 0.35rem;
+  padding: 0.32rem 0.8rem;
+  font-size: 0.6rem;
   font-weight: 800;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   background: var(--blue-deep);
   color: #ffffff;
@@ -338,18 +338,18 @@
 
 .trip-pass-body {
   display: flex;
-  gap: 0.8rem;
-  padding: 0.75rem 1rem 0.5rem;
+  gap: 0.65rem;
+  padding: 0.55rem 0.8rem 0.35rem;
 }
 
 .trip-pass-thumb,
 .trip-pass-body .trip-pass-thumb {
   flex-shrink: 0;
-  width: 58px;
-  height: 58px;
+  width: 46px;
+  height: 46px;
   object-fit: cover;
-  border-radius: 0.4rem;
-  border: 3px solid #ffffff;
+  border-radius: 0.35rem;
+  border: 2px solid #ffffff;
   box-shadow: 0 2px 6px var(--shadow-color);
   transform: rotate(-3deg);
   transition: transform 0.3s ease;
@@ -361,16 +361,16 @@
 .trip-pass-fields {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.32rem;
   min-width: 0;
   flex: 1;
 }
 
 .trip-pass-label {
   display: block;
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -383,7 +383,7 @@
 }
 
 .trip-pass-value {
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 700;
   color: var(--text);
   white-space: nowrap;
@@ -430,10 +430,10 @@
   position: relative;
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 0.45rem;
   min-width: 0;
-  padding: 0 0 0.3rem 1rem;
-  font-size: 0.75rem;
+  padding: 0 0 0.2rem 0.95rem;
+  font-size: 0.72rem;
 }
 .trip-pass-stop::before {
   content: "";
@@ -476,13 +476,38 @@
   color: var(--text-muted);
 }
 
-.trip-pass-stop--more {
-  font-weight: 600;
-  color: var(--text-muted);
+/* "Read more (+N stops)" / "Show less": unfolds the rest of a long itinerary.
+   Sits above the stretched link so it doesn't open the trip. */
+.trip-pass-more {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  align-self: flex-start;
+  margin: -0.05rem 0 0 0.95rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--blue-deep);
+  cursor: pointer;
 }
-.trip-pass-stop--more::before {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--text-muted);
+.trip-pass-more:hover {
+  text-decoration: underline;
+}
+.trip-pass-more:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+.trip-pass-more-icon {
+  transition: transform 0.2s ease;
+}
+.trip-pass-more[aria-expanded="true"] .trip-pass-more-icon {
+  transform: rotate(180deg);
 }
 
 /* How many of the trip's stories are filed under this stop. */
@@ -528,8 +553,8 @@
   align-items: center;
   gap: 0.25rem;
   align-self: flex-start;
-  min-height: 28px;
-  padding: 0 0.6rem;
+  min-height: 24px;
+  padding: 0 0.55rem;
   border: 1px dashed color-mix(in srgb, var(--text-muted) 60%, transparent);
   border-radius: 999px;
   background: transparent;
@@ -568,9 +593,9 @@
 .trip-pass-barcode {
   display: flex;
   align-items: stretch;
-  height: 22px;
-  margin: auto 1rem 0.7rem;
-  padding-top: 0.35rem;
+  height: 16px;
+  margin: auto 0.8rem 0.5rem;
+  padding-top: 0.25rem;
   overflow: hidden;
   opacity: 0.8;
 }
@@ -585,8 +610,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.75rem 0.5rem 0.7rem;
+  gap: 0.4rem;
+  padding: 0.55rem 0.4rem 0.5rem;
   border-left: 2px dashed color-mix(in srgb, var(--text-muted) 45%, transparent);
   text-align: center;
 }
@@ -596,7 +621,7 @@
 
 .trip-pass-scissors {
   position: absolute;
-  top: 1.1rem;
+  top: 0.85rem;
   left: -7px;
   color: var(--text-muted);
   background: color-mix(in srgb, var(--yellow) 9%, var(--bg-elevated));
@@ -604,10 +629,10 @@
 }
 
 .trip-pass-code {
-  padding: 0.15rem 0.4rem;
+  padding: 0.12rem 0.35rem;
   border-radius: 0.3rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   background: var(--yellow);
@@ -618,7 +643,7 @@
 .trip-pass-toggle {
   position: relative;
   z-index: 2;
-  padding: 0.3rem 0.55rem 0.15rem;
+  padding: 0.22rem 0.45rem 0.1rem;
   border: 1px dashed color-mix(in srgb, var(--text-muted) 50%, transparent);
   border-radius: 0.5rem;
   background: transparent;
@@ -644,17 +669,17 @@
 }
 
 .trip-pass-count {
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 800;
   line-height: 1;
   color: var(--text-strong);
 }
 
 .trip-env-title {
-  margin: -0.3rem 0 0;
-  font-size: 1.05rem;
+  margin: -0.25rem 0 0;
+  font-size: 0.95rem;
   font-weight: 750;
-  line-height: 1.4;
+  line-height: 1.3;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -682,15 +707,15 @@
   position: relative;
   z-index: 2;
   display: flex;
-  gap: 0.35rem;
+  gap: 0.3rem;
   margin-top: auto;
 }
 .trip-env-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg-panel-strong, var(--bg-elevated));
@@ -725,6 +750,9 @@
   .trip-pass-add-blog {
     min-height: 36px;
   }
+  .trip-pass-more {
+    min-height: 32px;
+  }
 
   /* Three slips share a phone's width: tighter paper, smaller photo. */
   .trip-env-slip-link {
@@ -755,7 +783,7 @@
 
   /* Compact pass: tighter type and spacing, capped height with the body scrolling inside. */
   .trip-env-front {
-    --stub: 5.25rem;
+    --stub: 4.75rem;
   }
   /* On the columns, not the grid: an auto grid row would just overflow a capped container. */
   .trip-pass-main,
@@ -765,38 +793,38 @@
   }
   .trip-pass-header {
     flex-shrink: 0;
-    padding: 0.35rem 0.75rem;
+    padding: 0.3rem 0.65rem;
   }
   .trip-pass-body {
     min-height: 0;
-    gap: 0.6rem;
-    padding: 0.55rem 0.75rem 0.4rem;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem 0.3rem;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
   .trip-pass-thumb,
   .trip-pass-body .trip-pass-thumb {
-    width: 44px;
-    height: 44px;
+    width: 38px;
+    height: 38px;
   }
   .trip-pass-fields {
-    gap: 0.3rem;
+    gap: 0.26rem;
   }
   .trip-env-title {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
   }
   .trip-pass-barcode {
     flex-shrink: 0;
-    height: 18px;
-    margin: auto 0.75rem 0.5rem;
+    height: 14px;
+    margin: auto 0.65rem 0.4rem;
   }
   .trip-pass-stub {
-    gap: 0.4rem;
-    padding: 0.6rem 0.35rem 0.55rem;
+    gap: 0.35rem;
+    padding: 0.5rem 0.3rem 0.45rem;
     overflow-y: auto;
   }
   .trip-pass-count {
-    font-size: 1rem;
+    font-size: 0.92rem;
   }
 }
 
@@ -806,6 +834,7 @@
   .trip-pass-thumb,
   .trip-pass-toggle,
   .trip-pass-toggle-icon,
+  .trip-pass-more-icon,
   .trip-pass-add-blog,
   .trip-env-slip {
     transition: none;

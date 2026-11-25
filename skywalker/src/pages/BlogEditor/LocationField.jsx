@@ -3,7 +3,7 @@ import { AnimatePresence } from "framer-motion";
 import { Globe2, LoaderCircle, LocateFixed, MapPin, Search, X } from "lucide-react";
 import { reverseGeocode, searchPlaces } from "../../lib/geocode";
 import { autoPinFor, pinsNear } from "../../lib/pinStore";
-import { distanceKm, formatCoords } from "../../lib/geo";
+import { distanceKm, formatCoords, hasCoords } from "../../lib/geo";
 import Select from "../../components/Select/Select";
 import GlobePickerModal from "./GlobePickerModal";
 
@@ -82,8 +82,10 @@ export default function LocationField({ name, onNameChange, coords, onPick, pins
   };
 
   // Pins close enough to share, plus whichever pin the post is already on
-  // (it may sit further away — e.g. a whole-city hub).
+  // (it may sit further away — e.g. a whole-city hub). Only shown with coords;
+  // without them distanceKm would throw on a post that's filed but unplaced.
   const pinOptions = useMemo(() => {
+    if (!hasCoords(coords)) return [];
     const near = pinsNear(pins, coords);
     const current = pins.find((p) => p.id === pinChoice);
     if (current && !near.some((p) => p.id === current.id)) near.push({ ...current, distanceKm: distanceKm(current, coords) });

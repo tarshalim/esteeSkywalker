@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { ChevronRight, FilePlus2, ImagePlus, Link2, LoaderCircle, Luggage, MapPin, Pencil, Route, Unlink, Users, X } from "lucide-react";
+import { ChevronRight, FilePlus2, ImagePlus, Link2, LoaderCircle, Luggage, MapPin, Pencil, Route, Trash2, Unlink, Users, X } from "lucide-react";
 import { formatBlogDate, formatDateRange } from "../../lib/dateFilters";
 import { formatWeather } from "../../lib/weather";
 import { formatCoords } from "../../lib/geo";
@@ -172,6 +172,7 @@ function TripSection({ trip, focusStop = null, canEdit, busy, rowProps, onNewSto
  * @param {function(?import("../../types/hierarchy").Trip): void} onAddPhotos - into that trip, or none
  * @param {function(): void} onNewTrip
  * @param {function(import("../../types/hierarchy").TripNode): void} onEditTrip
+ * @param {function(): void} onDelete - delete the location (asks first); not offered on virtual pins
  */
 export default function PinQuickCard({
   pin,
@@ -186,6 +187,7 @@ export default function PinQuickCard({
   onEditTrip,
   onAttach,
   onDetach,
+  onDelete,
 }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -227,6 +229,17 @@ export default function PinQuickCard({
         .filter(Boolean)
         .join(" · ");
   const rowProps = { canDetach: canEdit && !pin.virtual, busy, onOpenPost, onDetach };
+
+  // Mirrors the FK actions: trips go (with their stops and companions); posts
+  // and photos stay, unfiled. See cascadePinDelete for the mock-mode copy.
+  const pinName = pin.title || pin.placeName || "this pin";
+  const handleDelete = () => {
+    const details = [
+      trips.length > 0 && `${plural(trips.length, "trip")} here will be deleted too.`,
+      posts.length + photos.length > 0 && "Its stories and photos stay, just no longer filed at this place.",
+    ].filter(Boolean);
+    if (window.confirm([`Delete “${pinName}”?`, ...details].join(" "))) onDelete();
+  };
   // Header and footer stick to the card's edges while it scrolls as one.
   const pinnedBar = { background: "var(--bg-panel-strong)" };
 
@@ -256,6 +269,18 @@ export default function PinQuickCard({
             {subtitle} · {counts}
           </p>
         </div>
+        {canEdit && !pin.virtual && onDelete && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={Boolean(busy)}
+            className="-m-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+            aria-label={`Delete pin “${pinName}”`}
+            title="Delete pin"
+          >
+            <Trash2 size={17} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}

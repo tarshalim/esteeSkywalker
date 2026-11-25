@@ -294,146 +294,6 @@
   gap: 1.75rem 1.25rem;
 }
 
-/* A story is a scrapbook page: photo mounted with a paper margin, taped on. */
-.blog-card {
-  position: relative;
-  border-radius: 0.5rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 18px var(--shadow-color);
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-}
-.blog-card:nth-child(odd) {
-  --card-tilt: -0.6deg;
-}
-.blog-card:nth-child(even) {
-  --card-tilt: 0.6deg;
-}
-.blog-card:hover {
-  transform: translateY(-4px) rotate(var(--card-tilt, 0deg));
-  border-color: var(--border-strong);
-  box-shadow: 0 16px 34px var(--shadow-color);
-}
-
-/* Washi tape holding the page down. */
-.blog-card::before {
-  content: "";
-  position: absolute;
-  top: -9px;
-  left: 50%;
-  z-index: 2;
-  width: 76px;
-  height: 20px;
-  translate: -50% 0;
-  rotate: -3deg;
-  background: color-mix(in srgb, var(--yellow) 55%, transparent);
-  box-shadow: 0 1px 2px var(--shadow-color);
-  pointer-events: none;
-}
-.blog-card:nth-child(3n + 2)::before {
-  background: color-mix(in srgb, var(--blue-bright) 40%, transparent);
-  rotate: 2deg;
-}
-.blog-card:nth-child(3n)::before {
-  background: color-mix(in srgb, var(--pin-red) 35%, transparent);
-  rotate: -1deg;
-}
-
-.blog-card-link {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: 0.65rem 0.65rem 0;
-}
-
-.blog-card-media {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  border-radius: 0.3rem;
-  background: var(--bg-panel);
-  overflow: hidden;
-}
-.blog-card-media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.5s ease;
-}
-.blog-card:hover .blog-card-media img {
-  transform: scale(1.05);
-}
-
-.blog-card-badge {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: var(--yellow);
-  color: var(--text-on-accent);
-}
-
-.blog-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.9rem 0.6rem 1.1rem;
-  flex: 1;
-}
-
-/* Location + date share one row: the date keeps its full width, the location
-   shrinks (font step set inline, then ellipsis) into whatever space is left. */
-.blog-card-meta {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-.blog-card-meta > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-.blog-card-place {
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-
-.blog-card-title {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 650;
-  line-height: 1.3;
-  color: var(--text);
-}
-
-.blog-card-excerpt {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--text-muted);
-  /* overflow:hidden drops a flex item's min-height to 0; without this the
-     column can squeeze the clamp box and slice its last line. */
-  flex-shrink: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.blog-card-cta {
-  margin-top: auto;
-  padding-top: 0.5rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-strong);
-}
-
 .blog-feed-empty {
   text-align: center;
   padding: 3rem 0;
@@ -459,34 +319,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
   }
-  .blog-card-link {
-    padding: 0.4rem 0.4rem 0;
-  }
-  .blog-card::before {
-    width: 52px;
-    height: 14px;
-    top: -6px;
-  }
-  .blog-card-badge {
-    top: 0.5rem;
-    left: 0.5rem;
-    padding: 0.15rem 0.5rem;
-    font-size: 0.6rem;
-  }
-  .blog-card-meta {
-    gap: 0.5rem;
-    font-size: 0.7rem;
-  }
-  .blog-card-title {
-    font-size: 0.95rem;
-  }
-  .blog-card-excerpt {
-    font-size: 0.8rem;
-    -webkit-line-clamp: 2;
-  }
-  .blog-card-cta {
-    font-size: 0.78rem;
-  }
   .blog-feed-filters {
     margin-bottom: 1.25rem;
   }
@@ -502,9 +334,5 @@
   .blog-feed-sort,
   .blog-feed-select {
     min-height: 36px;
-  }
-  .blog-card-body {
-    gap: 0.35rem;
-    padding: 0.6rem 0.35rem 0.8rem;
   }
 }

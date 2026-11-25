@@ -1,5 +1,5 @@
 import { realCover } from "./media";
-import { formatDate, formatDateRange } from "./dateFilters";
+import { dateFilterLabel, matchesDateFilter } from "./dateFilters";
 import { companionsForPost } from "./hierarchy";
 
 // Travel-story categories. Stored on the blog object itself (the `blogs.data`
@@ -69,11 +69,7 @@ export function locationOptions(blogs) {
   };
 }
 
-/**
- * A date filter. `day`: `start` is yyyy-mm-dd. `month`: `start` is yyyy-mm.
- * `range`: `start`/`end` are yyyy-mm-dd and either may be blank (open-ended).
- * @typedef {{ mode: "day"|"month"|"range", start: string, end: string }} DateFilter
- */
+/** @typedef {import("./dateFilters").DateFilter} DateFilter */
 
 /**
  * @typedef {{
@@ -91,27 +87,6 @@ export const EMPTY_FILTERS = { country: "", city: "", trip: "", companion: "", d
 
 export const hasActiveFilters = (f) => Boolean(f.country || f.city || f.trip || f.companion || f.date || f.favoritesOnly);
 
-/** Inclusive [from, to] yyyy-mm-dd bounds of a date filter ("" = open-ended), or null if it's incomplete. */
-function dateFilterBounds(d) {
-  if (!d) return null;
-  if (d.mode === "day") return d.start ? [d.start, d.start] : null;
-  // "-31" works for every month: these are compared as strings, never parsed.
-  if (d.mode === "month") return d.start ? [`${d.start}-01`, `${d.start}-31`] : null;
-  return d.start || d.end ? [d.start || "", d.end || ""] : null;
-}
-
-/** Short label for the date filter pill: "Mar 4, 2025", "March 2025", "Mar 1 – Mar 9, 2025", "From Mar 1, 2025". */
-export function dateFilterLabel(d) {
-  const bounds = dateFilterBounds(d);
-  if (!bounds) return "";
-  if (d.mode === "month") {
-    return new Date(`${d.start}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
-  }
-  const [from, to] = bounds;
-  if (from && to) return formatDateRange(from, to);
-  return from ? `From ${formatDate(from)}` : `Until ${formatDate(to)}`;
-}
-
 const NO_TRIPS = new Map();
 
 /**
@@ -125,15 +100,8 @@ export function matchesFilters(blog, f, tripsById = NO_TRIPS) {
   if (f.trip && blog.tripId !== f.trip) return false;
   if (f.companion && !companionsForPost(blog, tripsById.get(blog.tripId)).includes(f.companion)) return false;
   if (f.favoritesOnly && !blog.favorite) return false;
-  const bounds = dateFilterBounds(f.date);
-  if (bounds) {
-    // A trip matches when any of its days falls inside the filter.
-    const start = blog.startDate ?? blog.postDate ?? blog.date ?? "";
-    const end = blog.endDate || start;
-    const [from, to] = bounds;
-    if (!start || (to && start > to) || (from && end < from)) return false;
-  }
-  return true;
+  // A trip matches when any of its days falls inside the filter.
+  return matchesDateFilter(blog.startDate ?? blog.postDate ?? blog.date, blog.endDate, f.date);
 }
 
 /**

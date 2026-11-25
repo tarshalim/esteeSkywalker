@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { MapPinPlus } from "lucide-react";
 import { usePlaceName } from "../../hooks/usePlaceName";
+import { useDialog } from "../../hooks/useDialog";
 import { formatCoords } from "../../lib/geo";
 import Select from "../Select/Select";
 import "./AddStopPopover.css";
@@ -29,7 +30,9 @@ const MARKER_PX = 44;
  * @param {function(): void} onCancel
  */
 export default function AddStopPopover({ coords, trips, defaultTripId = null, locate, trackRef, onConfirm, onCancel }) {
-  const ref = useRef(null);
+  // Non-modal: the globe stays usable around it. Escape closes just this
+  // prompt, not the location card it sits over.
+  const { ref } = useDialog({ onDismiss: onCancel, modal: false });
   const [tripId, setTripId] = useState(() => (trips.some((t) => t.id === defaultTripId) ? defaultTripId : trips[0]?.id));
   const trip = trips.find((t) => t.id === tripId) ?? trips[0];
   const { name, isResolving } = usePlaceName(coords);
@@ -55,13 +58,7 @@ export default function AddStopPopover({ coords, trips, defaultTripId = null, lo
     return () => {
       if (trackRef.current === reposition) trackRef.current = null;
     };
-  }, [coords, locate, trackRef]);
-
-  useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onCancel();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [coords, locate, trackRef, ref]);
 
   if (!trip) return null;
   // Mid-lookup, the local fallback (country / ocean) is still a usable name.

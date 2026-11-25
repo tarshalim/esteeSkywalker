@@ -1,6 +1,7 @@
 import { makeId } from "./storage";
 import { createCollection } from "./collection";
 import { notifyDataChanged } from "./liveSync";
+import { dateYear } from "./dateFilters";
 import { MOCK_KEYS } from "./mockCascades";
 
 // Gallery API (photos and videos): Supabase `gallery_items` table when
@@ -64,7 +65,7 @@ export async function createPhoto({
     continent,
     locationName,
     timestamp,
-    year: new Date(timestamp).getFullYear(),
+    year: dateYear(timestamp),
     timeTaken,
     camera,
     locationSource,

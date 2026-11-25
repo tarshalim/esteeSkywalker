@@ -95,6 +95,7 @@ export default function BlogReader({ blog, trip = null, toolbar = null, preview 
               </span>
             )}
             <span>{formatBlogDate(blog, "long")}</span>
+            {blog.authorName && <span className="blog-detail-author">✍️ by {blog.authorName}</span>}
           </div>
         </motion.div>
       </div>

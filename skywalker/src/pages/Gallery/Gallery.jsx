@@ -1,7 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
 import { getPhotos, createPhoto } from "../../lib/photoStore";
 import { getBlogs } from "../../lib/blogStore";
 import { getPins } from "../../lib/pinStore";
@@ -15,7 +14,7 @@ import {
   tripLabel,
   tripsReferencedBy,
 } from "../../lib/hierarchy";
-import { FilterSelect } from "../../components/BlogFilterBar/BlogFilterBar";
+import { ClearFiltersButton, FilterSelect } from "../../components/FilterControls/FilterControls";
 import { collectMedia } from "../../lib/media";
 import { useAsync } from "../../hooks/useAsync";
 import { useFilteredItems } from "../../hooks/useFilteredItems";
@@ -104,8 +103,8 @@ export default function Gallery() {
     toggleYear,
     sortOrder,
     setSortOrder,
-    dateRange,
-    setDateRange,
+    dateFilter,
+    setDateFilter,
     hasActiveFilters,
     clearFilters,
   } = useFilteredItems(media, MEDIA_ACCESSORS);
@@ -257,8 +256,8 @@ export default function Gallery() {
         onToggleYear={toggleYear}
         sortOrder={sortOrder}
         onSortOrderChange={setSortOrder}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
+        dateFilter={dateFilter}
+        onDateFilterChange={setDateFilter}
         hasActiveFilters={hasActiveFilters || hasTripFilters}
         onClearFilters={clearAllFilters}
         resultCount={count}
@@ -295,16 +294,7 @@ export default function Gallery() {
             options={tagChoices.map((tag) => ({ value: tag, label: `#${tag}` }))}
           />
         )}
-        {hasTripFilters && (
-          <button
-            type="button"
-            onClick={() => setTripFilters(EMPTY_TRIP_FILTERS)}
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-slate-900/70 px-3 text-xs font-semibold text-white sm:text-sm"
-          >
-            <X size={14} aria-hidden="true" />
-            Clear trip filters
-          </button>
-        )}
+        {hasTripFilters && <ClearFiltersButton onClick={() => setTripFilters(EMPTY_TRIP_FILTERS)}>Clear trip filters</ClearFiltersButton>}
       </div>
 
       {error && <p className="gallery-subtitle">Couldn&rsquo;t load the gallery: {errorMessage(error)}</p>}

@@ -1,25 +1,19 @@
 import { createContext, useCallback, useContext, useState } from "react";
+import { readTourStatus, shouldOfferTour, writeTourStatus } from "./tourStatus";
 
 const TourContext = createContext(null);
-const STORAGE_KEY = "skywalker-tour";
 
-// "completed" | "skipped" | "dismissed" once the user has answered; any value
-// stops the homepage from offering the tour again automatically.
-function readStatus() {
+// Reading `window.localStorage` itself throws when storage is blocked.
+function getStorage() {
   try {
-    return window.localStorage.getItem(STORAGE_KEY);
+    return window.localStorage;
   } catch {
     return null;
   }
 }
 
-function writeStatus(status) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, status);
-  } catch {
-    // Storage blocked — the offer will just reappear next visit.
-  }
-}
+const readStatus = () => readTourStatus(getStorage());
+const writeStatus = (status) => writeTourStatus(getStorage(), status);
 
 /**
  * First-run guided tour state. Each step names its own page, so the Tour
@@ -45,7 +39,7 @@ export function TourProvider({ children }) {
 
   const value = {
     isActive,
-    shouldOffer: status === null && !isActive,
+    shouldOffer: shouldOfferTour(status, isActive),
     start,
     preview,
     setPreview,

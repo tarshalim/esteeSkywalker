@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { motion } from "framer-motion";
+import { useDialog } from "../../hooks/useDialog";
 
 /**
  * Shown when leaving the editor with unsaved edits. `saveLabel` is
@@ -7,11 +7,9 @@ import { motion } from "framer-motion";
  * already published (saving it as a draft would unpublish it).
  */
 export default function UnsavedChangesDialog({ saveLabel, saving, error, onSave, onDiscard, onCancel }) {
-  useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onCancel();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  // Like DeletePostDialog: Escape and the backdrop can't close it mid-save,
+  // since the save would still navigate away once it finished.
+  const { ref, dismiss } = useDialog({ onDismiss: onCancel, locked: saving });
 
   return (
     <motion.div
@@ -19,9 +17,10 @@ export default function UnsavedChangesDialog({ saveLabel, saving, error, onSave,
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      onClick={onCancel}
+      onClick={dismiss}
     >
       <motion.div
+        ref={ref}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="unsaved-title"

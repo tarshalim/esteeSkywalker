@@ -38,11 +38,22 @@ const fromRow = (r) => ({
   createdAt: r.created_at,
 });
 
+// The shape section_reactor accepts; any other key makes every toggle fail
+// with "Missing reactor key".
+const GUEST_KEY_RE = /^[A-Za-z0-9-]{16,64}$/;
+
+// crypto.randomUUID only exists in secure contexts (HTTPS, localhost), so a
+// phone testing the dev server over the LAN needs the getRandomValues path.
+function randomKey() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** A random per-browser id so guests can toggle their own reactions. */
-function guestKey() {
+export function guestKey() {
   let key = readJSON(GUEST_KEY, null);
-  if (!key) {
-    key = crypto.randomUUID();
+  if (typeof key !== "string" || !GUEST_KEY_RE.test(key)) {
+    key = randomKey();
     try {
       writeJSON(GUEST_KEY, key);
     } catch {
@@ -62,12 +73,39 @@ export function saveGuestProfile(profile) {
   }
 }
 
+// Postgres' char_length counts code points, not UTF-16 units like .length.
+const charLength = (s) => [...s].length;
+
+// The same character classes the stamp_section_comment trigger strips, plus
+// NUL, which Postgres text can't hold at all (the insert would fail outright).
+// eslint-disable-next-line no-control-regex
+const BODY_CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+// eslint-disable-next-line no-control-regex
+const NAME_CONTROL_RE = /[\u0000-\u001F\u007F]/g;
+
+/** The body as the trigger stores it: control characters other than
+ * newline/tab/CR removed, then trimmed. */
+export const cleanCommentBody = (body) => body.replace(BODY_CONTROL_RE, "").trim();
+
+/** The guest name as the trigger stores it: control characters removed, runs of
+ * whitespace collapsed to one space, trimmed. */
+export const cleanGuestName = (name) => name.replace(NAME_CONTROL_RE, "").replace(/\s+/g, " ").trim();
+
+/** @returns {?string} what's wrong with a comment body, or null if it's fine (same rule as the column check) */
+export function validateCommentBody(body) {
+  const clean = cleanCommentBody(body ?? "");
+  if (!clean) return "Please write a comment first.";
+  if (charLength(clean) > COMMENT_MAX) return `Comments can be up to ${COMMENT_MAX} characters.`;
+  return null;
+}
+
 /** @returns {?string} what's wrong with a guest's name/email, or null if it's fine */
 export function validateGuest({ name, email }) {
-  if (!name.trim()) return "Please enter your name.";
-  if (name.trim().length > NAME_MAX) return `Names can be up to ${NAME_MAX} characters.`;
-  const e = email.trim();
-  if (!e || e.length > EMAIL_MAX || !EMAIL_RE.test(e)) return "Please enter a valid email address.";
+  const n = cleanGuestName(name ?? "");
+  if (!n) return "Please enter your name.";
+  if (charLength(n) > NAME_MAX) return `Names can be up to ${NAME_MAX} characters.`;
+  const e = (email ?? "").trim();
+  if (!e || charLength(e) > EMAIL_MAX || !EMAIL_RE.test(e)) return "Please enter a valid email address.";
   return null;
 }
 
@@ -79,10 +117,21 @@ const ERROR_MESSAGES = {
   duplicate: "You’ve already posted that comment.",
 };
 
-/** A reader-facing message for a failed comment post. */
-export function commentErrorMessage(err) {
-  if (err?.hint === "invalid_guest") return err.message;
-  return ERROR_MESSAGES[err?.hint] ?? infraErrorMessage(err) ?? "Couldn’t post your comment. Please try again.";
+// A member's comment only gets a guest error when the server no longer sees the
+// account as approved (its role changed since the page loaded). The form shows
+// no name/email fields then, so "enter a valid email" would be a dead end.
+const MEMBER_DEMOTED = "Your account can’t comment as itself right now. Reload the page and try again.";
+
+/**
+ * A reader-facing message for a failed comment post.
+ * @param {unknown} err
+ * @param {{ member?: boolean }} [opts] whether the post was sent as a signed-in member
+ */
+export function commentErrorMessage(err, { member = false } = {}) {
+  const hint = /** @type {any} */ (err)?.hint;
+  if (hint === "invalid_guest" || hint === "invalid_body") return /** @type {any} */ (err).message;
+  if (member && (hint === "invalid_name" || hint === "invalid_email")) return MEMBER_DEMOTED;
+  return ERROR_MESSAGES[hint] ?? infraErrorMessage(err) ?? "Couldn’t post your comment. Please try again.";
 }
 
 /** @returns {Promise<SectionComment[]>} oldest first */
@@ -103,10 +152,13 @@ export async function getSectionComments(blogId) {
  * @returns {Promise<SectionComment>}
  */
 export async function addSectionComment({ blogId, sectionId, body, guest = null, user = null }) {
+  const bodyProblem = validateCommentBody(body);
+  if (bodyProblem) throw Object.assign(new Error(bodyProblem), { hint: "invalid_body" });
   if (!user) {
     const problem = validateGuest(guest ?? { name: "", email: "" });
     if (problem) throw Object.assign(new Error(problem), { hint: "invalid_guest" });
   }
+  const cleanBody = cleanCommentBody(body);
   if (supabase) {
     const row = unwrap(
       await supabase
@@ -114,9 +166,9 @@ export async function addSectionComment({ blogId, sectionId, body, guest = null,
         .insert({
           blog_id: blogId,
           section_id: sectionId,
-          body: body.trim(),
+          body: cleanBody,
           // Required by the column; the trigger overwrites it for accounts.
-          author_name: guest?.name.trim() || user?.username || "Guest",
+          author_name: (guest && cleanGuestName(guest.name)) || user?.username || "Guest",
           author_email: guest?.email?.trim() || null,
         })
         .select(COMMENT_COLUMNS)
@@ -128,9 +180,9 @@ export async function addSectionComment({ blogId, sectionId, body, guest = null,
     id: makeId("cmt"),
     blogId,
     sectionId,
-    body: body.trim(),
+    body: cleanBody,
     userId: user?.id ?? null,
-    authorName: user ? user.username : guest.name.trim(),
+    authorName: user ? user.username : cleanGuestName(guest.name),
     authorAvatar: user?.avatar ?? null,
     isGuest: !user,
     createdAt: new Date().toISOString(),
@@ -139,9 +191,18 @@ export async function addSectionComment({ blogId, sectionId, body, guest = null,
   return delay(comment);
 }
 
+/**
+ * Only the comment's author or an admin may delete it (the "delete own comment
+ * or moderate" policy). RLS doesn't raise on a refused delete, it just matches
+ * no rows, so a 0-row result is checked: still there → refused; gone → someone
+ * already deleted it, which is the outcome the caller wanted anyway.
+ */
 export async function deleteSectionComment(id) {
   if (supabase) {
-    unwrap(await supabase.from("section_comments").delete().eq("id", id));
+    const deleted = unwrap(await supabase.from("section_comments").delete().eq("id", id).select("id"));
+    if (deleted?.length) return true;
+    const still = unwrap(await supabase.from("section_comments").select("id").eq("id", id));
+    if (still?.length) throw new Error("You can only delete your own comments.");
     return true;
   }
   writeJSON(COMMENTS_KEY, readJSON(COMMENTS_KEY, []).filter((c) => c.id !== id));
@@ -166,6 +227,18 @@ export async function getSectionReactions(blogId) {
     entry.mine ||= r.reactor === me;
   }
   return delay(map);
+}
+
+/**
+ * The optimistic local flip of one reaction: on ↔ off, count ±1 (never below 0).
+ * @param {ReactionMap} map
+ * @returns {ReactionMap} a new map; the input isn't changed
+ */
+export function flipReaction(map, sectionId, emoji) {
+  const section = map[sectionId] ?? {};
+  const prev = section[emoji] ?? { count: 0, mine: false };
+  const next = { count: Math.max(0, prev.count + (prev.mine ? -1 : 1)), mine: !prev.mine };
+  return { ...map, [sectionId]: { ...section, [emoji]: next } };
 }
 
 /** Adds or removes this reader's reaction. @returns {Promise<boolean>} whether it's now on */
